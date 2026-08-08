@@ -191,6 +191,7 @@
       <a data-page="certificates">🏅 &nbsp;الشهادات</a>
       <a data-page="surveys">📋 &nbsp;الاستبيانات والرضا</a>
       <a data-page="users">🔐 &nbsp;المستخدمون والأدوار</a>
+      <a data-page="mentorApps">📥 &nbsp;طلبات الانضمام كمرشد</a>
       <a data-page="activity">🕒 &nbsp;سجل النشاط</a>
     </nav>
     <div class="logout-box">
@@ -295,7 +296,8 @@ async function handleLogin(){
   }
 
   currentUser = data.user;
-  document.getElementById("current-user-email").textContent = currentUser.email;
+  const { data: profile } = await sb.from("profiles").select("full_name").eq("id", currentUser.id).maybeSingle();
+  document.getElementById("current-user-email").innerHTML = `<strong style="color:#fff">${profile?.full_name || currentUser.email}</strong><br><span style="font-size:10.5px">${currentUser.email}</span>`;
   document.getElementById("login-screen").style.display = "none";
   document.getElementById("app").classList.add("active");
   navigateTo("overview");
@@ -317,7 +319,8 @@ async function restoreSession(){
     const { data: roles } = await sb.from("user_roles").select("roles(key)").eq("user_id", currentUser.id);
     const roleKeys = (roles || []).map(r => r.roles?.key);
     if(roleKeys.includes("admin") || roleKeys.includes("coordinator")){
-      document.getElementById("current-user-email").textContent = currentUser.email;
+      const { data: profile } = await sb.from("profiles").select("full_name").eq("id", currentUser.id).maybeSingle();
+      document.getElementById("current-user-email").innerHTML = `<strong style="color:#fff">${profile?.full_name || currentUser.email}</strong><br><span style="font-size:10.5px">${currentUser.email}</span>`;
       document.getElementById("login-screen").style.display = "none";
       document.getElementById("app").classList.add("active");
       navigateTo("overview");
@@ -351,6 +354,7 @@ function navigateTo(page){
     certificates: renderCertificates,
     surveys: renderSurveys,
     users: renderUsers,
+    mentorApps: renderMentorApplications,
     activity: renderActivityLog,
   };
   (renderers[page] || renderOverview)();
@@ -1221,6 +1225,59 @@ async function renderSurveys(){
 /* ============================================================
    9. المستخدمون والأدوار
    ============================================================ */
+/* ============================================================
+   طلبات الانضمام كمرشد
+   ============================================================ */
+async function renderMentorApplications(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header"><div><h1>طلبات الانضمام كمرشد</h1><p>راجع طلبات المتقدمين للإرشاد واعتمدها</p></div></div>
+    <div class="card"><div id="mentor-apps-table">جاري التحميل...</div></div>`;
+
+  const { data, error } = await sb.from("mentor_applications")
+    .select("*, profiles(full_name, email, phone, organization)")
+    .order("created_at", {ascending:false});
+
+  const box = document.getElementById("mentor-apps-table");
+  if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
+  if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد طلبات انضمام بعد</div>`; return; }
+
+  const statusBadge = {
+    pending: '<span class="badge badge-gray">قيد المراجعة</span>',
+    approved: '<span class="badge badge-green">مُعتمَد</span>',
+    rejected: '<span class="badge badge-red">مرفوض</span>',
+  };
+
+  box.innerHTML = `<table><thead><tr>
+    <th>المتقدم</th><th>التخصص</th><th>النبذة</th><th>الحالة</th><th></th>
+    </tr></thead><tbody>
+    ${data.map(a => `<tr>
+      <td><strong>${esc(a.profiles?.full_name||"—")}</strong><br><span style="color:var(--muted);font-size:12px">${esc(a.profiles?.email||"")}</span></td>
+      <td>${esc(a.specialization)}</td>
+      <td style="max-width:220px;font-size:12.5px;color:var(--muted)">${esc((a.bio||"").substring(0,100))}</td>
+      <td>${statusBadge[a.status]||a.status}</td>
+      <td class="row-actions">
+        ${a.status === "pending" ? `
+          <button class="btn btn-primary btn-sm" onclick="approveMentorApp('${a.id}')">اعتماد</button>
+          <button class="btn btn-danger btn-sm" onclick="rejectMentorApp('${a.id}')">رفض</button>
+        ` : ""}
+      </td>
+    </tr>`).join("")}
+    </tbody></table>`;
+}
+async function approveMentorApp(id){
+  const { data, error } = await sb.rpc("approve_mentor_application", { p_application_id: id });
+  if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  logActivity("اعتماد طلب مرشد", "mentor_application", id);
+  showToast("تم اعتماد الطلب — صار عنده دور مرشد الآن");
+  renderMentorApplications();
+}
+async function rejectMentorApp(id){
+  const { data, error } = await sb.rpc("reject_mentor_application", { p_application_id: id });
+  if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  showToast("تم رفض الطلب");
+  renderMentorApplications();
+}
+
 async function renderUsers(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">

@@ -73,7 +73,7 @@
 <div id="content-screen" style="display:none">
   <header>
     <div class="header-row">
-      <div><h1>لوحة الإرشاد</h1><p>إدارة مواعيدك وملاحظاتك للفرق</p></div>
+      <div><h1 id="mentor-welcome">لوحة الإرشاد</h1><p>إدارة مواعيدك وملاحظاتك للفرق</p></div>
       <button class="btn-link" onclick="handleLogout()">تسجيل الخروج</button>
     </div>
   </header>
@@ -81,6 +81,7 @@
     <div class="tabs" id="tabs-bar">
       <div class="tab active" data-t="slots">مواعيدي</div>
       <div class="tab" data-t="add">إضافة موعد جديد</div>
+      <div class="tab" data-t="profile">ملفي الشخصي</div>
     </div>
     <div id="main-content">جاري التحميل...</div>
   </main>
@@ -152,7 +153,7 @@ async function restoreSession(){
 }
 restoreSession();
 
-function showContent(){
+async function showContent(){
   document.getElementById("auth-gate-screen").style.display = "none";
   document.getElementById("content-screen").style.display = "block";
   document.getElementById("tabs-bar").addEventListener("click", e => {
@@ -162,11 +163,37 @@ function showContent(){
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.t === currentTab));
     renderTab();
   });
+  const { data: profile } = await sb.from("profiles").select("full_name").eq("id", currentUser.id).maybeSingle();
+  document.getElementById("mentor-welcome").textContent = "مرحبًا، " + (profile?.full_name || currentUser.email);
   renderTab();
 }
 function renderTab(){
   if(currentTab === "slots") renderSlots();
-  else renderAddSlot();
+  else if(currentTab === "add") renderAddSlot();
+  else renderMyProfile();
+}
+
+/* ---------------- ملفي الشخصي ---------------- */
+async function renderMyProfile(){
+  const main = document.getElementById("main-content");
+  const { data: profile } = await sb.from("profiles").select("*").eq("id", currentUser.id).single();
+  main.innerHTML = `<div class="card">
+    <h3 style="margin:0 0 16px">ملفي الشخصي</h3>
+    <div class="field"><label>الاسم الكامل</label><input value="${esc(profile.full_name||"")}" disabled style="opacity:.6"></div>
+    <div class="field"><label>التخصص</label><input id="profile-spec" value="${esc(profile.specialization||"")}" placeholder="مثال: الذكاء الاصطناعي، القانون التجاري..."></div>
+    <div class="field"><label>نبذة تعريفية</label><textarea id="profile-bio" rows="4" placeholder="خبرتك ذات الصلة بالبرنامج...">${esc(profile.bio||"")}</textarea></div>
+    <div id="profile-alert" class="alert"></div>
+    <button class="btn btn-primary" onclick="saveMyProfile()">حفظ التعديلات</button>
+  </div>`;
+}
+async function saveMyProfile(){
+  const alertBox = document.getElementById("profile-alert");
+  alertBox.className = "alert";
+  const specialization = document.getElementById("profile-spec").value.trim();
+  const bio = document.getElementById("profile-bio").value.trim();
+  const { error } = await sb.from("profiles").update({ specialization, bio }).eq("id", currentUser.id);
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  alertBox.textContent = "تم الحفظ بنجاح"; alertBox.className = "alert success";
 }
 
 /* ---------------- مواعيدي ---------------- */
