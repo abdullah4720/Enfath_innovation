@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
   :root{
     --navy:#0B1F3A;
@@ -176,15 +178,20 @@
     </div>
     <nav id="nav-menu">
       <a data-page="overview" class="active">📊 &nbsp;نظرة عامة</a>
+      <a data-page="analytics">📈 &nbsp;التحليلات</a>
+      <a data-page="participants">🧑‍🤝‍🧑 &nbsp;المشاركون</a>
       <a data-page="tracks">🧭 &nbsp;المسارات</a>
       <a data-page="teams">👥 &nbsp;الفرق</a>
+      <a data-page="projects">💡 &nbsp;المشاريع</a>
       <a data-page="prep">🎓 &nbsp;جلسات التحضير</a>
       <a data-page="announcements">📢 &nbsp;التحديثات والملفات</a>
       <a data-page="judging">⚖️ &nbsp;التحكيم</a>
       <a data-page="events">📍 &nbsp;الفعاليات والحضور</a>
+      <a href="./scan.html" target="_blank" style="opacity:.9">📷 &nbsp;تسجيل الحضور (مسح QR)</a>
       <a data-page="certificates">🏅 &nbsp;الشهادات</a>
       <a data-page="surveys">📋 &nbsp;الاستبيانات والرضا</a>
       <a data-page="users">🔐 &nbsp;المستخدمون والأدوار</a>
+      <a data-page="activity">🕒 &nbsp;سجل النشاط</a>
     </nav>
     <div class="logout-box">
       <div class="user-email" id="current-user-email"></div>
@@ -240,6 +247,13 @@ function esc(str){
 function fmtDate(d){
   if(!d) return "—";
   return new Date(d).toLocaleString("ar-SA", {dateStyle:"medium", timeStyle:"short"});
+}
+async function logActivity(action, entityType, entityId, metadata={}){
+  try {
+    await sb.from("activity_log").insert({
+      user_id: currentUser?.id, action, entity_type: entityType, entity_id: entityId, metadata
+    });
+  } catch(e){ /* لا نوقف تدفق العمل بسبب فشل تسجيل النشاط */ }
 }
 
 /* ---------------- المصادقة ---------------- */
@@ -325,8 +339,11 @@ function navigateTo(page){
   });
   const renderers = {
     overview: renderOverview,
+    analytics: renderAnalytics,
+    participants: renderParticipants,
     tracks: renderTracks,
     teams: renderTeams,
+    projects: renderProjects,
     prep: renderPrep,
     announcements: renderAnnouncements,
     judging: renderJudging,
@@ -334,6 +351,7 @@ function navigateTo(page){
     certificates: renderCertificates,
     surveys: renderSurveys,
     users: renderUsers,
+    activity: renderActivityLog,
   };
   (renderers[page] || renderOverview)();
 }
@@ -346,9 +364,28 @@ async function renderOverview(){
   main.innerHTML = `<div class="page-header"><div><h1>نظرة عامة</h1><p>مؤشرات عامة عن سير البرنامج</p></div></div>
     <div class="grid-stats" id="stats-grid">جاري التحميل...</div>
     <div class="card">
+      <div class="toolbar">
+        <h3 style="margin:0">تاريخ انطلاق الهاكاثون</h3>
+      </div>
+      <p class="hint" style="margin-bottom:10px">يظهر كعداد تنازلي بصفحة المشارك والصفحة الرئيسية</p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input type="datetime-local" id="hackathon-date-input" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+        <button class="btn btn-primary btn-sm" onclick="saveHackathonDate()">حفظ</button>
+        <span id="hackathon-date-alert" style="font-size:12.5px;color:var(--teal);display:none">تم الحفظ ✓</span>
+      </div>
+    </div>
+    <div class="card" id="mentor-alert-card"></div>
+    <div class="card">
       <h3>الرضا حسب المرحلة</h3>
       <div id="satisfaction-table">جاري التحميل...</div>
     </div>`;
+
+  const { data: dateRow } = await sb.from("platform_settings").select("value").eq("key","hackathon_start_date").maybeSingle();
+  if(dateRow?.value){
+    document.getElementById("hackathon-date-input").value = dateRow.value.substring(0,16);
+  }
+
+  await renderMentorAlert();
 
   const { data: stats, error } = await sb.from("dashboard_stats").select("*").single();
   if(error){
@@ -384,6 +421,47 @@ async function renderOverview(){
 }
 function statCard(num, label, accent=false){
   return `<div class="stat-card ${accent ? 'accent' : ''}"><div class="num">${num ?? "—"}</div><div class="label">${label}</div></div>`;
+}
+async function saveHackathonDate(){
+  const val = document.getElementById("hackathon-date-input").value;
+  if(!val) return;
+  const { error } = await sb.from("platform_settings")
+    .upsert({ key: "hackathon_start_date", value: new Date(val).toISOString() });
+  const alertEl = document.getElementById("hackathon-date-alert");
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  alertEl.style.display = "inline";
+  setTimeout(() => alertEl.style.display = "none", 2000);
+}
+const MIN_MENTOR_SLOTS = 3;
+async function renderMentorAlert(){
+  const card = document.getElementById("mentor-alert-card");
+  const { data: mentors } = await sb.from("user_roles")
+    .select("user_id, profiles(full_name, email), roles!inner(key)")
+    .eq("roles.key", "mentor");
+
+  if(!mentors || !mentors.length){
+    card.innerHTML = `<h3>حالة المرشدين</h3><div class="empty-state">لا يوجد مرشدون مسجّلون بعد</div>`;
+    return;
+  }
+
+  const { data: slots } = await sb.from("mentor_slots").select("mentor_user_id");
+  const slotCounts = {};
+  (slots||[]).forEach(s => { slotCounts[s.mentor_user_id] = (slotCounts[s.mentor_user_id]||0) + 1; });
+
+  const below = mentors.filter(m => (slotCounts[m.user_id]||0) < MIN_MENTOR_SLOTS);
+
+  if(!below.length){
+    card.innerHTML = `<h3>حالة المرشدين</h3><div class="empty-state">كل المرشدين أضافوا ${MIN_MENTOR_SLOTS} مواعيد على الأقل ✓</div>`;
+    return;
+  }
+  card.innerHTML = `<h3>⚠ مرشدون بحاجة لإضافة مواعيد</h3>
+    <p class="hint" style="margin-bottom:10px">الحد الأدنى المقترح ${MIN_MENTOR_SLOTS} مواعيد لكل مرشد</p>
+    ${below.map(m => `
+      <div class="member-row">
+        <span>${esc(m.profiles?.full_name||"—")}</span>
+        <span class="badge badge-red">${slotCounts[m.user_id]||0} / ${MIN_MENTOR_SLOTS}</span>
+      </div>
+    `).join("")}`;
 }
 
 /* ============================================================
@@ -456,6 +534,7 @@ async function saveTrack(id){
   const q = id ? sb.from("tracks").update(payload).eq("id", id) : sb.from("tracks").insert(payload);
   const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
+  logActivity(id ? "تعديل مسار" : "إضافة مسار", "track", id || null, {name: payload.name_ar});
   showToast("تم الحفظ بنجاح");
   closeModal();
   renderTracks();
@@ -464,18 +543,68 @@ async function saveTrack(id){
 /* ============================================================
    3. الفرق
    ============================================================ */
+let allTeamsCache = [];
 async function renderTeams(){
   const main = document.getElementById("main-content");
-  main.innerHTML = `<div class="page-header"><div><h1>الفرق</h1><p>متابعة حالة الفرق المسجلة عبر جميع المسارات</p></div></div>
-    <div class="card"><div id="teams-table">جاري التحميل...</div></div>`;
+  main.innerHTML = `<div class="page-header">
+      <div><h1>الفرق</h1><p>متابعة حالة الفرق المسجلة عبر جميع المسارات، وأعضائها</p></div>
+      <button class="btn btn-outline" onclick="exportTeamsExcel()">⬇ تصدير Excel</button>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="form-row-2" style="grid-template-columns:2fr 1fr 1fr">
+        <div class="field" style="margin:0"><label>بحث بالاسم</label><input id="team-search" placeholder="اسم الفريق أو عضو..." oninput="filterTeamsView()"></div>
+        <div class="field" style="margin:0"><label>المسار</label><select id="team-filter-track" onchange="filterTeamsView()"><option value="">الكل</option></select></div>
+        <div class="field" style="margin:0"><label>الحالة</label>
+          <select id="team-filter-status" onchange="filterTeamsView()">
+            <option value="">الكل</option>
+            <option value="pending">قيد المراجعة</option>
+            <option value="confirmed">مؤكد</option>
+            <option value="disqualified">مستبعد</option>
+            <option value="withdrawn">منسحب</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="teams-table">جاري التحميل...</div>`;
 
   const { data, error } = await sb.from("teams")
-    .select("id, team_name, status, invite_code, created_at, tracks(name_ar), team_members(count)")
+    .select("id, team_name, status, invite_code, created_at, tracks(name_ar, max_team_size), team_members(is_leader, profiles(full_name, email, organization))")
     .order("created_at", {ascending:false});
 
   const box = document.getElementById("teams-table");
-  if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
-  if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد فرق مسجلة بعد</div>`;
+  if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
+  allTeamsCache = data || [];
+
+  const { data: tracks } = await sb.from("tracks").select("id,name_ar");
+  const trackSelect = document.getElementById("team-filter-track");
+  (tracks||[]).forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.name_ar; opt.textContent = t.name_ar;
+    trackSelect.appendChild(opt);
+  });
+
+  filterTeamsView();
+}
+function filterTeamsView(){
+  const term = (document.getElementById("team-search")?.value || "").trim().toLowerCase();
+  const trackFilter = document.getElementById("team-filter-track")?.value || "";
+  const statusFilter = document.getElementById("team-filter-status")?.value || "";
+
+  const filtered = allTeamsCache.filter(t => {
+    const trackName = t.tracks?.name_ar || "";
+    const matchesTrack = !trackFilter || trackName === trackFilter;
+    const matchesStatus = !statusFilter || t.status === statusFilter;
+    const matchesTerm = !term ||
+      t.team_name.toLowerCase().includes(term) ||
+      (t.team_members||[]).some(m => (m.profiles?.full_name||"").toLowerCase().includes(term));
+    return matchesTrack && matchesStatus && matchesTerm;
+  });
+
+  renderTeamsTable(filtered);
+}
+function renderTeamsTable(data){
+  const box = document.getElementById("teams-table");
+  if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج مطابقة</div>`; return; }
 
   const statusBadge = {
     pending: '<span class="badge badge-gray">قيد المراجعة</span>',
@@ -484,31 +613,148 @@ async function renderTeams(){
     withdrawn: '<span class="badge badge-gray">منسحب</span>',
   };
 
-  box.innerHTML = `<table><thead><tr>
-    <th>الفريق</th><th>المسار</th><th>عدد الأعضاء</th><th>الحالة</th><th>تاريخ التسجيل</th><th></th>
-    </tr></thead><tbody>
-    ${data.map(t => `<tr>
-      <td><strong>${esc(t.team_name)}</strong></td>
-      <td>${esc(t.tracks?.name_ar || "—")}</td>
-      <td>${t.team_members?.[0]?.count ?? 0}</td>
-      <td>${statusBadge[t.status] || t.status}</td>
-      <td>${fmtDate(t.created_at)}</td>
-      <td class="row-actions">
-        <select onchange="updateTeamStatus('${t.id}', this.value)" class="btn-sm" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border)">
-          <option value="">تغيير الحالة</option>
-          <option value="confirmed">تأكيد</option>
-          <option value="disqualified">استبعاد</option>
-          <option value="withdrawn">انسحاب</option>
-        </select>
-      </td>
-    </tr>`).join("")}
-    </tbody></table>`;
+  box.innerHTML = data.map(t => {
+    const members = t.team_members || [];
+    return `
+    <div class="card" style="margin-bottom:14px;padding:16px 18px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
+        <div>
+          <strong style="font-size:15px">${esc(t.team_name)}</strong>
+          <div style="font-size:12.5px;color:var(--muted);margin-top:2px">
+            ${esc(t.tracks?.name_ar || "—")} · ${members.length} / ${t.tracks?.max_team_size ?? "—"} أعضاء ·
+            سُجّل ${fmtDate(t.created_at)} · رمز الدعوة: <code>${esc(t.invite_code)}</code>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${statusBadge[t.status] || t.status}
+          <button class="btn btn-outline btn-sm" onclick='openAddMemberModal("${t.id}", ${JSON.stringify(t.team_name)}, ${members.length}, ${t.tracks?.max_team_size ?? 99})'>+ عضو</button>
+          <select onchange="updateTeamStatus('${t.id}', this.value)" class="btn-sm" style="padding:5px 8px;border-radius:6px;border:1px solid var(--border)">
+            <option value="">تغيير الحالة</option>
+            <option value="confirmed">تأكيد</option>
+            <option value="disqualified">استبعاد</option>
+            <option value="withdrawn">انسحاب</option>
+          </select>
+        </div>
+      </div>
+      <table style="margin-top:12px"><tbody>
+        ${members.length ? members.map(m => `<tr>
+          <td style="padding:6px 8px;font-size:13px">${esc(m.profiles?.full_name||"—")} ${m.is_leader ? '<span class="badge badge-gold" style="margin-right:6px">قائد</span>' : ""}</td>
+          <td style="padding:6px 8px;font-size:12.5px;color:var(--muted)">${esc(m.profiles?.email||"")}</td>
+          <td style="padding:6px 8px;font-size:12.5px;color:var(--muted)">${esc(m.profiles?.organization||"")}</td>
+        </tr>`).join("") : `<tr><td style="padding:6px 8px;font-size:12.5px;color:var(--muted)">لا يوجد أعضاء بعد</td></tr>`}
+      </tbody></table>
+    </div>
+  `;}).join("");
+}
+function exportTeamsExcel(){
+  const term = (document.getElementById("team-search")?.value || "").trim().toLowerCase();
+  const trackFilter = document.getElementById("team-filter-track")?.value || "";
+  const statusFilter = document.getElementById("team-filter-status")?.value || "";
+  const filtered = allTeamsCache.filter(t => {
+    const trackName = t.tracks?.name_ar || "";
+    const matchesTrack = !trackFilter || trackName === trackFilter;
+    const matchesStatus = !statusFilter || t.status === statusFilter;
+    const matchesTerm = !term || t.team_name.toLowerCase().includes(term) ||
+      (t.team_members||[]).some(m => (m.profiles?.full_name||"").toLowerCase().includes(term));
+    return matchesTrack && matchesStatus && matchesTerm;
+  });
+
+  const rows = [];
+  filtered.forEach(t => {
+    const members = t.team_members || [];
+    if(!members.length){
+      rows.push({
+        "اسم الفريق": t.team_name, "المسار": t.tracks?.name_ar || "", "الحالة": t.status,
+        "اسم العضو": "", "البريد": "", "الجهة": "", "القائد": "", "رمز الدعوة": t.invite_code,
+        "تاريخ التسجيل": fmtDate(t.created_at)
+      });
+    } else {
+      members.forEach(m => {
+        rows.push({
+          "اسم الفريق": t.team_name, "المسار": t.tracks?.name_ar || "", "الحالة": t.status,
+          "اسم العضو": m.profiles?.full_name || "", "البريد": m.profiles?.email || "",
+          "الجهة": m.profiles?.organization || "", "القائد": m.is_leader ? "نعم" : "لا",
+          "رمز الدعوة": t.invite_code, "تاريخ التسجيل": fmtDate(t.created_at)
+        });
+      });
+    }
+  });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "الفرق والمشاركون");
+  XLSX.writeFile(wb, `فرق_هاكاثون_إنفاذ_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 async function updateTeamStatus(id, status){
   if(!status) return;
   const { error } = await sb.from("teams").update({status}).eq("id", id);
   if(error) return showToast("خطأ: " + error.message, true);
+  logActivity("تغيير حالة فريق", "team", id, {new_status: status});
   showToast("تم تحديث حالة الفريق");
+  renderTeams();
+}
+
+/* ---------------- إضافة عضو لفريق (من لوحة التحكم) ---------------- */
+function openAddMemberModal(teamId, teamName, currentCount, maxSize){
+  openModal(`
+    <h3>إضافة عضو لفريق ${esc(teamName)}</h3>
+    <p style="color:var(--muted);font-size:12.5px;margin:-10px 0 16px">عدد الأعضاء الحالي: ${currentCount} / ${maxSize}</p>
+    <div class="field"><label>ابحث بالبريد الإلكتروني</label>
+      <input id="add-member-search" placeholder="اكتب بريد المستخدم..." oninput="debouncedMemberSearch()">
+    </div>
+    <div id="add-member-results" style="margin-top:10px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إغلاق</button>
+    </div>
+  `);
+  window.currentAddMemberTeam = { teamId, currentCount, maxSize };
+}
+let memberSearchTimer;
+function debouncedMemberSearch(){
+  clearTimeout(memberSearchTimer);
+  memberSearchTimer = setTimeout(searchUserForMember, 400);
+}
+async function searchUserForMember(){
+  const term = document.getElementById("add-member-search").value.trim();
+  const box = document.getElementById("add-member-results");
+  if(!term){ box.innerHTML = ""; return; }
+  box.innerHTML = `<div style="font-size:12.5px;color:var(--muted)">جاري البحث...</div>`;
+
+  const { data, error } = await sb.from("profiles")
+    .select("id, full_name, email, team_members(team_id)")
+    .or(`email.ilike.%${term}%,full_name.ilike.%${term}%`)
+    .limit(8);
+
+  if(error){ box.innerHTML = `<div style="color:var(--danger);font-size:12.5px">خطأ: ${esc(error.message)}</div>`; return; }
+  if(!data.length){ box.innerHTML = `<div style="font-size:12.5px;color:var(--muted)">لا توجد نتائج</div>`; return; }
+
+  box.innerHTML = data.map(u => {
+    const alreadyInTeam = (u.team_members || []).length > 0;
+    return `
+      <div class="member-row-admin" style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:13.5px;font-weight:600">${esc(u.full_name)}</div>
+          <div style="font-size:12px;color:var(--muted)">${esc(u.email)}</div>
+        </div>
+        ${alreadyInTeam
+          ? `<span class="badge badge-gray">لديه فريق بالفعل</span>`
+          : `<button class="btn btn-primary btn-sm" style="width:auto;padding:7px 14px" onclick="addMemberToTeam('${u.id}', ${JSON.stringify(u.full_name)})">إضافة</button>`
+        }
+      </div>
+    `;
+  }).join("");
+}
+async function addMemberToTeam(userId, userName){
+  const { teamId, currentCount, maxSize } = window.currentAddMemberTeam;
+  if(currentCount >= maxSize){
+    showToast("الفريق مكتمل العدد بالفعل", true);
+    return;
+  }
+  const { error } = await sb.from("team_members").insert({ team_id: teamId, user_id: userId, is_leader: false });
+  if(error) return showToast("خطأ: " + error.message, true);
+  logActivity("إضافة عضو لفريق", "team", teamId, {member_name: userName});
+  showToast(`تمت إضافة ${userName} للفريق`);
+  closeModal();
   renderTeams();
 }
 
@@ -619,31 +865,34 @@ async function renderAnnouncements(){
       <td>${a.file_url ? `<a href="${esc(a.file_url)}" target="_blank" style="color:var(--teal)">فتح الملف</a>` : "—"}</td>
       <td>${fmtDate(a.published_at)}</td>
       <td class="row-actions">
+        <button class="btn btn-outline btn-sm" onclick='openAnnouncementModal(${JSON.stringify(a)})'>تعديل</button>
         <button class="btn btn-danger btn-sm" onclick="deleteRow('announcements','${a.id}', renderAnnouncements)">حذف</button>
       </td>
     </tr>`).join("")}
     </tbody></table>`;
 }
-async function openAnnouncementModal(){
+async function openAnnouncementModal(a=null){
+  const isEdit = !!a;
+  a = a || {title:"",body:"",file_url:"",track_id:"",is_pinned:false};
   const { data: tracks } = await sb.from("tracks").select("id,name_ar");
   openModal(`
-    <h3>إضافة تحديث جديد</h3>
-    <div class="field"><label>العنوان</label><input id="f-ann-title" placeholder="مثال: تحديث موعد الورشة الثانية"></div>
-    <div class="field"><label>التفاصيل</label><textarea id="f-ann-body" rows="4"></textarea></div>
-    <div class="field"><label>رابط ملف مرفق (اختياري)</label><input id="f-ann-file" placeholder="https://..."></div>
+    <h3>${isEdit ? "تعديل تحديث" : "إضافة تحديث جديد"}</h3>
+    <div class="field"><label>العنوان</label><input id="f-ann-title" value="${esc(a.title)}" placeholder="مثال: تحديث موعد الورشة الثانية"></div>
+    <div class="field"><label>التفاصيل</label><textarea id="f-ann-body" rows="4">${esc(a.body||"")}</textarea></div>
+    <div class="field"><label>رابط ملف مرفق (اختياري)</label><input id="f-ann-file" value="${esc(a.file_url||"")}" placeholder="https://..."></div>
     <div class="field"><label>المسار (اتركه فارغًا لجميع المسارات)</label>
       <select id="f-ann-track"><option value="">جميع المسارات</option>
-        ${(tracks||[]).map(t=>`<option value="${t.id}">${esc(t.name_ar)}</option>`).join("")}
+        ${(tracks||[]).map(t=>`<option value="${t.id}" ${a.track_id===t.id?"selected":""}>${esc(t.name_ar)}</option>`).join("")}
       </select>
     </div>
-    <div class="field"><label><input type="checkbox" id="f-ann-pin"> تثبيت أعلى القائمة</label></div>
+    <div class="field"><label><input type="checkbox" id="f-ann-pin" ${a.is_pinned?"checked":""}> تثبيت أعلى القائمة</label></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
-      <button class="btn btn-primary" onclick="saveAnnouncement()">نشر التحديث</button>
+      <button class="btn btn-primary" onclick="saveAnnouncement('${a.id||""}')">${isEdit ? "حفظ التعديل" : "نشر التحديث"}</button>
     </div>
   `);
 }
-async function saveAnnouncement(){
+async function saveAnnouncement(id){
   const title = document.getElementById("f-ann-title").value.trim();
   const body = document.getElementById("f-ann-body").value.trim();
   const file_url = document.getElementById("f-ann-file").value.trim();
@@ -651,11 +900,12 @@ async function saveAnnouncement(){
   const is_pinned = document.getElementById("f-ann-pin").checked;
   if(!title){ showToast("العنوان مطلوب", true); return; }
 
-  const { error } = await sb.from("announcements").insert({
-    title, body, file_url: file_url || null, track_id, is_pinned, created_by: currentUser.id
-  });
+  const payload = { title, body, file_url: file_url || null, track_id, is_pinned };
+  const q = id ? sb.from("announcements").update(payload).eq("id", id) : sb.from("announcements").insert({...payload, created_by: currentUser.id});
+  const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
-  showToast("تم النشر بنجاح");
+  if(!id) logActivity("نشر تحديث", "announcement", null, {title});
+  showToast(id ? "تم التحديث" : "تم النشر بنجاح");
   closeModal();
   renderAnnouncements();
 }
@@ -696,10 +946,15 @@ async function renderJudgingRounds(){
   box.innerHTML = rounds.map(r => `
     <div class="card">
       <div class="toolbar" style="margin-bottom:10px">
-        <h3 style="margin:0">${esc(r.name_ar)} ${r.is_active ? '<span class="badge badge-green">نشطة</span>' : '<span class="badge badge-gray">غير نشطة</span>'}</h3>
+        <h3 style="margin:0">${esc(r.name_ar)}
+          ${r.is_active ? '<span class="badge badge-green">نشطة</span>' : '<span class="badge badge-gray">غير نشطة</span>'}
+          ${r.results_published ? '<span class="badge badge-gold">النتائج منشورة</span>' : ''}
+        </h3>
         <div class="row-actions">
           <button class="btn btn-outline btn-sm" onclick="toggleRoundActive('${r.id}', ${!r.is_active})">${r.is_active ? "إيقاف" : "تفعيل"}</button>
           <button class="btn btn-outline btn-sm" onclick="openCriteriaModal('${r.id}')">+ معيار</button>
+          <button class="btn ${r.results_published ? 'btn-outline' : 'btn-primary'} btn-sm" onclick="togglePublishResults('${r.id}', ${!r.results_published})">${r.results_published ? "إخفاء النتائج عن الفرق" : "نشر النتائج للفرق"}</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRow('judging_rounds','${r.id}', renderJudgingRounds)">حذف الجولة</button>
         </div>
       </div>
       ${!r.judging_criteria.length ? '<div class="empty-state">لا توجد معايير مضافة لهذه الجولة</div>' : `
@@ -708,7 +963,10 @@ async function renderJudgingRounds(){
           <td>${esc(c.name_ar)}</td>
           <td>${c.weight}</td>
           <td>${c.max_score}</td>
-          <td><button class="btn btn-danger btn-sm" onclick="deleteRow('judging_criteria','${c.id}', renderJudgingRounds)">حذف</button></td>
+          <td class="row-actions">
+            <button class="btn btn-outline btn-sm" onclick='openCriteriaModal("${r.id}", ${JSON.stringify(c)})'>تعديل</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRow('judging_criteria','${c.id}', renderJudgingRounds)">حذف</button>
+          </td>
         </tr>`).join("")}
       </tbody></table>`}
     </div>
@@ -740,28 +998,40 @@ async function toggleRoundActive(id, value){
   if(error) return showToast("خطأ: " + error.message, true);
   renderJudgingRounds();
 }
-function openCriteriaModal(roundId){
+async function togglePublishResults(id, value){
+  if(value && !confirm("نشر النتائج راح يخلي كل فريق يشوف درجاته والتغذية الراجعة من المحكّمين. متأكد؟")) return;
+  const { error } = await sb.from("judging_rounds").update({results_published:value}).eq("id", id);
+  if(error) return showToast("خطأ: " + error.message, true);
+  logActivity(value ? "نشر نتائج جولة تحكيم" : "إخفاء نتائج جولة تحكيم", "judging_round", id);
+  showToast(value ? "تم نشر النتائج للفرق" : "تم إخفاء النتائج");
+  renderJudgingRounds();
+}
+function openCriteriaModal(roundId, c=null){
+  const isEdit = !!c;
+  c = c || {name_ar:"",weight:25,max_score:10};
   openModal(`
-    <h3>إضافة معيار تقييم</h3>
-    <div class="field"><label>اسم المعيار</label><input id="f-crit-name" placeholder="مثال: الابتكار وجدة الفكرة"></div>
+    <h3>${isEdit ? "تعديل معيار" : "إضافة معيار تقييم"}</h3>
+    <div class="field"><label>اسم المعيار</label><input id="f-crit-name" value="${esc(c.name_ar)}" placeholder="مثال: الابتكار وجدة الفكرة"></div>
     <div class="form-row-2">
-      <div class="field"><label>الوزن (%)</label><input type="number" id="f-crit-weight" value="25"></div>
-      <div class="field"><label>أقصى درجة</label><input type="number" id="f-crit-max" value="10"></div>
+      <div class="field"><label>الوزن (%)</label><input type="number" id="f-crit-weight" value="${c.weight}"></div>
+      <div class="field"><label>أقصى درجة</label><input type="number" id="f-crit-max" value="${c.max_score}"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
-      <button class="btn btn-primary" onclick="saveCriteria('${roundId}')">حفظ</button>
+      <button class="btn btn-primary" onclick="saveCriteria('${roundId}','${c.id||""}')">حفظ</button>
     </div>
   `);
 }
-async function saveCriteria(roundId){
+async function saveCriteria(roundId, id){
   const name_ar = document.getElementById("f-crit-name").value.trim();
   const weight = parseFloat(document.getElementById("f-crit-weight").value) || 1;
   const max_score = parseInt(document.getElementById("f-crit-max").value) || 10;
   if(!name_ar){ showToast("اسم المعيار مطلوب", true); return; }
-  const { error } = await sb.from("judging_criteria").insert({round_id: roundId, name_ar, weight, max_score});
+  const payload = { name_ar, weight, max_score };
+  const q = id ? sb.from("judging_criteria").update(payload).eq("id", id) : sb.from("judging_criteria").insert({round_id: roundId, ...payload});
+  const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
-  showToast("تمت الإضافة");
+  showToast(id ? "تم التحديث" : "تمت الإضافة");
   closeModal();
   renderJudgingRounds();
 }
@@ -811,31 +1081,36 @@ async function renderEvents(){
       <td>${e.event_attendance?.[0]?.count ?? 0}</td>
       <td><code style="font-size:11px;color:var(--muted)">${esc(e.qr_token)}</code></td>
       <td class="row-actions">
+        <button class="btn btn-outline btn-sm" onclick='openEventModal(${JSON.stringify(e)})'>تعديل</button>
         <button class="btn btn-danger btn-sm" onclick="deleteRow('events','${e.id}', renderEvents)">حذف</button>
       </td>
     </tr>`).join("")}
     </tbody></table>`;
 }
-function openEventModal(){
+function openEventModal(e=null){
+  const isEdit = !!e;
+  e = e || {title:"",event_date:"",location:""};
   openModal(`
-    <h3>إضافة فعالية</h3>
-    <div class="field"><label>عنوان الفعالية</label><input id="f-ev-title" placeholder="مثال: حفل الافتتاح"></div>
-    <div class="field"><label>الموعد</label><input type="datetime-local" id="f-ev-date"></div>
-    <div class="field"><label>الموقع</label><input id="f-ev-location"></div>
+    <h3>${isEdit ? "تعديل فعالية" : "إضافة فعالية"}</h3>
+    <div class="field"><label>عنوان الفعالية</label><input id="f-ev-title" value="${esc(e.title)}" placeholder="مثال: حفل الافتتاح"></div>
+    <div class="field"><label>الموعد</label><input type="datetime-local" id="f-ev-date" value="${e.event_date ? e.event_date.substring(0,16) : ''}"></div>
+    <div class="field"><label>الموقع</label><input id="f-ev-location" value="${esc(e.location||'')}"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
-      <button class="btn btn-primary" onclick="saveEvent()">حفظ</button>
+      <button class="btn btn-primary" onclick="saveEvent('${e.id||""}')">حفظ</button>
     </div>
   `);
 }
-async function saveEvent(){
+async function saveEvent(id){
   const title = document.getElementById("f-ev-title").value.trim();
   const dateVal = document.getElementById("f-ev-date").value;
   const location = document.getElementById("f-ev-location").value.trim();
   if(!title || !dateVal){ showToast("العنوان والموعد مطلوبان", true); return; }
-  const { error } = await sb.from("events").insert({title, event_date:new Date(dateVal).toISOString(), location});
+  const payload = {title, event_date:new Date(dateVal).toISOString(), location};
+  const q = id ? sb.from("events").update(payload).eq("id", id) : sb.from("events").insert(payload);
+  const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
-  showToast("تمت الإضافة");
+  showToast(id ? "تم التحديث" : "تمت الإضافة");
   closeModal();
   renderEvents();
 }
@@ -857,13 +1132,17 @@ async function renderCertificates(){
   if(error) box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
   else if(!types.length) box.innerHTML = `<div class="empty-state">لا توجد أنواع شهادات بعد</div>`;
   else box.innerHTML = `<table><thead><tr>
-      <th>النوع</th><th>الحد الأدنى للحضور</th><th>يشترط استبيان</th><th>عدد الصادرة</th>
+      <th>النوع</th><th>الحد الأدنى للحضور</th><th>يشترط استبيان</th><th>عدد الصادرة</th><th></th>
       </tr></thead><tbody>
       ${types.map(c => `<tr>
         <td><strong>${esc(c.name_ar)}</strong></td>
         <td>${c.min_attendance_pct}%</td>
         <td>${c.requires_survey ? '<span class="badge badge-gold">نعم</span>' : '<span class="badge badge-gray">لا</span>'}</td>
         <td>${c.certificates?.[0]?.count ?? 0}</td>
+        <td class="row-actions">
+          <button class="btn btn-outline btn-sm" onclick='openCertTypeModal(${JSON.stringify(c)})'>تعديل</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRow('certificate_types','${c.id}', renderCertificates)">حذف</button>
+        </td>
       </tr>`).join("")}
       </tbody></table>`;
 
@@ -881,28 +1160,34 @@ async function renderCertificates(){
     </tr>`).join("")}
     </tbody></table>`;
 }
-function openCertTypeModal(){
+function openCertTypeModal(c=null){
+  const isEdit = !!c;
+  c = c || {key:"",name_ar:"",min_attendance_pct:50,requires_survey:false};
   openModal(`
-    <h3>إضافة نوع شهادة</h3>
-    <div class="field"><label>المفتاح (بالإنجليزي، بدون مسافات)</label><input id="f-cert-key" placeholder="مثال: participation"></div>
-    <div class="field"><label>الاسم بالعربي</label><input id="f-cert-name" placeholder="مثال: شهادة مشاركة"></div>
-    <div class="field"><label>الحد الأدنى لنسبة الحضور (%)</label><input type="number" id="f-cert-attendance" value="50"></div>
-    <div class="field"><label><input type="checkbox" id="f-cert-survey"> يشترط تعبئة استبيان</label></div>
+    <h3>${isEdit ? "تعديل نوع شهادة" : "إضافة نوع شهادة"}</h3>
+    <div class="field"><label>المفتاح (بالإنجليزي، بدون مسافات)</label><input id="f-cert-key" value="${esc(c.key)}" ${isEdit?'disabled style="opacity:.6"':''}></div>
+    <div class="field"><label>الاسم بالعربي</label><input id="f-cert-name" value="${esc(c.name_ar)}"></div>
+    <div class="field"><label>الحد الأدنى لنسبة الحضور (%)</label><input type="number" id="f-cert-attendance" value="${c.min_attendance_pct}"></div>
+    <div class="field"><label><input type="checkbox" id="f-cert-survey" ${c.requires_survey?"checked":""}> يشترط تعبئة استبيان</label></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
-      <button class="btn btn-primary" onclick="saveCertType()">حفظ</button>
+      <button class="btn btn-primary" onclick="saveCertType('${c.id||""}')">حفظ</button>
     </div>
   `);
 }
-async function saveCertType(){
+async function saveCertType(id){
   const key = document.getElementById("f-cert-key").value.trim();
   const name_ar = document.getElementById("f-cert-name").value.trim();
   const min_attendance_pct = parseFloat(document.getElementById("f-cert-attendance").value) || 0;
   const requires_survey = document.getElementById("f-cert-survey").checked;
   if(!key || !name_ar){ showToast("المفتاح والاسم مطلوبان", true); return; }
-  const { error } = await sb.from("certificate_types").insert({key, name_ar, min_attendance_pct, requires_survey});
+
+  const payload = { name_ar, min_attendance_pct, requires_survey };
+  if(!id) payload.key = key;
+  const q = id ? sb.from("certificate_types").update(payload).eq("id", id) : sb.from("certificate_types").insert({...payload, key});
+  const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
-  showToast("تمت الإضافة");
+  showToast(id ? "تم التحديث" : "تمت الإضافة");
   closeModal();
   renderCertificates();
 }
@@ -994,6 +1279,7 @@ async function assignRole(userId){
   const roleId = document.getElementById("f-role-select").value;
   const { error } = await sb.from("user_roles").insert({user_id:userId, role_id:roleId});
   if(error) return showToast("خطأ: " + error.message, true);
+  logActivity("إضافة دور لمستخدم", "user", userId, {role_id: roleId});
   showToast("تم إضافة الدور");
   closeModal();
   searchUsers();
@@ -1004,8 +1290,233 @@ async function deleteRow(table, id, refreshFn){
   if(!confirm("هل أنت متأكد من الحذف؟ لا يمكن التراجع عن هذا الإجراء.")) return;
   const { error } = await sb.from(table).delete().eq("id", id);
   if(error) return showToast("خطأ: " + error.message, true);
+  logActivity("حذف عنصر", table, id);
   showToast("تم الحذف");
   refreshFn();
+}
+
+/* ============================================================
+   المشاريع (أفكار الفرق المقدَّمة)
+   ============================================================ */
+async function renderProjects(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header">
+      <div><h1>المشاريع</h1><p>الأفكار المقدَّمة من الفرق — نفس ما يشاهده المرشدون والمحكّمون</p></div>
+      <a href="./projects.html" target="_blank"><button class="btn btn-outline">↗ فتح صفحة العرض المشتركة</button></a>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="field" style="margin:0"><label>بحث بعنوان الفكرة أو اسم الفريق</label><input id="projects-search" placeholder="اكتب للبحث..." oninput="filterProjectsView()"></div>
+    </div>
+    <div id="projects-list">جاري التحميل...</div>`;
+
+  const { data, error } = await sb.from("submissions")
+    .select("id, title, description, file_url, version, submitted_at, teams(team_name, tracks(name_ar))")
+    .order("submitted_at", {ascending:false});
+
+  const box = document.getElementById("projects-list");
+  if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
+  allProjectsCache = data || [];
+  filterProjectsView();
+}
+let allProjectsCache = [];
+function filterProjectsView(){
+  const term = (document.getElementById("projects-search")?.value || "").trim().toLowerCase();
+  const filtered = allProjectsCache.filter(p =>
+    !term || (p.title||"").toLowerCase().includes(term) || (p.teams?.team_name||"").toLowerCase().includes(term)
+  );
+  const box = document.getElementById("projects-list");
+  if(!filtered.length){ box.innerHTML = `<div class="card"><div class="empty-state">لا توجد مشاريع مقدَّمة بعد</div></div>`; return; }
+
+  box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+    ${filtered.map(p => `
+      <div class="card" style="margin:0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <h3 style="margin:0 0 4px">${esc(p.title)}</h3>
+          <span class="badge badge-gray">إصدار ${p.version}</span>
+        </div>
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">${esc(p.teams?.team_name||"")} · ${esc(p.teams?.tracks?.name_ar||"")}</p>
+        <p style="font-size:13.5px;color:var(--ink);line-height:1.6">${esc((p.description||"").substring(0,160))}${(p.description||"").length>160?"…":""}</p>
+        ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600">📎 فتح الملف المرفق</a>` : ""}
+        <p class="hint" style="margin-top:10px">آخر تحديث: ${fmtDate(p.submitted_at)}</p>
+      </div>
+    `).join("")}
+  </div>`;
+}
+
+let chartInstances = [];
+async function renderAnalytics(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header"><div><h1>التحليلات</h1><p>مؤشرات بصرية عن التسجيل والمشاركة عبر البرنامج</p></div></div>
+    <div class="card"><h3>التسجيلات التراكمية عبر الوقت</h3><canvas id="chart-registrations" height="90"></canvas></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card"><h3>توزيع الفرق حسب المسار</h3><canvas id="chart-tracks" height="200"></canvas></div>
+      <div class="card"><h3>حالة الفرق</h3><canvas id="chart-status" height="200"></canvas></div>
+    </div>
+    <div class="card"><h3>متوسط الرضا حسب المرحلة (NPS)</h3><canvas id="chart-nps" height="90"></canvas></div>`;
+
+  chartInstances.forEach(c => c.destroy());
+  chartInstances = [];
+
+  const { data: teams } = await sb.from("teams").select("created_at, status, tracks(name_ar)");
+  const { data: satisfaction } = await sb.from("satisfaction_by_stage").select("*");
+
+  // تسجيلات تراكمية عبر الوقت
+  if(teams && teams.length){
+    const sorted = [...teams].sort((a,b)=> new Date(a.created_at) - new Date(b.created_at));
+    const labels = []; const cumulative = [];
+    let count = 0;
+    const byDay = {};
+    sorted.forEach(t => {
+      const day = t.created_at.substring(0,10);
+      byDay[day] = (byDay[day]||0) + 1;
+    });
+    Object.keys(byDay).sort().forEach(day => {
+      count += byDay[day];
+      labels.push(day);
+      cumulative.push(count);
+    });
+    chartInstances.push(new Chart(document.getElementById("chart-registrations"), {
+      type: "line",
+      data: { labels, datasets: [{ label: "عدد الفرق المسجّلة (تراكمي)", data: cumulative, borderColor: "#1F9E8E", backgroundColor: "rgba(31,158,142,.12)", fill: true, tension: .3 }] },
+      options: { plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{precision:0} } } }
+    }));
+
+    // توزيع المسارات
+    const trackCounts = {};
+    teams.forEach(t => { const n = t.tracks?.name_ar || "غير محدد"; trackCounts[n] = (trackCounts[n]||0)+1; });
+    chartInstances.push(new Chart(document.getElementById("chart-tracks"), {
+      type: "bar",
+      data: { labels: Object.keys(trackCounts), datasets: [{ data: Object.values(trackCounts), backgroundColor: "#5B3E96" }] },
+      options: { plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{precision:0} } } }
+    }));
+
+    // حالة الفرق
+    const statusLabelsMap = {pending:"قيد المراجعة", confirmed:"مؤكد", disqualified:"مستبعد", withdrawn:"منسحب"};
+    const statusCounts = {};
+    teams.forEach(t => { const n = statusLabelsMap[t.status]||t.status; statusCounts[n] = (statusCounts[n]||0)+1; });
+    chartInstances.push(new Chart(document.getElementById("chart-status"), {
+      type: "doughnut",
+      data: { labels: Object.keys(statusCounts), datasets: [{ data: Object.values(statusCounts), backgroundColor: ["#C89B3C","#1F9E8E","#C0392B","#9CA3AF"] } ] },
+      options: { plugins:{legend:{position:"bottom"}} }
+    }));
+  }
+
+  // NPS حسب المرحلة
+  if(satisfaction && satisfaction.length){
+    chartInstances.push(new Chart(document.getElementById("chart-nps"), {
+      type: "bar",
+      data: {
+        labels: satisfaction.map(s => s.survey_title),
+        datasets: [{ label: "متوسط NPS", data: satisfaction.map(s => s.avg_nps || 0), backgroundColor: "#0B1F3A" }]
+      },
+      options: { plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, max:10 } } }
+    }));
+  } else {
+    document.getElementById("chart-nps").parentElement.innerHTML = `<h3>متوسط الرضا حسب المرحلة (NPS)</h3><div class="empty-state">لا توجد استجابات استبيانات بعد</div>`;
+  }
+}
+
+/* ============================================================
+   المشاركون (دليل كامل)
+   ============================================================ */
+let allParticipantsCache = [];
+async function renderParticipants(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header">
+      <div><h1>المشاركون</h1><p>دليل كامل بكل المسجّلين وأدوارهم وفرقهم</p></div>
+      <button class="btn btn-outline" onclick="exportParticipantsExcel()">⬇ تصدير Excel</button>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="field" style="margin:0"><label>بحث بالاسم أو البريد أو الجهة</label><input id="participants-search" placeholder="اكتب للبحث..." oninput="filterParticipantsView()"></div>
+    </div>
+    <div class="card"><div id="participants-table">جاري التحميل...</div></div>`;
+
+  const { data, error } = await sb.from("profiles")
+    .select("id, full_name, email, phone, organization, created_at, user_roles(roles(name_ar)), team_members(is_leader, teams(team_name, tracks(name_ar)))")
+    .order("created_at", {ascending:false});
+
+  const box = document.getElementById("participants-table");
+  if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
+  allParticipantsCache = data || [];
+  filterParticipantsView();
+}
+function filterParticipantsView(){
+  const term = (document.getElementById("participants-search")?.value || "").trim().toLowerCase();
+  const filtered = allParticipantsCache.filter(p =>
+    !term ||
+    (p.full_name||"").toLowerCase().includes(term) ||
+    (p.email||"").toLowerCase().includes(term) ||
+    (p.organization||"").toLowerCase().includes(term)
+  );
+  renderParticipantsTable(filtered);
+}
+function renderParticipantsTable(data){
+  const box = document.getElementById("participants-table");
+  if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج</div>`; return; }
+
+  box.innerHTML = `<table><thead><tr>
+    <th>الاسم</th><th>البريد / الجوال</th><th>الجهة</th><th>الأدوار</th><th>الفريق</th><th>تاريخ التسجيل</th>
+    </tr></thead><tbody>
+    ${data.map(p => {
+      const membership = (p.team_members||[])[0];
+      return `<tr>
+        <td>${esc(p.full_name)}</td>
+        <td>${esc(p.email)}<br><span style="color:var(--muted);font-size:12px">${esc(p.phone||"")}</span></td>
+        <td>${esc(p.organization||"—")}</td>
+        <td>${(p.user_roles||[]).map(r=>`<span class="badge badge-green" style="margin-left:4px">${esc(r.roles?.name_ar||"")}</span>`).join("") || "—"}</td>
+        <td>${membership ? `${esc(membership.teams?.team_name||"")} ${membership.is_leader ? '<span class="badge badge-gold">قائد</span>' : ""}<br><span style="color:var(--muted);font-size:12px">${esc(membership.teams?.tracks?.name_ar||"")}</span>` : '<span style="color:var(--muted)">بدون فريق</span>'}</td>
+        <td>${fmtDate(p.created_at)}</td>
+      </tr>`;
+    }).join("")}
+    </tbody></table>`;
+}
+function exportParticipantsExcel(){
+  const term = (document.getElementById("participants-search")?.value || "").trim().toLowerCase();
+  const filtered = allParticipantsCache.filter(p =>
+    !term || (p.full_name||"").toLowerCase().includes(term) || (p.email||"").toLowerCase().includes(term) || (p.organization||"").toLowerCase().includes(term)
+  );
+  const rows = filtered.map(p => {
+    const membership = (p.team_members||[])[0];
+    return {
+      "الاسم": p.full_name, "البريد": p.email, "الجوال": p.phone || "",
+      "الجهة": p.organization || "", "الأدوار": (p.user_roles||[]).map(r=>r.roles?.name_ar).join("، "),
+      "الفريق": membership?.teams?.team_name || "", "المسار": membership?.teams?.tracks?.name_ar || "",
+      "قائد فريق": membership?.is_leader ? "نعم" : "لا", "تاريخ التسجيل": fmtDate(p.created_at)
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "المشاركون");
+  XLSX.writeFile(wb, `مشاركون_هاكاثون_إنفاذ_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+/* ============================================================
+   سجل النشاط
+   ============================================================ */
+async function renderActivityLog(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header"><div><h1>سجل النشاط</h1><p>آخر الإجراءات الإدارية على المنصة</p></div></div>
+    <div class="card"><div id="activity-table">جاري التحميل...</div></div>`;
+
+  const { data, error } = await sb.from("activity_log")
+    .select("*, profiles(full_name)")
+    .order("created_at", {ascending:false})
+    .limit(100);
+
+  const box = document.getElementById("activity-table");
+  if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
+  if(!data.length){ box.innerHTML = `<div class="empty-state">لا يوجد نشاط مسجّل بعد</div>`; return; }
+
+  box.innerHTML = `<table><thead><tr>
+    <th>الإجراء</th><th>بواسطة</th><th>النوع</th><th>التوقيت</th>
+    </tr></thead><tbody>
+    ${data.map(a => `<tr>
+      <td>${esc(a.action)}</td>
+      <td>${esc(a.profiles?.full_name || "—")}</td>
+      <td><span class="badge badge-gray">${esc(a.entity_type||"—")}</span></td>
+      <td>${fmtDate(a.created_at)}</td>
+    </tr>`).join("")}
+    </tbody></table>`;
 }
 </script>
 </body>

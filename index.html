@@ -3,606 +3,322 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>التسجيل | هاكاثون إنفاذ</title>
+<title>هاكاثون إنفاذ 2026 | جامعة القصيم</title>
+<meta name="description" content="هاكاثون إنفاذ — حلول ذكاء اصطناعي لخدمة قطاع التنفيذ القضائي. تنظيم مركز الابتكار والملكية الفكرية، جامعة القصيم.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
-    --navy:#0B1F3A; --navy-light:#122a52; --purple:#5B3E96; --teal:#1F9E8E;
-    --gold:#C89B3C; --bg:#F5F6FA; --card:#FFFFFF; --ink:#1A1D29; --muted:#6B7280;
-    --border:#E4E6EF; --danger:#C0392B; --radius:16px;
+    --ink:#0B1F3A; --ink-light:#122a52; --paper:#F7F5EF; --paper-dim:#EFEBE0;
+    --purple:#5B3E96; --teal:#1F9E8E; --gold:#C89B3C; --charcoal:#1A1D29; --muted:#6B7280;
+    --border:rgba(11,31,58,.12);
+    --font-display:'IBM Plex Sans Arabic', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
   }
-  *{box-sizing:border-box;}
-  body{margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--ink);}
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{font-family:var(--font-display); color:var(--charcoal); background:var(--paper); line-height:1.6; overflow-x:hidden;}
+  a{color:inherit; text-decoration:none;}
+  img,svg{display:block; max-width:100%;}
+
+  .ref-bar{
+    background:var(--ink); color:#9db3d6; font-family:var(--font-mono); font-size:11.5px;
+    letter-spacing:.06em; padding:8px 24px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
+  }
+  .ref-bar span{opacity:.85;}
+
+  .site-header{background:var(--ink); color:#fff; padding:16px 24px 0; position:sticky; top:0; z-index:50;}
+  .nav-row{max-width:1180px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; padding-bottom:16px;}
+  .brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:15px;}
+  .brand-mark{width:34px; height:34px; border-radius:50%; border:1.5px solid var(--gold); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:12px; color:var(--gold);}
+  .nav-links{display:flex; gap:28px; font-size:13.5px; color:#c8d3e8;}
+  .nav-links a:hover{color:#fff;}
+  .cta-small{background:var(--teal); color:#fff !important; padding:9px 20px; border-radius:8px; font-weight:600; font-size:13px;}
 
   .hero{
-    background:radial-gradient(circle at 20% 15%, rgba(91,62,150,.55), transparent 45%),
-               linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 60%, #0e2745 100%);
-    color:#fff; padding:52px 20px 70px; text-align:center; position:relative; overflow:hidden;
+    background:radial-gradient(circle at 15% 10%, rgba(91,62,150,.5), transparent 42%),
+               linear-gradient(150deg, var(--ink) 0%, var(--ink-light) 55%, #0e2745 100%);
+    color:#fff; padding:80px 24px 110px; position:relative; overflow:hidden;
   }
-  .hero::after{
-    content:""; position:absolute; inset:0; opacity:.08; pointer-events:none;
-    background-image:linear-gradient(rgba(255,255,255,.6) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,.6) 1px, transparent 1px);
-    background-size:42px 42px;
+  .hero::before{
+    content:""; position:absolute; inset:0; opacity:.07; pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px);
+    background-size:46px 46px;
   }
-  .hero-content{position:relative; z-index:1; max-width:640px; margin:0 auto;}
-  .eyebrow{display:inline-block; background:rgba(31,158,142,.18); color:#5fe4cf; border:1px solid rgba(31,158,142,.4);
-    padding:5px 16px; border-radius:20px; font-size:12.5px; font-weight:600; margin-bottom:18px;}
-  .hero h1{font-size:clamp(26px,4vw,36px); margin:0 0 10px; font-weight:800;}
-  .hero p{color:#c8d3e8; font-size:15px; margin:0; line-height:1.7;}
+  .hero-inner{max-width:1180px; margin:0 auto; position:relative; z-index:1; display:grid; grid-template-columns:1.3fr .7fr; gap:40px; align-items:center;}
+  .eyebrow{display:inline-flex; align-items:center; gap:8px; background:rgba(31,158,142,.16); border:1px solid rgba(31,158,142,.4);
+    padding:6px 15px; border-radius:20px; font-size:12px; font-weight:600; color:#5fe4cf; margin-bottom:22px; font-family:var(--font-mono); letter-spacing:.03em;}
+  .hero h1{font-size:clamp(32px,4.6vw,52px); font-weight:800; line-height:1.15; margin-bottom:16px; opacity:0; animation:riseIn .7s .1s forwards;}
+  .hero h1 span{color:var(--gold);}
+  .hero .lede{font-size:16.5px; color:#c8d3e8; max-width:520px; margin-bottom:32px; opacity:0; animation:riseIn .7s .25s forwards;}
+  .hero-ctas{display:flex; gap:14px; flex-wrap:wrap; opacity:0; animation:riseIn .7s .4s forwards;}
+  .btn-primary{background:var(--teal); color:#fff; padding:14px 28px; border-radius:10px; font-weight:700; font-size:14.5px; display:inline-block; transition:.2s;}
+  .btn-primary:hover{background:#188878; transform:translateY(-1px);}
+  .btn-ghost{border:1.5px solid rgba(255,255,255,.35); color:#fff; padding:13px 26px; border-radius:10px; font-weight:600; font-size:14.5px; display:inline-block; transition:.2s;}
+  .btn-ghost:hover{border-color:#fff; background:rgba(255,255,255,.06);}
 
-  .wrap{max-width:560px; margin:-40px auto 60px; padding:0 20px; position:relative; z-index:2;}
-  .panel{background:var(--card); border-radius:var(--radius); padding:32px 28px; box-shadow:0 24px 60px rgba(11,31,58,.16); border:1px solid var(--border);}
+  @keyframes riseIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
 
-  h2{font-size:19px; margin:0 0 4px; color:var(--navy);}
-  .sub{color:var(--muted); font-size:13.5px; margin:0 0 24px;}
-
-  .field{margin-bottom:16px;}
-  .field label{display:block; font-size:13px; margin-bottom:6px; font-weight:500;}
-  .field input, .field select, .field textarea{
-    width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:10px;
-    font-family:inherit; font-size:14px; background:#fafbfc; transition:.15s;
+  .seal-wrap{display:flex; justify-content:center; align-items:center;}
+  .seal{
+    width:220px; height:220px; position:relative; opacity:0; transform:scale(.7) rotate(-14deg);
+    animation:sealIn .8s .5s cubic-bezier(.34,1.56,.64,1) forwards;
   }
-  .field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--teal); background:#fff;}
-  .hint{font-size:11.5px; color:var(--muted); margin-top:5px;}
+  @keyframes sealIn{to{opacity:1; transform:scale(1) rotate(0deg);}}
+  .seal svg{width:100%; height:100%;}
 
-  .btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; border:none; border-radius:10px;
-    padding:13px 22px; font-family:inherit; font-size:14.5px; font-weight:600; cursor:pointer; transition:.15s; width:100%;}
-  .btn-primary{background:var(--teal); color:#fff;}
-  .btn-primary:hover{background:#188878;}
-  .btn-primary:disabled{opacity:.6; cursor:not-allowed;}
-  .btn-outline{background:transparent; border:1px solid var(--border); color:var(--ink);}
-  .btn-outline:hover{border-color:var(--teal); color:var(--teal);}
-  .btn-link{background:none; border:none; color:var(--teal); cursor:pointer; font-size:13px; font-family:inherit; font-weight:600; padding:0;}
-
-  .switcher{display:flex; gap:8px; margin-bottom:24px; background:#f0f1f5; padding:4px; border-radius:11px;}
-  .switcher button{flex:1; padding:9px; border:none; border-radius:8px; background:none; font-family:inherit;
-    font-size:13.5px; font-weight:600; color:var(--muted); cursor:pointer; transition:.15s;}
-  .switcher button.active{background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(0,0,0,.08);}
-
-  .alert{padding:11px 14px; border-radius:9px; font-size:13px; margin-bottom:16px; display:none;}
-  .alert.error{background:#fdeceb; color:var(--danger); display:block;}
-  .alert.success{background:#e6f7f3; color:var(--teal); display:block;}
-
-  .loader{width:15px; height:15px; border:2px solid rgba(255,255,255,.4); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; display:inline-block;}
-  @keyframes spin{to{transform:rotate(360deg);}}
-
-  /* لوحة المشارك بعد الدخول */
-  #dash-screen{display:none;}
-  .topbar{display:flex; justify-content:space-between; align-items:center; max-width:800px; margin:0 auto 20px; padding:20px 20px 0;}
-  .topbar .who{font-size:13px; color:var(--muted);}
-  .topbar .who strong{color:var(--ink);}
-  .dash-wrap{max-width:800px; margin:0 auto; padding:0 20px 60px;}
-
-  .status-badge{display:inline-block; padding:4px 13px; border-radius:20px; font-size:12px; font-weight:600;}
-  .status-pending{background:#fbf3e2; color:var(--gold);}
-  .status-confirmed{background:#e6f7f3; color:var(--teal);}
-  .status-disqualified{background:#fdeceb; color:var(--danger);}
-  .status-withdrawn{background:#f0f1f5; color:var(--muted);}
-
-  .track-option{
-    border:1.5px solid var(--border); border-radius:12px; padding:14px 16px; margin-bottom:10px; cursor:pointer; transition:.15s;
+  @media (prefers-reduced-motion: reduce){
+    .hero h1, .hero .lede, .hero-ctas, .seal{animation:none; opacity:1; transform:none;}
   }
-  .track-option.selected{border-color:var(--teal); background:#f2fbf9;}
-  .track-option h4{margin:0 0 3px; font-size:14px;}
-  .track-option p{margin:0; font-size:12.5px; color:var(--muted);}
 
-  .member-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);}
-  .member-row:last-child{border-bottom:none;}
-  .leader-tag{font-size:11px; background:var(--purple); color:#fff; padding:2px 9px; border-radius:12px; margin-right:6px;}
+  .facts-bar{background:var(--paper-dim); border-bottom:1px solid var(--border);}
+  .facts-inner{max-width:1180px; margin:0 auto; padding:26px 24px; display:grid; grid-template-columns:repeat(4,1fr); gap:20px; text-align:center;}
+  .fact-num{font-family:var(--font-mono); font-size:26px; font-weight:600; color:var(--ink);}
+  .fact-label{font-size:12.5px; color:var(--muted); margin-top:4px;}
 
-  .invite-box{background:#f2fbf9; border:1px dashed var(--teal); border-radius:12px; padding:16px; text-align:center; margin-bottom:20px;}
-  .invite-code{font-size:22px; font-weight:800; letter-spacing:3px; color:var(--navy); margin:8px 0;}
+  section{padding:76px 24px;}
+  .section-inner{max-width:1180px; margin:0 auto;}
+  .section-tag{font-family:var(--font-mono); font-size:12px; color:var(--teal); letter-spacing:.08em; margin-bottom:10px; display:block;}
+  .section-title{font-size:clamp(24px,3vw,32px); font-weight:800; color:var(--ink); margin-bottom:14px;}
+  .section-sub{color:var(--muted); font-size:15px; max-width:600px; margin-bottom:44px;}
 
-  .card{background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:24px; margin-bottom:18px;}
+  .tracks-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px;}
+  .track-card{background:#fff; border:1px solid var(--border); border-radius:14px; padding:26px 22px; position:relative; transition:.2s;}
+  .track-card:hover{transform:translateY(-3px); box-shadow:0 14px 32px rgba(11,31,58,.09); border-color:var(--teal);}
+  .track-ref{font-family:var(--font-mono); font-size:11px; color:var(--gold); letter-spacing:.05em; margin-bottom:14px; display:block;}
+  .track-card h3{font-size:16.5px; margin-bottom:8px; color:var(--ink);}
+  .track-card p{font-size:13.5px; color:var(--muted); line-height:1.7;}
 
-  .dash-tabs{display:flex; gap:4px; background:#eef0f6; padding:4px; border-radius:12px; margin-bottom:20px; overflow-x:auto;}
-  .dash-tab{flex:1; white-space:nowrap; padding:10px 14px; border:none; border-radius:9px; background:none; font-family:inherit;
-    font-size:13.5px; font-weight:600; color:var(--muted); cursor:pointer; transition:.15s;}
-  .dash-tab.active{background:#fff; color:var(--navy); box-shadow:0 1px 5px rgba(0,0,0,.08);}
+  .timeline{position:relative; padding-right:4px;}
+  .timeline::before{content:""; position:absolute; top:8px; bottom:8px; right:23px; width:2px; background:var(--border);}
+  .tl-item{position:relative; padding-right:64px; padding-bottom:36px;}
+  .tl-item:last-child{padding-bottom:0;}
+  .tl-marker{
+    position:absolute; right:0; top:0; width:48px; height:48px; border-radius:50%; background:var(--ink); color:#fff;
+    display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:14px; font-weight:600; z-index:1;
+  }
+  .tl-item.done .tl-marker{background:var(--teal);}
+  .tl-title{font-size:15.5px; font-weight:700; color:var(--ink); margin-bottom:4px;}
+  .tl-desc{font-size:13.5px; color:var(--muted);}
 
-  .eligible-yes{color:var(--teal); font-weight:600;}
-  .eligible-no{color:var(--muted);}
-  .progress-bar{background:#eef0f6; border-radius:20px; height:8px; overflow:hidden; margin:6px 0;}
-  .progress-fill{background:var(--teal); height:100%; border-radius:20px; transition:.3s;}
+  .duality{background:var(--ink); color:#fff; text-align:center;}
+  .duality .section-inner{max-width:820px;}
+  .duality h2{font-size:clamp(22px,3vw,30px); font-weight:700; margin-bottom:18px; line-height:1.5;}
+  .duality h2 .hl{color:var(--gold);}
+  .duality p{color:#a9b8d4; font-size:14.5px;}
 
-  .announcement-item{border-bottom:1px solid var(--border); padding:16px 0;}
-  .announcement-item:last-child{border-bottom:none;}
-  .announcement-item h4{margin:0 0 4px; font-size:14.5px;}
-  .announcement-item .meta{font-size:11.5px; color:var(--muted); margin-bottom:6px;}
-  .announcement-item p{margin:0; font-size:13.5px; color:var(--ink); line-height:1.6;}
-  .pin-flag{color:var(--gold); margin-left:4px;}
+  .final-cta{text-align:center; position:relative;}
+  .final-cta .seal-mini{width:70px; height:70px; margin:0 auto 20px; opacity:.9;}
+  .final-cta h2{font-size:clamp(24px,3.4vw,34px); color:var(--ink); font-weight:800; margin-bottom:12px;}
+  .final-cta p{color:var(--muted); margin-bottom:28px; max-width:480px; margin-left:auto; margin-right:auto;}
 
-  .cert-item{display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--border);}
-  .cert-item:last-child{border-bottom:none;}
-  .cert-item h4{margin:0 0 4px; font-size:14px;}
-  .cert-item .meta{font-size:12px; color:var(--muted);}
+  footer{background:var(--ink); color:#8fa1c4; padding:36px 24px; font-size:12.5px;}
+  .footer-inner{max-width:1180px; margin:0 auto; display:flex; justify-content:space-between; flex-wrap:wrap; gap:14px;}
+
+  @media(max-width:820px){
+    .hero-inner{grid-template-columns:1fr;}
+    .seal-wrap{order:-1;}
+    .seal{width:140px; height:140px; margin:0 auto;}
+    .facts-inner{grid-template-columns:repeat(2,1fr);}
+    .nav-links{display:none;}
+  }
 </style>
 </head>
 <body>
 
-<div class="hero">
-  <div class="hero-content">
-    <span class="eyebrow">جامعة القصيم × إنفاذ</span>
-    <h1>هاكاثون إنفاذ</h1>
-    <p>سجّل فريقك أو انضم لفريق قائم، واختر مسارك، وابدأ رحلتك في تطوير حلول رقمية تخدم القطاع القضائي.</p>
+<div class="ref-bar">
+  <span>REF / إنفاذ-2026 / جامعة القصيم</span>
+  <span>مركز الابتكار والملكية الفكرية · Innexia</span>
+</div>
+
+<header class="site-header">
+  <div class="nav-row">
+    <div class="brand">
+      <span class="brand-mark">إ</span>
+      هاكاثون إنفاذ
+    </div>
+    <nav class="nav-links">
+      <a href="#tracks">المسارات</a>
+      <a href="#timeline">الجدول الزمني</a>
+      <a href="#about">عن البرنامج</a>
+    </nav>
+    <a href="./registration.html" class="cta-small">سجّل فريقك</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <span class="eyebrow">● التسجيل مفتوح الآن</span>
+      <h1>حين تلتقي العدالة<br>بـ<span>الذكاء الاصطناعي</span></h1>
+      <p class="lede">هاكاثون إنفاذ يجمع المطورين والمصممين وخبراء القانون لبناء حلول ذكاء اصطناعي تخدم قطاع التنفيذ القضائي — بتنظيم مركز الابتكار والملكية الفكرية بجامعة القصيم.</p>
+      <div class="hero-ctas">
+        <a href="./registration.html" class="btn-primary">سجّل فريقك الآن</a>
+        <a href="#tracks" class="btn-ghost">استعرض المسارات</a>
+      </div>
+      <div id="countdown-box" style="display:none; margin-top:26px; font-family:var(--font-mono); font-size:13px; color:#5fe4cf; letter-spacing:.03em;">
+        ⏳ ينطلق الهاكاثون خلال: <span id="countdown-value" style="font-weight:700"></span>
+      </div>
+    </div>
+    <div class="seal-wrap">
+      <div class="seal">
+        <svg viewBox="0 0 200 200">
+          <defs>
+            <path id="sealRing" d="M 100,100 m -78,0 a 78,78 0 1,1 156,0 a 78,78 0 1,1 -156,0" fill="none"/>
+          </defs>
+          <circle cx="100" cy="100" r="95" fill="none" stroke="#C89B3C" stroke-width="1.2" opacity=".55"/>
+          <circle cx="100" cy="100" r="78" fill="none" stroke="#C89B3C" stroke-width="1.8"/>
+          <circle cx="100" cy="100" r="60" fill="none" stroke="#1F9E8E" stroke-width="1" opacity=".5"/>
+          <text font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#C89B3C" letter-spacing="3">
+            <textPath href="#sealRing" startOffset="0%">هاكاثون إنفاذ ★ جامعة القصيم ★ 2026 ★</textPath>
+          </text>
+          <text x="100" y="93" text-anchor="middle" font-family="IBM Plex Sans Arabic" font-size="30" font-weight="800" fill="#fff">إنفاذ</text>
+          <text x="100" y="116" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#5fe4cf" letter-spacing="2">AI × JUSTICE</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="facts-bar">
+  <div class="facts-inner">
+    <div><div class="fact-num">04</div><div class="fact-label">مسارات تقنية</div></div>
+    <div><div class="fact-num">2–5</div><div class="fact-label">أعضاء لكل فريق</div></div>
+    <div><div class="fact-num">QU</div><div class="fact-label">جامعة القصيم</div></div>
+    <div><div class="fact-num">AI</div><div class="fact-label">حلول ذكاء اصطناعي</div></div>
   </div>
 </div>
 
-<!-- ============== شاشة الدخول/التسجيل ============== -->
-<div id="auth-screen" class="wrap">
-  <div class="panel">
-    <div class="switcher">
-      <button id="tab-signup" class="active" onclick="switchAuthTab('signup')">حساب جديد</button>
-      <button id="tab-login" onclick="switchAuthTab('login')">لدي حساب</button>
-    </div>
-
-    <div id="auth-alert" class="alert"></div>
-
-    <!-- تسجيل جديد -->
-    <div id="signup-form">
-      <h2>إنشاء حساب مشارك</h2>
-      <p class="sub">خطوة واحدة، ثم تختار مسارك وتنشئ فريقك أو تنضم لفريق</p>
-      <div class="field"><label>الاسم الكامل</label><input id="su-name" placeholder="الاسم الثلاثي"></div>
-      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="su-email"></div>
-      <div class="field"><label>رقم الجوال</label><input id="su-phone" placeholder="05xxxxxxxx"></div>
-      <div class="field"><label>الجهة (جامعة / شركة / جهة حكومية)</label><input id="su-org"></div>
-      <div class="field"><label>كلمة المرور</label><input type="password" id="su-password"></div>
-      <button class="btn btn-primary" id="su-btn" onclick="handleSignup()">إنشاء الحساب والمتابعة</button>
-    </div>
-
-    <!-- تسجيل دخول -->
-    <div id="login-form" style="display:none">
-      <h2>تسجيل الدخول</h2>
-      <p class="sub">أدخل بياناتك للمتابعة لفريقك</p>
-      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="li-email"></div>
-      <div class="field"><label>كلمة المرور</label><input type="password" id="li-password"></div>
-      <button class="btn btn-primary" id="li-btn" onclick="handleLogin()">تسجيل الدخول</button>
+<section id="tracks">
+  <div class="section-inner">
+    <span class="section-tag">/ 01 — المسارات</span>
+    <h2 class="section-title">اختر ملف قضيتك</h2>
+    <p class="section-sub">أربعة مسارات تقنية، كل واحد يعالج تحديًا حقيقيًا بمنظومة التنفيذ القضائي.</p>
+    <div class="tracks-grid">
+      <div class="track-card">
+        <span class="track-ref">TRACK / 01</span>
+        <h3>العدالة الرقمية</h3>
+        <p>حلول تقنية لتحسين إجراءات التقاضي والتنفيذ القضائي، وتسريع دورة القضايا من الرفع حتى التنفيذ.</p>
+      </div>
+      <div class="track-card">
+        <span class="track-ref">TRACK / 02</span>
+        <h3>الذكاء الاصطناعي القانوني</h3>
+        <p>تطبيقات الذكاء الاصطناعي في تحليل القضايا والأنظمة، ودعم القرار بالاعتماد على البيانات.</p>
+      </div>
+      <div class="track-card">
+        <span class="track-ref">TRACK / 03</span>
+        <h3>تجربة المستخدم الحكومي</h3>
+        <p>تحسين تجربة المستفيدين من الخدمات القضائية والحكومية، من التقديم إلى المتابعة.</p>
+      </div>
+      <div class="track-card">
+        <span class="track-ref">TRACK / 04</span>
+        <h3>الأمن السيبراني القضائي</h3>
+        <p>حماية الأنظمة والبيانات القضائية الحساسة من التهديدات الرقمية المتطورة.</p>
+      </div>
     </div>
   </div>
-</div>
+</section>
 
-<!-- ============== لوحة المشارك ============== -->
-<div id="dash-screen">
-  <div class="topbar">
-    <div class="who">مرحبًا، <strong id="dash-name"></strong></div>
-    <button class="btn-link" onclick="handleLogout()">تسجيل الخروج</button>
+<section id="timeline" style="background:var(--paper-dim)">
+  <div class="section-inner">
+    <span class="section-tag">/ 02 — سير البرنامج</span>
+    <h2 class="section-title">من التسجيل إلى الإعلان</h2>
+    <p class="section-sub">ست مراحل متتابعة، كل مرحلة تبني على ما قبلها.</p>
+    <div class="timeline">
+      <div class="tl-item done">
+        <div class="tl-marker">01</div>
+        <div class="tl-title">التسجيل وتكوين الفريق</div>
+        <div class="tl-desc">إنشاء الحساب، اختيار المسار، وتكوين الفريق أو الانضمام لفريق قائم عبر رمز الدعوة.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-marker">02</div>
+        <div class="tl-title">التحضير والتدريب</div>
+        <div class="tl-desc">ورش تدريبية تقنية وقانونية تؤهّل الفرق لبناء حلولها.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-marker">03</div>
+        <div class="tl-title">الإرشاد الفردي</div>
+        <div class="tl-desc">جلسات إرشاد مباشرة مع خبراء بالمجال التقني والقانوني لصقل الفكرة.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-marker">04</div>
+        <div class="tl-title">أيام الهاكاثون</div>
+        <div class="tl-desc">بناء الحل الفعلي وتجهيز العرض التقديمي النهائي.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-marker">05</div>
+        <div class="tl-title">التحكيم</div>
+        <div class="tl-desc">عرض الفرق أمام لجنة تحكيم متخصصة وفق معايير معلنة.</div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-marker">06</div>
+        <div class="tl-title">إعلان النتائج والشهادات</div>
+        <div class="tl-desc">تكريم الفائزين، وإصدار شهادات المشاركة لجميع المستوفين للشروط.</div>
+      </div>
+    </div>
   </div>
-  <div class="dash-wrap" id="dash-content"></div>
-</div>
+</section>
 
+<section class="duality" id="about">
+  <div class="section-inner">
+    <span class="section-tag" style="color:#5fe4cf">/ 03 — لماذا "إنفاذ"</span>
+    <h2>الاسم نفسه هو الفكرة: <span class="hl">تنفيذ الأحكام</span>، و<span class="hl">تنفيذ الكود</span>.</h2>
+    <p>البرنامج يقف على تقاطع مباشر بين منظومة التنفيذ القضائي في المملكة وأدوات الذكاء الاصطناعي الحديثة — فرصة لبناء حلول تُنفَّذ فعليًا، لا مجرد نماذج أولية.</p>
+  </div>
+</section>
+
+<section class="final-cta">
+  <div class="section-inner">
+    <div class="seal-mini">
+      <svg viewBox="0 0 200 200">
+        <circle cx="100" cy="100" r="78" fill="none" stroke="#C89B3C" stroke-width="2.5"/>
+        <circle cx="100" cy="100" r="58" fill="none" stroke="#1F9E8E" stroke-width="1.2" opacity=".6"/>
+        <text x="100" y="112" text-anchor="middle" font-family="IBM Plex Sans Arabic" font-size="28" font-weight="800" fill="#0B1F3A">إنفاذ</text>
+      </svg>
+    </div>
+    <h2>جاهز تبني حل يُنفَّذ فعليًا؟</h2>
+    <p>سجّل فريقك الآن — الأماكن محدودة بكل مسار.</p>
+    <a href="./registration.html" class="btn-primary">سجّل فريقك الآن</a>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-inner">
+    <span>مركز الابتكار والملكية الفكرية (ICIP) — جامعة القصيم</span>
+    <span style="display:flex;gap:16px">
+      <a href="./mentor.html" style="color:#8fa1c4">دخول المرشدين</a>
+      <a href="./judge.html" style="color:#8fa1c4">دخول المحكّمين</a>
+    </span>
+    <span>REF / إنفاذ-2026 / QU-ICIP</span>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
-/* ============================================================
-   إعدادات الاتصال بـ Supabase — عدّلها قبل النشر
-   ============================================================ */
-const SUPABASE_URL = "https://tuyomqhvdjpsayecystf.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA";
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+(async function(){
+  const sb = supabase.createClient(
+    "https://tuyomqhvdjpsayecystf.supabase.co",
+    "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA"
+  );
+  const { data } = await sb.from("platform_settings").select("value").eq("key","hackathon_start_date").maybeSingle();
+  if(!data?.value) return;
+  const target = new Date(data.value).getTime();
+  const box = document.getElementById("countdown-box");
+  const valueEl = document.getElementById("countdown-value");
 
-let currentUser = null;
-let currentProfile = null;
-
-function esc(str){
-  if(str === null || str === undefined) return "";
-  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-}
-function showAlert(msg, type="error"){
-  const box = document.getElementById("auth-alert");
-  box.textContent = msg;
-  box.className = "alert " + type;
-}
-function clearAlert(){
-  document.getElementById("auth-alert").className = "alert";
-}
-function switchAuthTab(tab){
-  clearAlert();
-  document.getElementById("tab-signup").classList.toggle("active", tab==="signup");
-  document.getElementById("tab-login").classList.toggle("active", tab==="login");
-  document.getElementById("signup-form").style.display = tab==="signup" ? "block" : "none";
-  document.getElementById("login-form").style.display = tab==="login" ? "block" : "none";
-}
-
-/* ---------------- إنشاء حساب ---------------- */
-async function handleSignup(){
-  clearAlert();
-  const full_name = document.getElementById("su-name").value.trim();
-  const email = document.getElementById("su-email").value.trim();
-  const phone = document.getElementById("su-phone").value.trim();
-  const organization = document.getElementById("su-org").value.trim();
-  const password = document.getElementById("su-password").value;
-
-  if(!full_name || !email || !password){
-    showAlert("الاسم والبريد وكلمة المرور مطلوبة"); return;
+  function tick(){
+    const diff = target - Date.now();
+    if(diff <= 0){ valueEl.textContent = "بدأ الآن! 🎉"; return; }
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    valueEl.textContent = `${d} يوم ${h} ساعة ${m} دقيقة`;
   }
-  if(password.length < 6){
-    showAlert("كلمة المرور يجب ألا تقل عن 6 أحرف"); return;
-  }
-
-  const btn = document.getElementById("su-btn");
-  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
-
-  const { data, error } = await sb.auth.signUp({
-    email, password,
-    options: { data: { full_name, phone, organization } }
-  });
-  if(error){
-    btn.disabled = false; btn.textContent = "إنشاء الحساب والمتابعة";
-    showAlert(error.message.includes("already") ? "هذا البريد مسجّل مسبقًا، جرّب تسجيل الدخول" : "تعذّر إنشاء الحساب: " + error.message);
-    return;
-  }
-
-  // ملاحظة: الملف الشخصي والدور يُنشآن تلقائيًا عبر trigger بقاعدة البيانات
-  // (راجع 06_auth_trigger.sql) — لا حاجة لإدخال يدوي هنا
-
-  if(!data.session){
-    btn.disabled = false; btn.textContent = "إنشاء الحساب والمتابعة";
-    showAlert("تم إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيد الحساب ثم سجّل الدخول.", "success");
-    return;
-  }
-
-  currentUser = data.user;
-  await loadProfile();
-  showDashboard();
-}
-
-/* ---------------- تسجيل الدخول ---------------- */
-async function handleLogin(){
-  clearAlert();
-  const email = document.getElementById("li-email").value.trim();
-  const password = document.getElementById("li-password").value;
-  if(!email || !password){ showAlert("البريد وكلمة المرور مطلوبان"); return; }
-
-  const btn = document.getElementById("li-btn");
-  btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
-
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if(error){
-    btn.disabled = false; btn.textContent = "تسجيل الدخول";
-    showAlert("بيانات الدخول غير صحيحة");
-    return;
-  }
-  currentUser = data.user;
-  await loadProfile();
-  showDashboard();
-}
-
-async function handleLogout(){
-  await sb.auth.signOut();
-  currentUser = null; currentProfile = null;
-  document.getElementById("dash-screen").style.display = "none";
-  document.getElementById("auth-screen").style.display = "block";
-  document.querySelector(".hero").style.display = "block";
-}
-
-async function restoreSession(){
-  const { data } = await sb.auth.getSession();
-  if(data.session){
-    currentUser = data.session.user;
-    await loadProfile();
-    showDashboard();
-  }
-}
-restoreSession();
-
-async function loadProfile(){
-  const { data } = await sb.from("profiles").select("*").eq("id", currentUser.id).single();
-  currentProfile = data;
-}
-
-function showDashboard(){
-  document.getElementById("auth-screen").style.display = "none";
-  document.querySelector(".hero").style.display = "none";
-  document.getElementById("dash-screen").style.display = "block";
-  document.getElementById("dash-name").textContent = currentProfile?.full_name || currentUser.email;
-  renderDashboard();
-}
-
-/* ---------------- لوحة المشارك الرئيسية (بتبويبات) ---------------- */
-let dashTab = "team";
-let cachedMembership = null;
-
-async function renderDashboard(){
-  const content = document.getElementById("dash-content");
-  content.innerHTML = `
-    <div class="dash-tabs" id="dash-tabs-bar">
-      <button class="dash-tab ${dashTab==='team'?'active':''}" data-t="team">فريقي</button>
-      <button class="dash-tab ${dashTab==='prep'?'active':''}" data-t="prep">التحضير</button>
-      <button class="dash-tab ${dashTab==='certs'?'active':''}" data-t="certs">الشهادات</button>
-      <button class="dash-tab ${dashTab==='updates'?'active':''}" data-t="updates">التحديثات والملفات</button>
-    </div>
-    <div id="dash-tab-body"><div class="card">جاري التحميل...</div></div>
-  `;
-  document.getElementById("dash-tabs-bar").addEventListener("click", (e)=>{
-    const btn = e.target.closest(".dash-tab");
-    if(!btn) return;
-    dashTab = btn.dataset.t;
-    renderDashboard();
-  });
-
-  const { data: membership } = await sb.from("team_members")
-    .select("team_id, is_leader, teams(id, team_name, status, invite_code, track_id, tracks(name_ar))")
-    .eq("user_id", currentUser.id)
-    .maybeSingle();
-  cachedMembership = membership;
-
-  if(dashTab === "team") renderTeamTab(membership);
-  else if(dashTab === "prep") renderPrepTab(membership);
-  else if(dashTab === "certs") renderCertsTab();
-  else renderUpdatesTab(membership);
-}
-
-function renderTeamTab(membership){
-  if(membership && membership.teams) renderTeamView(membership);
-  else renderNoTeamView();
-}
-
-/* ---------------- تبويب: التحضير ---------------- */
-async function renderPrepTab(membership){
-  const body = document.getElementById("dash-tab-body");
-  const trackId = membership?.teams?.track_id;
-
-  const { data: sessions, error } = await sb.from("prep_sessions")
-    .select("*")
-    .order("session_date");
-
-  const { data: myAttendance } = await sb.from("prep_attendance")
-    .select("session_id").eq("user_id", currentUser.id);
-  const attendedIds = new Set((myAttendance||[]).map(a=>a.session_id));
-
-  if(error){ body.innerHTML = `<div class="card"><div class="hint">خطأ: ${esc(error.message)}</div></div>`; return; }
-  const relevant = (sessions||[]).filter(s => !s.track_id || s.track_id === trackId);
-
-  if(!relevant.length){
-    body.innerHTML = `<div class="card"><h2>جلسات التحضير</h2><p class="sub">لا توجد جلسات مجدولة حاليًا لمسارك، تابع هذه الصفحة لاحقًا</p></div>`;
-    return;
-  }
-
-  body.innerHTML = `<div class="card"><h2>جلسات التحضير</h2><p class="sub">الورش والتدريبات المتاحة قبل يوم الهاكاثون</p>
-    ${relevant.map(s => `
-      <div class="member-row" style="align-items:flex-start">
-        <div>
-          <strong>${esc(s.title)}</strong><br>
-          <span class="hint">${fmtDate(s.session_date)} · ${esc(s.location || (s.is_online ? "عبر الإنترنت" : ""))}</span>
-        </div>
-        <span class="status-badge ${attendedIds.has(s.id) ? 'status-confirmed' : 'status-pending'}">
-          ${attendedIds.has(s.id) ? "تم الحضور" : "لم يُسجَّل حضور"}
-        </span>
-      </div>
-    `).join("")}
-  </div>`;
-}
-
-/* ---------------- تبويب: الشهادات ---------------- */
-async function renderCertsTab(){
-  const body = document.getElementById("dash-tab-body");
-  body.innerHTML = `<div class="card">جاري التحميل...</div>`;
-
-  const { data: types, error } = await sb.from("certificate_types").select("*").eq("is_active", true);
-  if(error){ body.innerHTML = `<div class="card"><div class="hint">خطأ: ${esc(error.message)}</div></div>`; return; }
-
-  const { data: myCerts } = await sb.from("certificates").select("cert_type_id, verification_code, issued_at").eq("user_id", currentUser.id);
-  const issuedMap = {};
-  (myCerts||[]).forEach(c => issuedMap[c.cert_type_id] = c);
-
-  let html = `<div class="card"><h2>شهاداتي</h2><p class="sub">الشهادات تُصدر ذاتيًا فور استيفاء الشروط</p>`;
-
-  for(const t of (types||[])){
-    const issued = issuedMap[t.id];
-    let eligibilityHtml = "";
-    if(!issued){
-      const { data: elig } = await sb.rpc("check_certificate_eligibility", { p_user_id: currentUser.id, p_cert_type_key: t.key });
-      const pct = elig?.attendance_pct ?? 0;
-      const req = elig?.required_attendance_pct ?? 0;
-      eligibilityHtml = `
-        <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(pct,100)}%"></div></div>
-        <span class="hint">نسبة الحضور ${pct}% (المطلوب ${req}%)${t.requires_survey ? (elig?.survey_completed ? " · تم إكمال الاستبيان" : " · يتبقّى إكمال الاستبيان") : ""}</span>
-      `;
-    }
-    html += `
-      <div class="cert-item">
-        <div>
-          <h4>${esc(t.name_ar)}</h4>
-          ${issued ? `<span class="meta eligible-yes">صادرة بتاريخ ${fmtDate(issued.issued_at)} · رمز التحقق: ${esc(issued.verification_code)}</span>` : eligibilityHtml}
-        </div>
-        ${issued
-          ? `<span class="status-badge status-confirmed">تم الإصدار</span>`
-          : `<button class="btn btn-outline" style="width:auto;padding:9px 16px" onclick="issueCertificate('${t.key}')">إصدار الشهادة</button>`
-        }
-      </div>
-    `;
-  }
-  html += `</div>`;
-  body.innerHTML = html;
-}
-async function issueCertificate(certKey){
-  const { data, error } = await sb.rpc("issue_certificate", { p_cert_type_key: certKey });
-  if(error){ alert("خطأ: " + error.message); return; }
-  if(!data.success){
-    alert("لم تكتمل الشروط بعد لإصدار هذه الشهادة");
-    return;
-  }
-  renderCertsTab();
-}
-
-/* ---------------- تبويب: التحديثات والملفات ---------------- */
-async function renderUpdatesTab(membership){
-  const body = document.getElementById("dash-tab-body");
-  const trackId = membership?.teams?.track_id;
-
-  const { data, error } = await sb.from("announcements")
-    .select("*, tracks(name_ar)")
-    .order("is_pinned", {ascending:false})
-    .order("published_at", {ascending:false});
-
-  if(error){ body.innerHTML = `<div class="card"><div class="hint">خطأ: ${esc(error.message)}</div></div>`; return; }
-  const relevant = (data||[]).filter(a => !a.track_id || a.track_id === trackId);
-
-  if(!relevant.length){
-    body.innerHTML = `<div class="card"><h2>التحديثات والملفات</h2><p class="sub">لا توجد تحديثات منشورة حتى الآن</p></div>`;
-    return;
-  }
-
-  body.innerHTML = `<div class="card"><h2>التحديثات والملفات</h2><p class="sub">آخر الإعلانات والملفات المتعلقة ببرنامجك</p>
-    ${relevant.map(a => `
-      <div class="announcement-item">
-        <h4>${a.is_pinned ? '<span class="pin-flag">📌</span>' : ''}${esc(a.title)}</h4>
-        <div class="meta">${fmtDate(a.published_at)} · ${esc(a.tracks?.name_ar || "جميع المسارات")}</div>
-        <p>${esc(a.body||"")}</p>
-        ${a.file_url ? `<a href="${esc(a.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600">📎 فتح الملف المرفق</a>` : ""}
-      </div>
-    `).join("")}
-  </div>`;
-}
-
-/* ---------------- حالة: لا يوجد فريق بعد ---------------- */
-async function renderNoTeamView(){
-  const content = document.getElementById("dash-tab-body");
-  const { data: tracks } = await sb.from("tracks").select("*").eq("is_active", true).order("display_order");
-
-  content.innerHTML = `
-    <div class="switcher" style="max-width:320px">
-      <button id="opt-create" class="active" onclick="setTeamOption('create')">إنشاء فريق</button>
-      <button id="opt-join" onclick="setTeamOption('join')">الانضمام لفريق</button>
-    </div>
-
-    <div id="create-team-box" class="card">
-      <h2>إنشاء فريق جديد</h2>
-      <p class="sub">اختر المسار ثم اسم الفريق، وستحصل على رمز دعوة لمشاركته مع زملائك</p>
-      <div class="field"><label>اختر المسار</label></div>
-      <div id="track-list">
-        ${(tracks||[]).map(t => `
-          <div class="track-option" data-id="${t.id}" onclick="selectTrack('${t.id}')">
-            <h4>${esc(t.name_ar)}</h4>
-            <p>${esc(t.description||"")} · حجم الفريق ${t.min_team_size}–${t.max_team_size}</p>
-          </div>
-        `).join("") || '<p class="hint">لا توجد مسارات مفتوحة حاليًا</p>'}
-      </div>
-      <div class="field" style="margin-top:16px"><label>اسم الفريق</label><input id="new-team-name" placeholder="اسم فريقك"></div>
-      <div id="create-alert" class="alert"></div>
-      <button class="btn btn-primary" onclick="createTeam()">إنشاء الفريق</button>
-    </div>
-
-    <div id="join-team-box" class="card" style="display:none">
-      <h2>الانضمام لفريق قائم</h2>
-      <p class="sub">اطلب رمز الدعوة من قائد الفريق</p>
-      <div class="field"><label>رمز الدعوة</label><input id="join-code" placeholder="مثال: a1b2c3d4" style="text-transform:uppercase"></div>
-      <div id="join-alert" class="alert"></div>
-      <button class="btn btn-primary" onclick="joinTeam()">الانضمام للفريق</button>
-    </div>
-  `;
-}
-let selectedTrackId = null;
-function selectTrack(id){
-  selectedTrackId = id;
-  document.querySelectorAll(".track-option").forEach(el=>{
-    el.classList.toggle("selected", el.dataset.id === id);
-  });
-}
-function setTeamOption(opt){
-  document.getElementById("opt-create").classList.toggle("active", opt==="create");
-  document.getElementById("opt-join").classList.toggle("active", opt==="join");
-  document.getElementById("create-team-box").style.display = opt==="create" ? "block" : "none";
-  document.getElementById("join-team-box").style.display = opt==="join" ? "block" : "none";
-}
-async function createTeam(){
-  const alertBox = document.getElementById("create-alert");
-  alertBox.className = "alert";
-  const team_name = document.getElementById("new-team-name").value.trim();
-  if(!selectedTrackId){ alertBox.textContent = "اختر مسارًا أولًا"; alertBox.className = "alert error"; return; }
-  if(!team_name){ alertBox.textContent = "اسم الفريق مطلوب"; alertBox.className = "alert error"; return; }
-
-  const { data, error } = await sb.rpc("create_team_with_leader", {
-    p_track_id: selectedTrackId, p_team_name: team_name
-  });
-  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
-  if(!data.success){ alertBox.textContent = data.error; alertBox.className = "alert error"; return; }
-
-  renderDashboard();
-}
-async function joinTeam(){
-  const alertBox = document.getElementById("join-alert");
-  alertBox.className = "alert";
-  const code = document.getElementById("join-code").value.trim();
-  if(!code){ alertBox.textContent = "أدخل رمز الدعوة"; alertBox.className = "alert error"; return; }
-
-  const { data, error } = await sb.rpc("join_team_with_code", { p_invite_code: code });
-  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
-  if(!data.success){ alertBox.textContent = data.error; alertBox.className = "alert error"; return; }
-
-  renderDashboard();
-}
-
-/* ---------------- حالة: يوجد فريق ---------------- */
-async function renderTeamView(membership){
-  const content = document.getElementById("dash-tab-body");
-  const team = membership.teams;
-
-  const { data: members } = await sb.from("team_members")
-    .select("is_leader, profiles(full_name, organization)")
-    .eq("team_id", team.id);
-
-  const { data: submission } = await sb.from("submissions")
-    .select("*").eq("team_id", team.id).order("version", {ascending:false}).limit(1).maybeSingle();
-
-  const statusLabels = {
-    pending:["قيد المراجعة","status-pending"], confirmed:["مؤكد","status-confirmed"],
-    disqualified:["مستبعد","status-disqualified"], withdrawn:["منسحب","status-withdrawn"]
-  };
-  const [statusText, statusClass] = statusLabels[team.status] || ["—","status-pending"];
-
-  content.innerHTML = `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
-        <div>
-          <h2 style="margin-bottom:2px">${esc(team.team_name)}</h2>
-          <p class="sub" style="margin:0">${esc(team.tracks?.name_ar || "")}</p>
-        </div>
-        <span class="status-badge ${statusClass}">${statusText}</span>
-      </div>
-
-      ${membership.is_leader ? `
-      <div class="invite-box">
-        <div class="hint">شارك هذا الرمز مع زملائك للانضمام للفريق</div>
-        <div class="invite-code">${esc(team.invite_code)}</div>
-      </div>` : ""}
-
-      <h4 style="margin:18px 0 8px;font-size:13.5px;color:var(--muted)">أعضاء الفريق (${members?.length||0})</h4>
-      ${(members||[]).map(m => `
-        <div class="member-row">
-          <span>${esc(m.profiles?.full_name||"—")} ${m.is_leader ? '<span class="leader-tag">قائد الفريق</span>' : ""}</span>
-          <span class="hint">${esc(m.profiles?.organization||"")}</span>
-        </div>
-      `).join("")}
-    </div>
-
-    <div class="card">
-      <h2>الفكرة المقدَّمة</h2>
-      <p class="sub">${submission ? "آخر تحديث: إصدار " + submission.version : "لم تُقدَّم فكرة بعد"}</p>
-      <div class="field"><label>عنوان الفكرة</label><input id="sub-title" value="${esc(submission?.title||"")}"></div>
-      <div class="field"><label>وصف الفكرة</label><textarea id="sub-desc" rows="4">${esc(submission?.description||"")}</textarea></div>
-      <div class="field"><label>رابط ملف/عرض تقديمي (اختياري)</label><input id="sub-file" value="${esc(submission?.file_url||"")}"></div>
-      <div id="sub-alert" class="alert"></div>
-      <button class="btn btn-primary" onclick="saveSubmission('${team.id}', ${submission?.version||0})">${submission ? "تحديث الفكرة" : "إرسال الفكرة"}</button>
-    </div>
-  `;
-}
-async function saveSubmission(teamId, currentVersion){
-  const alertBox = document.getElementById("sub-alert");
-  alertBox.className = "alert";
-  const title = document.getElementById("sub-title").value.trim();
-  const description = document.getElementById("sub-desc").value.trim();
-  const file_url = document.getElementById("sub-file").value.trim();
-  if(!title){ alertBox.textContent = "عنوان الفكرة مطلوب"; alertBox.className = "alert error"; return; }
-
-  const { error } = await sb.from("submissions").insert({
-    team_id: teamId, title, description, file_url, version: currentVersion + 1
-  });
-  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
-  alertBox.textContent = "تم الحفظ بنجاح"; alertBox.className = "alert success";
-  setTimeout(()=> renderDashboard(), 900);
-}
+  box.style.display = "block";
+  tick();
+  setInterval(tick, 60000);
+})();
 </script>
 </body>
 </html>

@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>لوحة التحكيم | هاكاثون إنفاذ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --navy:#0B1F3A; --navy-light:#122a52; --purple:#5B3E96; --teal:#1F9E8E;
+    --gold:#C89B3C; --bg:#F5F6FA; --card:#FFFFFF; --ink:#1A1D29; --muted:#6B7280;
+    --border:#E4E6EF; --danger:#C0392B; --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--ink);}
+
+  header{background:linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 60%, #0e2745 100%); color:#fff; padding:22px 24px;}
+  .header-row{max-width:900px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;}
+  header h1{font-size:18px; margin:0;}
+  header p{margin:2px 0 0; font-size:12.5px; color:#a9b8d4;}
+  .btn-link{background:none; border:none; color:#c8d3e8; cursor:pointer; font-size:12.5px; font-family:inherit;}
+
+  main{max-width:900px; margin:0 auto; padding:24px;}
+  .card{background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:22px; margin-bottom:18px;}
+  .empty-state{text-align:center; padding:50px 20px; color:var(--muted); font-size:14px;}
+
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:13px; margin-bottom:6px; font-weight:500;}
+  .field input, .field textarea{width:100%; padding:11px 13px; border:1px solid var(--border); border-radius:9px; font-family:inherit; font-size:14px;}
+  .btn{border:none; border-radius:9px; padding:12px 20px; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;}
+  .btn-primary{background:var(--teal); color:#fff; width:100%;}
+  .btn-primary:hover{background:#188878;}
+  .alert{padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none;}
+  .alert.error{background:#fdeceb; color:var(--danger); display:block;}
+  .alert.success{background:#e6f7f3; color:var(--teal); display:block;}
+
+  .auth-gate{max-width:400px; margin:80px auto; text-align:center; background:var(--card); border-radius:var(--radius); padding:36px 28px; border:1px solid var(--border);}
+  .auth-gate h2{margin-bottom:6px; color:var(--navy);}
+  .auth-gate p{color:var(--muted); font-size:13.5px; margin-bottom:20px;}
+
+  .team-header{display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; margin-bottom:14px;}
+  .team-header h3{margin:0 0 3px; font-size:16.5px;}
+  .team-header .sub{color:var(--muted); font-size:12.5px;}
+  .badge{display:inline-block; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600;}
+  .badge-gray{background:#f0f1f5; color:var(--muted);}
+  .badge-green{background:#e6f7f3; color:var(--teal);}
+  .badge-red{background:#fdeceb; color:var(--danger);}
+
+  .project-box{background:#f8f9fb; border-radius:10px; padding:14px 16px; margin-bottom:16px;}
+  .project-box h4{margin:0 0 4px; font-size:13.5px;}
+  .project-box p{margin:0; font-size:13px; color:var(--muted); line-height:1.6;}
+
+  .criteria-row{display:grid; grid-template-columns:1fr 90px; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);}
+  .criteria-row:last-of-type{border-bottom:none;}
+  .criteria-row .c-name{font-size:13.5px;}
+  .criteria-row .c-hint{font-size:11.5px; color:var(--muted);}
+  .criteria-row input{width:100%; padding:9px; border:1px solid var(--border); border-radius:8px; text-align:center; font-family:inherit;}
+
+  .conflict-notice{background:#fdeceb; color:var(--danger); border-radius:9px; padding:12px 16px; font-size:13px; text-align:center;}
+</style>
+</head>
+<body>
+
+<div id="auth-gate-screen" class="auth-gate">
+  <h2>لوحة التحكيم</h2>
+  <p>سجّل دخولك بحساب المحكّم الخاص بك</p>
+  <div id="gate-alert" class="alert"></div>
+  <div class="field"><input type="email" id="gate-email" placeholder="البريد الإلكتروني"></div>
+  <div class="field"><input type="password" id="gate-password" placeholder="كلمة المرور"></div>
+  <button class="btn btn-primary" onclick="handleGateLogin()">دخول</button>
+</div>
+
+<div id="content-screen" style="display:none">
+  <header>
+    <div class="header-row">
+      <div>
+        <h1>لوحة التحكيم</h1>
+        <p id="round-name"></p>
+      </div>
+      <button class="btn-link" onclick="handleLogout()">تسجيل الخروج</button>
+    </div>
+  </header>
+  <main id="main-content">جاري التحميل...</main>
+</div>
+
+<script>
+const SUPABASE_URL = "https://tuyomqhvdjpsayecystf.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let activeRound = null;
+let criteriaList = [];
+
+function esc(str){
+  if(str === null || str === undefined) return "";
+  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function handleGateLogin(){
+  const alertBox = document.getElementById("gate-alert");
+  alertBox.className = "alert";
+  const email = document.getElementById("gate-email").value.trim();
+  const password = document.getElementById("gate-password").value;
+  if(!email || !password){ alertBox.textContent = "أدخل البريد وكلمة المرور"; alertBox.className = "alert error"; return; }
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ alertBox.textContent = "بيانات الدخول غير صحيحة"; alertBox.className = "alert error"; return; }
+
+  const { data: roles } = await sb.from("user_roles").select("roles(key)").eq("user_id", data.user.id);
+  const roleKeys = (roles||[]).map(r => r.roles?.key);
+  if(!roleKeys.includes("judge") && !roleKeys.includes("admin")){
+    await sb.auth.signOut();
+    alertBox.textContent = "هذا الحساب لا يملك صلاحية التحكيم"; alertBox.className = "alert error";
+    return;
+  }
+  currentUser = data.user;
+  showContent();
+}
+async function handleLogout(){
+  await sb.auth.signOut();
+  currentUser = null;
+  document.getElementById("content-screen").style.display = "none";
+  document.getElementById("auth-gate-screen").style.display = "block";
+}
+async function restoreSession(){
+  const { data } = await sb.auth.getSession();
+  if(data.session){
+    const { data: roles } = await sb.from("user_roles").select("roles(key)").eq("user_id", data.session.user.id);
+    const roleKeys = (roles||[]).map(r => r.roles?.key);
+    if(roleKeys.includes("judge") || roleKeys.includes("admin")){
+      currentUser = data.session.user;
+      showContent();
+    }
+  }
+}
+restoreSession();
+
+async function showContent(){
+  document.getElementById("auth-gate-screen").style.display = "none";
+  document.getElementById("content-screen").style.display = "block";
+  await loadAssignments();
+}
+
+async function loadAssignments(){
+  const main = document.getElementById("main-content");
+
+  const { data: round } = await sb.from("judging_rounds").select("*").eq("is_active", true).limit(1).maybeSingle();
+  if(!round){
+    document.getElementById("round-name").textContent = "";
+    main.innerHTML = `<div class="card"><div class="empty-state">لا توجد جولة تحكيم نشطة حاليًا. تواصل مع منظّم البرنامج.</div></div>`;
+    return;
+  }
+  activeRound = round;
+  document.getElementById("round-name").textContent = round.name_ar;
+
+  const { data: criteria } = await sb.from("judging_criteria").select("*").eq("round_id", round.id).order("display_order");
+  criteriaList = criteria || [];
+
+  const { data: assignments, error } = await sb.from("judge_assignments")
+    .select("id, has_conflict, conflict_reason, team_id, teams(team_name, tracks(name_ar))")
+    .eq("judge_user_id", currentUser.id)
+    .eq("round_id", round.id);
+
+  if(error){ main.innerHTML = `<div class="card"><div class="empty-state">خطأ: ${esc(error.message)}</div></div>`; return; }
+  if(!assignments.length){ main.innerHTML = `<div class="card"><div class="empty-state">لم يتم تعيين أي فرق لك بهذه الجولة بعد</div></div>`; return; }
+
+  const { data: myScores } = await sb.from("scores").select("*").eq("judge_user_id", currentUser.id).eq("round_id", round.id);
+
+  let html = "";
+  for(const a of assignments){
+    if(a.has_conflict){
+      html += `<div class="card">
+        <div class="team-header"><div><h3>${esc(a.teams?.team_name||"")}</h3><span class="sub">${esc(a.teams?.tracks?.name_ar||"")}</span></div></div>
+        <div class="conflict-notice">⚠ تم استبعادك من تقييم هذا الفريق بسبب تعارض مصالح محتمل (${esc(a.conflict_reason||"")})</div>
+      </div>`;
+      continue;
+    }
+
+    const { data: submission } = await sb.from("submissions").select("*").eq("team_id", a.team_id).order("version",{ascending:false}).limit(1).maybeSingle();
+    const teamScores = (myScores||[]).filter(s => s.team_id === a.team_id);
+    const alreadyScored = teamScores.length === criteriaList.length && criteriaList.length > 0;
+
+    html += `<div class="card">
+      <div class="team-header">
+        <div><h3>${esc(a.teams?.team_name||"")}</h3><span class="sub">${esc(a.teams?.tracks?.name_ar||"")}</span></div>
+        ${alreadyScored ? '<span class="badge badge-green">تم التقييم</span>' : '<span class="badge badge-gray">بانتظار التقييم</span>'}
+      </div>
+      ${submission ? `
+        <div class="project-box">
+          <h4>${esc(submission.title)}</h4>
+          <p>${esc(submission.description||"")}</p>
+          ${submission.file_url ? `<a href="${esc(submission.file_url)}" target="_blank" style="color:var(--teal);font-size:12.5px;font-weight:600">📎 فتح الملف المرفق</a>` : ""}
+        </div>
+      ` : `<div class="project-box"><p>لم يقدّم الفريق فكرته بعد</p></div>`}
+
+      ${criteriaList.length ? `
+        <div id="criteria-form-${a.team_id}">
+          ${criteriaList.map(c => {
+            const existing = teamScores.find(s => s.criteria_id === c.id);
+            return `<div class="criteria-row">
+              <div><div class="c-name">${esc(c.name_ar)}</div><div class="c-hint">الوزن ${c.weight}% · من ${c.max_score}</div></div>
+              <input type="number" min="0" max="${c.max_score}" id="score-${a.team_id}-${c.id}" value="${existing?.score ?? ''}">
+            </div>`;
+          }).join("")}
+          <div class="field" style="margin-top:14px"><label>تغذية راجعة للفريق</label>
+            <textarea id="comments-${a.team_id}" rows="3" placeholder="اكتب ملاحظاتك — راح تظهر للفريق بعد إعلان النتائج">${esc(teamScores[0]?.comments||"")}</textarea>
+          </div>
+          <div id="submit-alert-${a.team_id}" class="alert"></div>
+          <button class="btn btn-primary" onclick="submitScores('${a.team_id}')">${alreadyScored ? "تحديث التقييم" : "إرسال التقييم"}</button>
+        </div>
+      ` : `<p style="color:var(--muted);font-size:13px">لم يتم تحديد معايير تقييم لهذه الجولة بعد</p>`}
+    </div>`;
+  }
+  main.innerHTML = html;
+}
+
+async function submitScores(teamId){
+  const alertBox = document.getElementById(`submit-alert-${teamId}`);
+  alertBox.className = "alert";
+  const comments = document.getElementById(`comments-${teamId}`).value.trim();
+
+  const rows = [];
+  for(const c of criteriaList){
+    const input = document.getElementById(`score-${teamId}-${c.id}`);
+    const val = parseFloat(input.value);
+    if(isNaN(val) || val < 0 || val > c.max_score){
+      alertBox.textContent = `تأكد من إدخال درجة صحيحة لكل معيار (0 إلى ${c.max_score})`;
+      alertBox.className = "alert error";
+      input.focus();
+      return;
+    }
+    rows.push({
+      judge_user_id: currentUser.id, team_id: teamId, round_id: activeRound.id,
+      criteria_id: c.id, score: val, comments: comments || null
+    });
+  }
+
+  const { error } = await sb.from("scores").upsert(rows, { onConflict: "judge_user_id,team_id,round_id,criteria_id" });
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+
+  alertBox.textContent = "تم حفظ التقييم بنجاح"; alertBox.className = "alert success";
+  setTimeout(() => loadAssignments(), 900);
+}
+</script>
+</body>
+</html>

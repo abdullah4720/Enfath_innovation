@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>المشاريع المشاركة | هاكاثون إنفاذ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --navy:#0B1F3A; --navy-light:#122a52; --purple:#5B3E96; --teal:#1F9E8E;
+    --gold:#C89B3C; --bg:#F5F6FA; --card:#FFFFFF; --ink:#1A1D29; --muted:#6B7280;
+    --border:#E4E6EF; --danger:#C0392B; --radius:14px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--ink);}
+
+  header{
+    background:linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 60%, #0e2745 100%);
+    color:#fff; padding:28px 24px; position:sticky; top:0; z-index:10;
+  }
+  header .row{display:flex; justify-content:space-between; align-items:center; max-width:1200px; margin:0 auto; flex-wrap:wrap; gap:12px;}
+  header h1{font-size:19px; margin:0;}
+  header p{margin:2px 0 0; font-size:12.5px; color:#a9b8d4;}
+  .live-badge{display:inline-flex; align-items:center; gap:6px; background:rgba(31,158,142,.18); border:1px solid rgba(31,158,142,.4);
+    padding:5px 13px; border-radius:20px; font-size:12px; font-weight:600; color:#5fe4cf;}
+  .live-dot{width:7px; height:7px; border-radius:50%; background:#5fe4cf; animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.3;}}
+
+  main{max-width:1200px; margin:0 auto; padding:24px;}
+  .toolbar{display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;}
+  .toolbar input, .toolbar select{
+    padding:11px 14px; border:1px solid var(--border); border-radius:10px; font-family:inherit; font-size:13.5px; background:#fff;
+  }
+  .toolbar input{flex:1; min-width:200px;}
+
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px;}
+  .card{background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:20px; transition:.15s;}
+  .card:hover{box-shadow:0 8px 24px rgba(11,31,58,.08); transform:translateY(-2px);}
+  .card h3{margin:0 0 4px; font-size:15.5px;}
+  .meta{font-size:12px; color:var(--muted); margin-bottom:10px;}
+  .desc{font-size:13.5px; line-height:1.65; color:var(--ink); margin-bottom:10px;}
+  .badge{display:inline-block; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600; background:#f0f1f5; color:var(--muted);}
+  .file-link{color:var(--teal); font-size:13px; font-weight:600; text-decoration:none;}
+  .updated{font-size:11.5px; color:var(--muted); margin-top:10px; padding-top:10px; border-top:1px solid var(--border);}
+
+  .empty-state{text-align:center; padding:60px 20px; color:var(--muted); font-size:14px;}
+  .auth-gate{max-width:420px; margin:80px auto; text-align:center; background:var(--card); border-radius:var(--radius); padding:36px 28px; border:1px solid var(--border);}
+  .auth-gate h2{margin-bottom:6px; color:var(--navy);}
+  .auth-gate p{color:var(--muted); font-size:13.5px; margin-bottom:20px;}
+  .field{margin-bottom:14px; text-align:right;}
+  .field input{width:100%; padding:11px 13px; border:1px solid var(--border); border-radius:9px; font-family:inherit; font-size:14px;}
+  .btn{width:100%; padding:12px; border:none; border-radius:9px; background:var(--teal); color:#fff; font-family:inherit; font-size:14px; font-weight:600; cursor:pointer;}
+  .alert{padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; background:#fdeceb; color:var(--danger); display:none;}
+  .alert.show{display:block;}
+
+  .new-flash{animation:flash 1.6s ease-out;}
+  @keyframes flash{0%{background:#e6f7f3;} 100%{background:var(--card);}}
+</style>
+</head>
+<body>
+
+<div id="auth-gate-screen" class="auth-gate">
+  <h2>المشاريع المشاركة</h2>
+  <p>هذه الصفحة مخصّصة للمرشدين والمحكّمين — سجّل الدخول بنفس حسابك بالمنصة</p>
+  <div id="gate-alert" class="alert"></div>
+  <div class="field"><input type="email" id="gate-email" placeholder="البريد الإلكتروني"></div>
+  <div class="field"><input type="password" id="gate-password" placeholder="كلمة المرور"></div>
+  <button class="btn" onclick="handleGateLogin()">دخول</button>
+</div>
+
+<div id="content-screen" style="display:none">
+  <header>
+    <div class="row">
+      <div>
+        <h1>المشاريع المشاركة — هاكاثون إنفاذ</h1>
+        <p>عرض حي لكل الأفكار المقدَّمة من الفرق</p>
+      </div>
+      <span class="live-badge"><span class="live-dot"></span> تحديث لحظي</span>
+    </div>
+  </header>
+  <main>
+    <div class="toolbar">
+      <input id="search-input" placeholder="ابحث بعنوان الفكرة أو اسم الفريق..." oninput="renderProjectsList()">
+      <select id="track-filter" onchange="renderProjectsList()"><option value="">كل المسارات</option></select>
+    </div>
+    <div id="projects-grid">جاري التحميل...</div>
+  </main>
+</div>
+
+<script>
+const SUPABASE_URL = "https://tuyomqhvdjpsayecystf.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let allProjects = [];
+
+async function handleGateLogin(){
+  const alertBox = document.getElementById("gate-alert");
+  alertBox.className = "alert";
+  const email = document.getElementById("gate-email").value.trim();
+  const password = document.getElementById("gate-password").value;
+  if(!email || !password){ alertBox.textContent = "أدخل البريد وكلمة المرور"; alertBox.className = "alert show"; return; }
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ alertBox.textContent = "بيانات الدخول غير صحيحة"; alertBox.className = "alert show"; return; }
+
+  const { data: roles } = await sb.from("user_roles").select("roles(key)").eq("user_id", data.user.id);
+  const roleKeys = (roles||[]).map(r => r.roles?.key);
+  if(!roleKeys.includes("mentor") && !roleKeys.includes("judge") && !roleKeys.includes("admin") && !roleKeys.includes("coordinator")){
+    await sb.auth.signOut();
+    alertBox.textContent = "هذا الحساب غير مخوّل لمشاهدة هذه الصفحة"; alertBox.className = "alert show";
+    return;
+  }
+  showContent();
+}
+
+async function restoreSession(){
+  const { data } = await sb.auth.getSession();
+  if(data.session){
+    const { data: roles } = await sb.from("user_roles").select("roles(key)").eq("user_id", data.session.user.id);
+    const roleKeys = (roles||[]).map(r => r.roles?.key);
+    if(roleKeys.includes("mentor") || roleKeys.includes("judge") || roleKeys.includes("admin") || roleKeys.includes("coordinator")){
+      showContent();
+    }
+  }
+}
+restoreSession();
+
+function esc(str){
+  if(str === null || str === undefined) return "";
+  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function fmtDate(d){
+  if(!d) return "—";
+  return new Date(d).toLocaleString("ar-SA", {dateStyle:"medium", timeStyle:"short"});
+}
+
+async function showContent(){
+  document.getElementById("auth-gate-screen").style.display = "none";
+  document.getElementById("content-screen").style.display = "block";
+  await loadProjects();
+  subscribeRealtime();
+}
+
+async function loadProjects(){
+  const { data, error } = await sb.from("submissions")
+    .select("id, title, description, file_url, version, submitted_at, teams(team_name, tracks(name_ar))")
+    .order("submitted_at", {ascending:false});
+  if(error){
+    document.getElementById("projects-grid").innerHTML = `<div class="empty-state">تعذّر تحميل المشاريع: ${esc(error.message)}</div>`;
+    return;
+  }
+  allProjects = data || [];
+
+  const tracks = [...new Set(allProjects.map(p => p.teams?.tracks?.name_ar).filter(Boolean))];
+  const trackSelect = document.getElementById("track-filter");
+  trackSelect.innerHTML = `<option value="">كل المسارات</option>` + tracks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+
+  renderProjectsList();
+}
+
+function renderProjectsList(highlightId){
+  const term = (document.getElementById("search-input")?.value || "").trim().toLowerCase();
+  const trackFilter = document.getElementById("track-filter")?.value || "";
+  const filtered = allProjects.filter(p => {
+    const matchesTerm = !term || (p.title||"").toLowerCase().includes(term) || (p.teams?.team_name||"").toLowerCase().includes(term);
+    const matchesTrack = !trackFilter || p.teams?.tracks?.name_ar === trackFilter;
+    return matchesTerm && matchesTrack;
+  });
+
+  const grid = document.getElementById("projects-grid");
+  if(!filtered.length){ grid.innerHTML = `<div class="empty-state">لا توجد مشاريع مطابقة حتى الآن</div>`; return; }
+
+  grid.innerHTML = `<div class="grid">
+    ${filtered.map(p => `
+      <div class="card ${p.id === highlightId ? 'new-flash' : ''}" id="project-${p.id}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <h3>${esc(p.title)}</h3>
+          <span class="badge">إصدار ${p.version}</span>
+        </div>
+        <div class="meta">${esc(p.teams?.team_name||"")} · ${esc(p.teams?.tracks?.name_ar||"")}</div>
+        <p class="desc">${esc(p.description||"لا يوجد وصف بعد")}</p>
+        ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" class="file-link">📎 فتح الملف المرفق</a>` : ""}
+        <div class="updated">آخر تحديث: ${fmtDate(p.submitted_at)}</div>
+      </div>
+    `).join("")}
+  </div>`;
+}
+
+function subscribeRealtime(){
+  sb.channel("submissions-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "submissions" }, async (payload) => {
+      await loadProjects();
+      if(payload.new?.id){
+        setTimeout(() => {
+          const el = document.getElementById("project-" + payload.new.id);
+          if(el) el.classList.add("new-flash");
+        }, 50);
+      }
+    })
+    .subscribe();
+}
+</script>
+</body>
+</html>
