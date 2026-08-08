@@ -1480,22 +1480,78 @@ let allParticipantsCache = [];
 async function renderParticipants(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
-      <div><h1>المشاركون</h1><p>دليل كامل بكل المسجّلين وأدوارهم وفرقهم</p></div>
-      <button class="btn btn-outline" onclick="exportParticipantsExcel()">⬇ تصدير Excel</button>
+      <div><h1>المشاركون</h1><p>دليل كامل بكل المسجّلين وأدوارهم وفرقهم، بالإضافة للأسماء المستوردة</p></div>
+      <div style="display:flex;gap:8px">
+        <label class="btn btn-outline" style="cursor:pointer;margin:0">
+          ⬆ استيراد من Excel
+          <input type="file" id="roster-import-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleRosterImport(event)">
+        </label>
+        <button class="btn btn-outline" onclick="exportParticipantsExcel()">⬇ تصدير Excel</button>
+      </div>
     </div>
     <div class="card" style="margin-bottom:16px">
+      <p class="hint" style="margin-bottom:10px">صيغة ملف الاستيراد المتوقعة (بأول صف عناوين الأعمدة): <code>الاسم</code>, <code>البريد</code>, <code>الجوال</code>, <code>الجهة</code>, <code>المسار</code></p>
       <div class="field" style="margin:0"><label>بحث بالاسم أو البريد أو الجهة</label><input id="participants-search" placeholder="اكتب للبحث..." oninput="filterParticipantsView()"></div>
     </div>
     <div class="card"><div id="participants-table">جاري التحميل...</div></div>`;
 
-  const { data, error } = await sb.from("profiles")
+  const { data: profiles, error } = await sb.from("profiles")
     .select("id, full_name, email, phone, organization, created_at, user_roles(roles(name_ar)), team_members(is_leader, teams(team_name, tracks(name_ar)))")
     .order("created_at", {ascending:false});
 
   const box = document.getElementById("participants-table");
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
-  allParticipantsCache = data || [];
+
+  const { data: roster } = await sb.from("participant_roster").select("*").order("imported_at", {ascending:false});
+  const registeredEmails = new Set((profiles||[]).map(p => (p.email||"").toLowerCase()));
+  const unregisteredRoster = (roster||[]).filter(r => !registeredEmails.has((r.email||"").toLowerCase()));
+
+  allParticipantsCache = [
+    ...(profiles||[]).map(p => ({...p, _imported: false})),
+    ...unregisteredRoster.map(r => ({
+      id: r.id, full_name: r.full_name, email: r.email, phone: r.phone,
+      organization: r.organization, created_at: r.imported_at,
+      user_roles: [], team_members: [], _imported: true, _track: r.track_name
+    }))
+  ];
   filterParticipantsView();
+}
+async function handleRosterImport(event){
+  const file = event.target.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, {type: "array"});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet);
+
+      if(!rows.length){ showToast("الملف فارغ", true); return; }
+
+      const records = rows.map(r => ({
+        full_name: r["الاسم"] || r["Name"] || r["name"] || "",
+        email: r["البريد"] || r["Email"] || r["email"] || null,
+        phone: String(r["الجوال"] || r["Phone"] || r["phone"] || "") || null,
+        organization: r["الجهة"] || r["Organization"] || r["organization"] || null,
+        track_name: r["المسار"] || r["Track"] || r["track"] || null,
+        imported_by: currentUser.id
+      })).filter(r => r.full_name);
+
+      if(!records.length){ showToast("لم يتم العثور على عمود 'الاسم' بالملف", true); return; }
+
+      const { error } = await sb.from("participant_roster").insert(records);
+      if(error){ showToast("خطأ بالاستيراد: " + error.message, true); return; }
+
+      logActivity("استيراد قائمة مشاركين", "participant_roster", null, {count: records.length});
+      showToast(`تم استيراد ${records.length} اسم بنجاح`);
+      renderParticipants();
+    } catch(err){
+      showToast("تعذّر قراءة الملف: " + err.message, true);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value = "";
 }
 function filterParticipantsView(){
   const term = (document.getElementById("participants-search")?.value || "").trim().toLowerCase();
@@ -1517,11 +1573,11 @@ function renderParticipantsTable(data){
     ${data.map(p => {
       const membership = (p.team_members||[])[0];
       return `<tr>
-        <td>${esc(p.full_name)}</td>
-        <td>${esc(p.email)}<br><span style="color:var(--muted);font-size:12px">${esc(p.phone||"")}</span></td>
+        <td>${esc(p.full_name)} ${p._imported ? '<span class="badge badge-gray">مستورد — لم يسجّل بعد</span>' : ''}</td>
+        <td>${esc(p.email||"—")}<br><span style="color:var(--muted);font-size:12px">${esc(p.phone||"")}</span></td>
         <td>${esc(p.organization||"—")}</td>
         <td>${(p.user_roles||[]).map(r=>`<span class="badge badge-green" style="margin-left:4px">${esc(r.roles?.name_ar||"")}</span>`).join("") || "—"}</td>
-        <td>${membership ? `${esc(membership.teams?.team_name||"")} ${membership.is_leader ? '<span class="badge badge-gold">قائد</span>' : ""}<br><span style="color:var(--muted);font-size:12px">${esc(membership.teams?.tracks?.name_ar||"")}</span>` : '<span style="color:var(--muted)">بدون فريق</span>'}</td>
+        <td>${membership ? `${esc(membership.teams?.team_name||"")} ${membership.is_leader ? '<span class="badge badge-gold">قائد</span>' : ""}<br><span style="color:var(--muted);font-size:12px">${esc(membership.teams?.tracks?.name_ar||"")}</span>` : (p._track ? `<span style="color:var(--muted)">مسار متوقّع: ${esc(p._track)}</span>` : '<span style="color:var(--muted)">بدون فريق</span>')}</td>
         <td>${fmtDate(p.created_at)}</td>
       </tr>`;
     }).join("")}
