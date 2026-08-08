@@ -223,25 +223,24 @@ async function handleSignup(){
   const btn = document.getElementById("su-btn");
   btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
 
-  const { data, error } = await sb.auth.signUp({ email, password });
+  const { data, error } = await sb.auth.signUp({
+    email, password,
+    options: { data: { full_name, phone, organization } }
+  });
   if(error){
     btn.disabled = false; btn.textContent = "إنشاء الحساب والمتابعة";
     showAlert(error.message.includes("already") ? "هذا البريد مسجّل مسبقًا، جرّب تسجيل الدخول" : "تعذّر إنشاء الحساب: " + error.message);
     return;
   }
 
-  const { error: profileError } = await sb.from("profiles").insert({
-    id: data.user.id, full_name, email, phone, organization
-  });
-  if(profileError){
+  // ملاحظة: الملف الشخصي والدور يُنشآن تلقائيًا عبر trigger بقاعدة البيانات
+  // (راجع 06_auth_trigger.sql) — لا حاجة لإدخال يدوي هنا
+
+  if(!data.session){
     btn.disabled = false; btn.textContent = "إنشاء الحساب والمتابعة";
-    showAlert("تم إنشاء الحساب لكن تعذّر حفظ الملف الشخصي: " + profileError.message);
+    showAlert("تم إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيد الحساب ثم سجّل الدخول.", "success");
     return;
   }
-
-  // إعطاء دور مشارك تلقائيًا
-  const { data: roleRow } = await sb.from("roles").select("id").eq("key","participant").single();
-  if(roleRow) await sb.from("user_roles").insert({user_id: data.user.id, role_id: roleRow.id});
 
   currentUser = data.user;
   await loadProfile();
