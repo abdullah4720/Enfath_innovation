@@ -920,9 +920,10 @@ async function saveAnnouncement(id){
 let judgingTab = "rounds";
 async function renderJudging(){
   const main = document.getElementById("main-content");
-  main.innerHTML = `<div class="page-header"><div><h1>التحكيم</h1><p>إدارة جولات التحكيم ومعايير التقييم ونتائج الفرق</p></div></div>
+  main.innerHTML = `<div class="page-header"><div><h1>التحكيم</h1><p>إدارة جولات التحكيم ومعايير التقييم وتعيين المحكّمين ونتائج الفرق</p></div></div>
     <div class="tabs" id="judging-tabs">
       <div class="tab ${judgingTab==='rounds'?'active':''}" data-t="rounds">الجولات والمعايير</div>
+      <div class="tab ${judgingTab==='assignments'?'active':''}" data-t="assignments">تعيين المحكّمين</div>
       <div class="tab ${judgingTab==='results'?'active':''}" data-t="results">النتائج المجمّعة</div>
     </div>
     <div id="judging-body"></div>`;
@@ -935,8 +936,106 @@ async function renderJudging(){
   });
 
   if(judgingTab === "rounds") renderJudgingRounds();
+  else if(judgingTab === "assignments") renderJudgingAssignments();
   else renderJudgingResults();
 }
+
+/* ---------------- تعيين المحكّمين للفرق ---------------- */
+let judgeAssignSelectedRound = null;
+async function renderJudgingAssignments(){
+  const body = document.getElementById("judging-body");
+  const { data: rounds } = await sb.from("judging_rounds").select("*").order("round_order");
+  if(!rounds || !rounds.length){
+    body.innerHTML = `<div class="card"><div class="empty-state">أضف جولة تحكيم أولاً من تبويب "الجولات والمعايير"</div></div>`;
+    return;
+  }
+  if(!judgeAssignSelectedRound) judgeAssignSelectedRound = rounds.find(r=>r.is_active)?.id || rounds[0].id;
+
+  body.innerHTML = `<div class="card">
+    <div class="field" style="margin-bottom:0"><label>الجولة</label>
+      <select id="assign-round-select" onchange="changeAssignRound(this.value)">
+        ${rounds.map(r => `<option value="${r.id}" ${r.id===judgeAssignSelectedRound?"selected":""}>${esc(r.name_ar)}</option>`).join("")}
+      </select>
+    </div>
+  </div>
+  <div id="assignments-list">جاري التحميل...</div>`;
+
+  await loadJudgingAssignmentsList();
+}
+function changeAssignRound(id){
+  judgeAssignSelectedRound = id;
+  loadJudgingAssignmentsList();
+}
+async function loadJudgingAssignmentsList(){
+  const box = document.getElementById("assignments-list");
+  box.innerHTML = `<div class="card">جاري التحميل...</div>`;
+
+  const { data: teams } = await sb.from("teams")
+    .select("id, team_name, status, tracks(name_ar)")
+    .eq("status", "confirmed")
+    .order("team_name");
+
+  const { data: assignments } = await sb.from("judge_assignments")
+    .select("id, judge_user_id, has_conflict, conflict_reason, team_id, profiles(full_name)")
+    .eq("round_id", judgeAssignSelectedRound);
+
+  if(!teams || !teams.length){
+    box.innerHTML = `<div class="card"><div class="empty-state">لا توجد فرق مؤكدة بعد لتعيين محكّمين لها</div></div>`;
+    return;
+  }
+
+  box.innerHTML = teams.map(t => {
+    const teamAssignments = (assignments||[]).filter(a => a.team_id === t.id);
+    return `
+    <div class="card" style="margin-bottom:14px">
+      <div class="toolbar" style="margin-bottom:10px">
+        <div>
+          <strong>${esc(t.team_name)}</strong>
+          <span style="color:var(--muted);font-size:12.5px"> · ${esc(t.tracks?.name_ar||"")}</span>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="openAssignJudgeModal('${t.id}', ${JSON.stringify(t.team_name)})">+ تعيين محكّم</button>
+      </div>
+      ${!teamAssignments.length ? '<p class="hint">لا يوجد محكّمون معيّنون بعد لهذا الفريق</p>' : teamAssignments.map(a => `
+        <div class="member-row">
+          <span>${esc(a.profiles?.full_name||"—")} ${a.has_conflict ? `<span class="badge badge-red">تعارض مصالح: ${esc(a.conflict_reason||"")}</span>` : ""}</span>
+          <button class="btn btn-danger btn-sm" onclick="deleteRow('judge_assignments','${a.id}', loadJudgingAssignmentsList)">إزالة</button>
+        </div>
+      `).join("")}
+    </div>`;
+  }).join("");
+}
+async function openAssignJudgeModal(teamId, teamName){
+  const { data: judges } = await sb.from("user_roles")
+    .select("user_id, profiles(full_name, email), roles!inner(key)")
+    .eq("roles.key", "judge");
+
+  openModal(`
+    <h3>تعيين محكّم لفريق ${esc(teamName)}</h3>
+    ${!judges || !judges.length ? `<p class="hint">لا يوجد محكّمون مسجّلون بعد — أضف دور "محكّم" من صفحة المستخدمون والأدوار</p>` : `
+      <div class="field"><label>اختر المحكّم</label>
+        <select id="f-judge-select">
+          ${judges.map(j => `<option value="${j.user_id}">${esc(j.profiles?.full_name||j.profiles?.email||"")}</option>`).join("")}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="assignJudgeToTeam('${teamId}')">تعيين</button>
+      </div>
+    `}
+  `);
+}
+async function assignJudgeToTeam(teamId){
+  const judgeId = document.getElementById("f-judge-select").value;
+  const { error } = await sb.from("judge_assignments").insert({
+    judge_user_id: judgeId, team_id: teamId, round_id: judgeAssignSelectedRound
+  });
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("تعيين محكّم لفريق", "judge_assignment", teamId);
+  showToast("تم التعيين — سيتم فحص تعارض المصالح تلقائيًا");
+  closeModal();
+  loadJudgingAssignmentsList();
+}
+
 async function renderJudgingRounds(){
   const body = document.getElementById("judging-body");
   body.innerHTML = `<div class="toolbar"><div></div><button class="btn btn-primary" onclick="openRoundModal()">+ إضافة جولة</button></div>
