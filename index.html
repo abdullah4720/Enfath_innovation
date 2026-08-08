@@ -513,33 +513,23 @@ async function createTeam(){
   if(!selectedTrackId){ alertBox.textContent = "اختر مسارًا أولًا"; alertBox.className = "alert error"; return; }
   if(!team_name){ alertBox.textContent = "اسم الفريق مطلوب"; alertBox.className = "alert error"; return; }
 
-  const { data: team, error } = await sb.from("teams")
-    .insert({ track_id: selectedTrackId, team_name })
-    .select().single();
+  const { data, error } = await sb.rpc("create_team_with_leader", {
+    p_track_id: selectedTrackId, p_team_name: team_name
+  });
   if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
-
-  const { error: memberError } = await sb.from("team_members")
-    .insert({ team_id: team.id, user_id: currentUser.id, is_leader: true });
-  if(memberError){ alertBox.textContent = "خطأ بإضافة العضوية: " + memberError.message; alertBox.className = "alert error"; return; }
+  if(!data.success){ alertBox.textContent = data.error; alertBox.className = "alert error"; return; }
 
   renderDashboard();
 }
 async function joinTeam(){
   const alertBox = document.getElementById("join-alert");
   alertBox.className = "alert";
-  const code = document.getElementById("join-code").value.trim().toLowerCase();
+  const code = document.getElementById("join-code").value.trim();
   if(!code){ alertBox.textContent = "أدخل رمز الدعوة"; alertBox.className = "alert error"; return; }
 
-  const { data: team, error } = await sb.from("teams").select("id, team_name, track_id, tracks(max_team_size)").eq("invite_code", code).maybeSingle();
-  if(error || !team){ alertBox.textContent = "رمز الدعوة غير صحيح"; alertBox.className = "alert error"; return; }
-
-  const { count } = await sb.from("team_members").select("*", {count:"exact", head:true}).eq("team_id", team.id);
-  if(team.tracks && count >= team.tracks.max_team_size){
-    alertBox.textContent = "الفريق مكتمل العدد"; alertBox.className = "alert error"; return;
-  }
-
-  const { error: joinError } = await sb.from("team_members").insert({ team_id: team.id, user_id: currentUser.id, is_leader: false });
-  if(joinError){ alertBox.textContent = "خطأ: " + joinError.message; alertBox.className = "alert error"; return; }
+  const { data, error } = await sb.rpc("join_team_with_code", { p_invite_code: code });
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  if(!data.success){ alertBox.textContent = data.error; alertBox.className = "alert error"; return; }
 
   renderDashboard();
 }
