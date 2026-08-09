@@ -770,7 +770,7 @@ async function searchUserForMember(){
         </div>
         ${alreadyInTeam
           ? `<span class="badge badge-gray">لديه فريق بالفعل</span>`
-          : `<button class="btn btn-primary btn-sm" style="width:auto;padding:7px 14px" onclick="addMemberToTeam('${u.id}', ${JSON.stringify(u.full_name)})">إضافة</button>`
+          : `<button class="btn btn-primary btn-sm" style="width:auto;padding:7px 14px" onclick='addMemberToTeam("${u.id}", ${JSON.stringify(u.full_name)})'>إضافة</button>`
         }
       </div>
     `;
@@ -880,7 +880,7 @@ async function renderMentorshipMentorsList(){
         <td>${mySlots.length}</td>
         <td>${myBooked}</td>
         <td class="row-actions">
-          <button class="btn btn-danger btn-sm" onclick="removeMentorRole('${m.id}', ${JSON.stringify(m.profiles?.full_name||"")})">حذف من المرشدين</button>
+          <button class="btn btn-danger btn-sm" onclick='removeMentorRole("${m.id}", ${JSON.stringify(m.profiles?.full_name||"")})'>حذف من المرشدين</button>
         </td>
       </tr>`;
     }).join("")}
@@ -925,7 +925,7 @@ async function searchAddMentor(){
         </div>
         ${alreadyMentor
           ? `<span class="badge badge-gray">مرشد بالفعل</span>`
-          : `<button class="btn btn-primary btn-sm" style="width:auto;padding:7px 14px" onclick="addMentorRole('${u.id}', ${JSON.stringify(u.full_name)})">إضافة</button>`
+          : `<button class="btn btn-primary btn-sm" style="width:auto;padding:7px 14px" onclick='addMentorRole("${u.id}", ${JSON.stringify(u.full_name)})'>إضافة</button>`
         }
       </div>
     `;
@@ -974,7 +974,7 @@ async function renderMentorshipTeamsList(){
     <div class="card" style="margin-bottom:12px">
       <div class="toolbar" style="margin-bottom:8px">
         <div><strong>${esc(t.team_name)}</strong> <span style="color:var(--muted);font-size:12.5px">· ${esc(t.tracks?.name_ar||"")}</span></div>
-        <button class="btn btn-outline btn-sm" onclick="openManualAssignModal('${t.id}', ${JSON.stringify(t.team_name)})">+ تعيين مرشد إضافي</button>
+        <button class="btn btn-outline btn-sm" onclick='openManualAssignModal("${t.id}", ${JSON.stringify(t.team_name)})'>+ تعيين مرشد إضافي</button>
       </div>
       ${!teamBookings.length ? '<p class="hint">بدون مواعيد إرشاد بعد</p>' : teamBookings.map(b => `
         <div class="member-row">
@@ -1347,7 +1347,7 @@ function renderAssignmentsList(teams, assignments){
           <strong>${esc(t.team_name)}</strong>
           <span style="color:var(--muted);font-size:12.5px"> · ${esc(t.tracks?.name_ar||"")}</span>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="openAssignJudgeModal('${t.id}', ${JSON.stringify(t.team_name)})">+ تعيين محكّم</button>
+        <button class="btn btn-outline btn-sm" onclick='openAssignJudgeModal("${t.id}", ${JSON.stringify(t.team_name)})'>+ تعيين محكّم</button>
       </div>
       ${!teamAssignments.length ? '<p class="hint">لا يوجد محكّمون معيّنون بعد لهذا الفريق</p>' : teamAssignments.map(a => `
         <div class="member-row">
