@@ -184,6 +184,7 @@
       <a data-page="teams">👥 &nbsp;الفرق</a>
       <a data-page="projects">💡 &nbsp;المشاريع</a>
       <a data-page="prep">🎓 &nbsp;جلسات التحضير</a>
+      <a data-page="mentorship">🧭 &nbsp;إدارة الإرشاد</a>
       <a data-page="announcements">📢 &nbsp;التحديثات والملفات</a>
       <a data-page="judging">⚖️ &nbsp;التحكيم</a>
       <a data-page="events">📍 &nbsp;الفعاليات والحضور</a>
@@ -350,6 +351,7 @@ function navigateTo(page){
     teams: renderTeams,
     projects: renderProjects,
     prep: renderPrep,
+    mentorship: renderMentorshipAdmin,
     announcements: renderAnnouncements,
     judging: renderJudging,
     events: renderEvents,
@@ -791,6 +793,197 @@ async function addMemberToTeam(userId, userName){
 /* ============================================================
    4. جلسات التحضير
    ============================================================ */
+/* ============================================================
+   إدارة الإرشاد الكاملة
+   ============================================================ */
+let mentorshipTab = "overview";
+async function renderMentorshipAdmin(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header"><div><h1>إدارة الإرشاد</h1><p>تحكّم كامل بعملية الإرشاد: مين يوجّه الفرق للمرشدين، ومتابعة كل الحجوزات</p></div></div>
+    <div class="tabs" id="mentorship-tabs">
+      <div class="tab ${mentorshipTab==='overview'?'active':''}" data-t="overview">نظرة عامة</div>
+      <div class="tab ${mentorshipTab==='mentors'?'active':''}" data-t="mentors">المرشدون</div>
+      <div class="tab ${mentorshipTab==='teams'?'active':''}" data-t="teams">الفرق</div>
+      <div class="tab ${mentorshipTab==='settings'?'active':''}" data-t="settings">إعدادات التوجيه</div>
+    </div>
+    <div id="mentorship-body"></div>`;
+
+  document.getElementById("mentorship-tabs").addEventListener("click", (e)=>{
+    const tab = e.target.closest(".tab");
+    if(!tab) return;
+    mentorshipTab = tab.dataset.t;
+    renderMentorshipAdmin();
+  });
+
+  if(mentorshipTab === "overview") renderMentorshipOverview();
+  else if(mentorshipTab === "mentors") renderMentorshipMentorsList();
+  else if(mentorshipTab === "teams") renderMentorshipTeamsList();
+  else renderMentorshipSettings();
+}
+
+/* ---------------- نظرة عامة ---------------- */
+async function renderMentorshipOverview(){
+  const body = document.getElementById("mentorship-body");
+  body.innerHTML = `<div class="grid-stats" id="mentorship-stats">جاري التحميل...</div>`;
+
+  const [slots, bookings, teams] = await Promise.all([
+    sb.from("mentor_slots").select("id, is_booked"),
+    sb.from("mentor_bookings").select("id, status"),
+    sb.from("teams").select("id, status").eq("status","confirmed"),
+  ]);
+  const totalSlots = slots.data?.length || 0;
+  const bookedSlots = (slots.data||[]).filter(s=>s.is_booked).length;
+  const confirmed = (bookings.data||[]).filter(b=>b.status==="confirmed").length;
+  const completed = (bookings.data||[]).filter(b=>b.status==="completed").length;
+  const pending = (bookings.data||[]).filter(b=>b.status==="pending").length;
+  const totalTeams = teams.data?.length || 0;
+
+  document.getElementById("mentorship-stats").innerHTML = `
+    ${statCard(totalSlots, "إجمالي المواعيد")}
+    ${statCard(bookedSlots + " / " + totalSlots, "مواعيد محجوزة")}
+    ${statCard(pending, "بانتظار تأكيد المرشد")}
+    ${statCard(confirmed, "مؤكدة")}
+    ${statCard(completed, "جلسات مكتملة")}
+    ${statCard(totalTeams - (bookings.data||[]).length > 0 ? totalTeams - new Set((bookings.data||[]).map(()=>1)).size : "—", "فرق بلا موعد بعد")}
+  `;
+}
+
+/* ---------------- المرشدون ---------------- */
+async function renderMentorshipMentorsList(){
+  const body = document.getElementById("mentorship-body");
+  body.innerHTML = `<div class="card"><div id="mentors-mgmt-table">جاري التحميل...</div></div>`;
+
+  const { data: mentorRoles } = await sb.from("user_roles")
+    .select("user_id, profiles!user_roles_user_id_fkey(full_name, email, specialization, bio), roles!inner(key)")
+    .eq("roles.key", "mentor");
+
+  const { data: slots } = await sb.from("mentor_slots").select("id, mentor_user_id, is_booked");
+
+  const box = document.getElementById("mentors-mgmt-table");
+  if(!mentorRoles || !mentorRoles.length){ box.innerHTML = `<div class="empty-state">لا يوجد مرشدون مسجّلون بعد</div>`; return; }
+
+  box.innerHTML = `<table><thead><tr>
+    <th>المرشد</th><th>التخصص</th><th>إجمالي المواعيد</th><th>المحجوزة</th>
+    </tr></thead><tbody>
+    ${mentorRoles.map(m => {
+      const mySlots = (slots||[]).filter(s => s.mentor_user_id === m.user_id);
+      const myBooked = mySlots.filter(s => s.is_booked).length;
+      return `<tr>
+        <td><strong>${esc(m.profiles?.full_name||"—")}</strong><br><span style="color:var(--muted);font-size:12px">${esc(m.profiles?.email||"")}</span></td>
+        <td>${esc(m.profiles?.specialization||"—")}</td>
+        <td>${mySlots.length}</td>
+        <td>${myBooked}</td>
+      </tr>`;
+    }).join("")}
+    </tbody></table>`;
+}
+
+/* ---------------- الفرق ---------------- */
+async function renderMentorshipTeamsList(){
+  const body = document.getElementById("mentorship-body");
+  body.innerHTML = `<div class="card"><div id="teams-mentorship-table">جاري التحميل...</div></div>`;
+
+  const { data: teams } = await sb.from("teams")
+    .select("id, team_name, status, tracks(name_ar)")
+    .eq("status", "confirmed")
+    .order("team_name");
+
+  const { data: bookings } = await sb.from("mentor_bookings")
+    .select("id, team_id, status, mentor_slots(mentor_user_id, start_time, profiles(full_name))");
+
+  const box = document.getElementById("teams-mentorship-table");
+  if(!teams || !teams.length){ box.innerHTML = `<div class="empty-state">لا توجد فرق مؤكدة بعد</div>`; return; }
+
+  const statusBadge = {pending:'<span class="badge badge-gray">قيد الانتظار</span>', confirmed:'<span class="badge badge-gold">مؤكد</span>', completed:'<span class="badge badge-green">مكتمل</span>', cancelled:'<span class="badge badge-red">ملغى</span>'};
+
+  box.innerHTML = `<table><thead><tr>
+    <th>الفريق</th><th>المسار</th><th>المرشد المحجوز</th><th>الحالة</th><th></th>
+    </tr></thead><tbody>
+    ${teams.map(t => {
+      const booking = (bookings||[]).find(b => b.team_id === t.id);
+      return `<tr>
+        <td><strong>${esc(t.team_name)}</strong></td>
+        <td>${esc(t.tracks?.name_ar||"")}</td>
+        <td>${booking ? esc(booking.mentor_slots?.profiles?.full_name||"—") + " · " + fmtDate(booking.mentor_slots?.start_time) : '<span style="color:var(--muted)">بدون موعد</span>'}</td>
+        <td>${booking ? (statusBadge[booking.status]||booking.status) : "—"}</td>
+        <td class="row-actions">
+          ${!booking ? `<button class="btn btn-outline btn-sm" onclick="openManualAssignModal('${t.id}', ${JSON.stringify(t.team_name)})">+ تعيين مرشد</button>` :
+            `<button class="btn btn-danger btn-sm" onclick="cancelMentorBooking('${booking.id}')">إلغاء الموعد</button>`}
+        </td>
+      </tr>`;
+    }).join("")}
+    </tbody></table>`;
+}
+async function openManualAssignModal(teamId, teamName){
+  const { data: slots } = await sb.from("mentor_slots")
+    .select("id, start_time, is_online, location, profiles(full_name, specialization)")
+    .eq("is_booked", false)
+    .gte("start_time", new Date().toISOString())
+    .order("start_time");
+
+  openModal(`
+    <h3>تعيين مرشد لفريق ${esc(teamName)}</h3>
+    ${!slots || !slots.length ? `<p class="hint">لا توجد مواعيد متاحة حاليًا — أضف مواعيد من حساب المرشد أول</p>` : `
+      <div class="field"><label>اختر الموعد</label>
+        <select id="f-manual-slot">
+          ${slots.map(s => `<option value="${s.id}">${esc(s.profiles?.full_name||"")} — ${fmtDate(s.start_time)} ${s.profiles?.specialization ? "· "+esc(s.profiles.specialization) : ""}</option>`).join("")}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="manualAssignMentor('${teamId}')">تعيين</button>
+      </div>
+    `}
+  `);
+}
+async function manualAssignMentor(teamId){
+  const slotId = document.getElementById("f-manual-slot").value;
+  const { error } = await sb.from("mentor_bookings").insert({ slot_id: slotId, team_id: teamId, status: "confirmed" });
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("تعيين مرشد يدويًا", "mentor_booking", teamId);
+  showToast("تم التعيين — سيصل إشعار للفريق تلقائيًا");
+  closeModal();
+  renderMentorshipTeamsList();
+}
+async function cancelMentorBooking(bookingId){
+  if(!confirm("متأكد تبي تلغي هذا الموعد؟ الموعد بيرجع متاح لفرق ثانية.")) return;
+  const { error } = await sb.from("mentor_bookings").update({ status: "cancelled" }).eq("id", bookingId);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  showToast("تم إلغاء الموعد");
+  renderMentorshipTeamsList();
+}
+
+/* ---------------- إعدادات التوجيه ---------------- */
+async function renderMentorshipSettings(){
+  const body = document.getElementById("mentorship-body");
+  const { data } = await sb.from("platform_settings").select("value").eq("key","mentorship_mode").maybeSingle();
+  const currentMode = data?.value || "self";
+
+  body.innerHTML = `<div class="card">
+    <h3 style="margin:0 0 10px">من يوجّه الفرق للمرشدين؟</h3>
+    <p class="hint" style="margin-bottom:16px">هذا الإعداد يتحكم بتجربة المشارك بتبويب "الإرشاد" بصفحته</p>
+
+    <div class="track-option ${currentMode==='self'?'selected':''}" style="cursor:pointer" onclick="selectMentorshipMode('self')">
+      <h4>🙋 حجز ذاتي من الفريق</h4>
+      <p>الفريق يشوف كل المواعيد المتاحة ويحجز بنفسه أي موعد يناسبه — أسرع وأبسط، مناسب لأعداد كبيرة</p>
+    </div>
+    <div class="track-option ${currentMode==='admin_only'?'selected':''}" style="cursor:pointer;margin-top:10px" onclick="selectMentorshipMode('admin_only')">
+      <h4>🧑‍💼 توجيه من الإدارة فقط</h4>
+      <p>الإدارة تحدد يدويًا أي مرشد يناسب كل فريق (من تبويب "الفرق")، والفريق ما يقدر يحجز بنفسه — مناسب لما تبي تحكم دقيق بالمطابقة حسب التخصص</p>
+    </div>
+
+    <div id="mentorship-mode-alert" class="alert" style="margin-top:16px"></div>
+  </div>`;
+}
+async function selectMentorshipMode(mode){
+  const { error } = await sb.from("platform_settings").upsert({ key: "mentorship_mode", value: mode });
+  const alertBox = document.getElementById("mentorship-mode-alert");
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  logActivity("تغيير وضع توجيه الإرشاد", "platform_settings", null, {mode});
+  alertBox.textContent = "تم الحفظ — التغيير يظهر فورًا بصفحات المشاركين"; alertBox.className = "alert success";
+  renderMentorshipSettings();
+}
+
 async function renderPrep(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
