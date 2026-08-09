@@ -1333,7 +1333,7 @@ async function renderMentorApplications(){
     <div class="card"><div id="mentor-apps-table">جاري التحميل...</div></div>`;
 
   const { data, error } = await sb.from("mentor_applications")
-    .select("*, profiles(full_name, email, phone, organization)")
+    .select("*, profiles!mentor_applications_user_id_fkey(full_name, email, phone, organization)")
     .order("created_at", {ascending:false});
 
   const box = document.getElementById("mentor-apps-table");
@@ -1401,7 +1401,7 @@ async function searchUsers(){
   if(!term){ box.innerHTML = `<div class="empty-state">ابدأ بالبحث عن مستخدم لعرض أدواره</div>`; return; }
 
   const { data, error } = await sb.from("profiles")
-    .select("id, full_name, email, organization, user_roles(id, roles(key, name_ar), track_id)")
+    .select("id, full_name, email, organization, user_roles!user_roles_user_id_fkey(id, roles(key, name_ar), track_id)")
     .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
     .limit(20);
 
@@ -1595,7 +1595,7 @@ async function renderParticipants(){
     <div class="card"><div id="participants-table">جاري التحميل...</div></div>`;
 
   const { data: profiles, error } = await sb.from("profiles")
-    .select("id, full_name, email, phone, organization, created_at, user_roles(roles(name_ar)), team_members(is_leader, teams(team_name, tracks(name_ar)))")
+    .select("id, full_name, email, phone, organization, created_at, user_roles!user_roles_user_id_fkey(roles(name_ar)), team_members(is_leader, teams(team_name, tracks(name_ar)))")
     .order("created_at", {ascending:false});
 
   const box = document.getElementById("participants-table");
