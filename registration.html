@@ -654,28 +654,45 @@ async function renderMentorshipTab(membership){
   }
   const team = membership.teams;
 
-  // هل الفريق عنده حجز حالي؟
-  const { data: myBooking } = await sb.from("mentor_bookings")
-    .select("id, status, requested_topic, mentor_slots(start_time, end_time, is_online, location, profiles(full_name))")
+  // كل مواعيد الفريق النشطة (غير الملغاة)
+  const { data: myBookings } = await sb.from("mentor_bookings")
+    .select("id, status, requested_topic, mentor_slots(id, start_time, end_time, is_online, location, profiles(full_name))")
     .eq("team_id", team.id)
-    .order("created_at", {ascending:false})
-    .limit(1).maybeSingle();
+    .neq("status", "cancelled")
+    .order("created_at", {ascending:false});
+
+  cachedTeamBookings = myBookings || [];
 
   let bookingHtml = "";
-  if(myBooking){
-    const statusLabels = {pending:["قيد الانتظار — بانتظار تأكيد المرشد","status-pending"], confirmed:["مؤكد","status-confirmed"], completed:["تم عقد الجلسة","status-confirmed"], cancelled:["ملغى","status-withdrawn"]};
-    const [label, cls] = statusLabels[myBooking.status] || ["—","status-pending"];
+  if(cachedTeamBookings.length){
+    const statusLabels = {pending:["قيد الانتظار — بانتظار تأكيد المرشد","status-pending"], confirmed:["مؤكد","status-confirmed"], completed:["تم عقد الجلسة","status-confirmed"]};
     bookingHtml = `<div class="card">
-      <h2>موعدك الحالي</h2>
-      <div class="member-row">
-        <span>${fmtDate(myBooking.mentor_slots?.start_time)} — ${esc(myBooking.mentor_slots?.profiles?.full_name||"مرشد")}</span>
-        <span class="status-badge ${cls}">${label}</span>
-      </div>
-      <p class="hint" style="margin-top:8px">${esc(myBooking.mentor_slots?.location || (myBooking.mentor_slots?.is_online ? "عبر الإنترنت" : ""))}</p>
+      <h2>مواعيدك الحالية (${cachedTeamBookings.length})</h2>
+      ${cachedTeamBookings.map(b => {
+        const [label, cls] = statusLabels[b.status] || ["—","status-pending"];
+        return `
+        <div class="member-row" style="align-items:flex-start">
+          <div>
+            <strong>${fmtDate(b.mentor_slots?.start_time)}</strong> — ${esc(b.mentor_slots?.profiles?.full_name||"مرشد")}<br>
+            <span class="hint">${esc(b.mentor_slots?.location || (b.mentor_slots?.is_online ? "عبر الإنترنت" : ""))}</span>
+          </div>
+          <div style="text-align:left">
+            <span class="status-badge ${cls}">${label}</span>
+            ${b.status !== "completed" ? `<div style="margin-top:6px"><button class="btn-link" style="color:var(--danger);font-size:12px" onclick="cancelMyMentorBooking('${b.id}')">إلغاء</button></div>` : ""}
+          </div>
+        </div>`;
+      }).join("")}
     </div>`;
   }
 
-  // المواعيد المتاحة (غير محجوزة) — لكل المسارات أو نفس مسار الفريق
+  const { data: modeSetting } = await sb.from("platform_settings").select("value").eq("key","mentorship_mode").maybeSingle();
+  const mentorshipMode = modeSetting?.value || "self";
+
+  if(mentorshipMode === "admin_only"){
+    body.innerHTML = bookingHtml + (cachedTeamBookings.length ? "" : `<div class="card"><h2>الإرشاد</h2><p class="sub">فريق تنسيق البرنامج بيتولى تحديد المرشد المناسب لفريقكم حسب مسار مشروعكم — بيصلكم إشعار فور تحديد الموعد.</p></div>`);
+    return;
+  }
+
   const { data: slots, error } = await sb.from("mentor_slots")
     .select("id, start_time, end_time, is_online, location, is_booked, track_id, profiles(full_name, specialization, bio)")
     .eq("is_booked", false)
@@ -688,14 +705,24 @@ async function renderMentorshipTab(membership){
     return;
   }
 
-  cachedMentorSlots = slots || [];
+  // ترشيح: نطابق تخصص المرشد مع مسار الفريق لإبراز الأنسب
+  const trackKeywordMap = {
+    "العدالة الرقمية": ["القانون والتشريع","التنفيذ القضائي والإجراءات القانونية","هندسة البرمجيات وتطوير الأنظمة"],
+    "الذكاء الاصطناعي القانوني": ["الذكاء الاصطناعي وتعلم الآلة","القانون والتشريع","البيانات وتحليل الأعمال"],
+    "تجربة المستخدم الحكومي": ["تجربة المستخدم وتصميم المنتجات","إدارة المشاريع وريادة الأعمال"],
+    "الأمن السيبراني القضائي": ["الأمن السيبراني","هندسة البرمجيات وتطوير الأنظمة"],
+  };
+  const relevantKeywords = trackKeywordMap[team.tracks?.name_ar] || [];
+  const isRecommended = (spec) => relevantKeywords.some(k => (spec||"").includes(k));
+
+  cachedMentorSlots = (slots || []).sort((a,b) => (isRecommended(b.profiles?.specialization)?1:0) - (isRecommended(a.profiles?.specialization)?1:0));
   const specializations = [...new Set(cachedMentorSlots.map(s => s.profiles?.specialization).filter(Boolean))];
 
   const slotsHtml = !cachedMentorSlots.length
     ? `<div class="card"><h2>المواعيد المتاحة</h2><p class="sub">لا توجد مواعيد إرشاد متاحة حاليًا، تابع لاحقًا</p></div>`
     : `<div class="card">
         <h2>المواعيد المتاحة</h2>
-        <p class="sub">اختر مرشدًا يناسب احتياج فريقك — الحجز يظهر فورًا لبقية الفرق</p>
+        <p class="sub">مرتّبة حسب الأنسب لمسار فريقكم — يمكنكم حجز أكثر من مرشد بشرط عدم تعارض الأوقات</p>
         ${specializations.length ? `
           <div class="field" style="margin-bottom:16px">
             <label>فلترة حسب التخصص</label>
@@ -709,22 +736,23 @@ async function renderMentorshipTab(membership){
       </div>`;
 
   body.innerHTML = bookingHtml + slotsHtml;
-  renderMentorSlotsList(cachedMentorSlots, team.id);
+  renderMentorSlotsList(cachedMentorSlots, team.id, isRecommended);
 }
 let cachedMentorSlots = [];
+let cachedTeamBookings = [];
 function filterMentorSlots(teamId){
   const spec = document.getElementById("mentor-spec-filter").value;
   const filtered = spec ? cachedMentorSlots.filter(s => s.profiles?.specialization === spec) : cachedMentorSlots;
   renderMentorSlotsList(filtered, teamId);
 }
-function renderMentorSlotsList(slots, teamId){
+function renderMentorSlotsList(slots, teamId, isRecommended){
   const box = document.getElementById("mentor-slots-list");
   if(!box) return;
   if(!slots.length){ box.innerHTML = `<p class="hint">لا توجد مواعيد مطابقة لهذا التخصص</p>`; return; }
   box.innerHTML = slots.map(s => `
     <div class="member-row" style="align-items:flex-start">
       <div>
-        <strong>${fmtDate(s.start_time)}</strong><br>
+        <strong>${fmtDate(s.start_time)}</strong> ${isRecommended && isRecommended(s.profiles?.specialization) ? '<span class="badge-gold" style="font-size:10.5px;padding:2px 8px;border-radius:10px;background:#fbf3e2;color:var(--gold)">⭐ مقترح لتخصصكم</span>' : ""}<br>
         <span class="hint">${esc(s.profiles?.full_name||"مرشد")}${s.profiles?.specialization ? " · " + esc(s.profiles.specialization) : ""}</span><br>
         ${s.profiles?.bio ? `<span class="hint" style="font-size:11.5px">${esc(s.profiles.bio.substring(0,90))}${s.profiles.bio.length>90?"…":""}</span><br>` : ""}
         <span class="hint">${esc(s.location || (s.is_online ? "عبر الإنترنت" : ""))}</span>
@@ -733,10 +761,29 @@ function renderMentorSlotsList(slots, teamId){
     </div>
   `).join("");
 }
+function timesOverlap(startA, endA, startB, endB){
+  return new Date(startA) < new Date(endB) && new Date(startB) < new Date(endA);
+}
 async function bookMentorSlot(slotId, teamId){
+  const targetSlot = cachedMentorSlots.find(s => s.id === slotId);
+  if(targetSlot){
+    const conflict = cachedTeamBookings.some(b =>
+      b.mentor_slots && timesOverlap(targetSlot.start_time, targetSlot.end_time, b.mentor_slots.start_time, b.mentor_slots.end_time)
+    );
+    if(conflict){
+      alert("هذا الموعد يتعارض بالتوقيت مع موعد إرشاد آخر لديكم بالفعل — اختر موعدًا بوقت مختلف");
+      return;
+    }
+  }
   const topic = prompt("اختياري: وش الموضوع اللي تبي تناقشه بالجلسة؟") || null;
   const { error } = await sb.from("mentor_bookings").insert({ slot_id: slotId, team_id: teamId, requested_topic: topic });
   if(error){ alert("تعذّر الحجز: " + error.message); return; }
+  renderMentorshipTab(cachedMembership);
+}
+async function cancelMyMentorBooking(bookingId){
+  if(!confirm("متأكد تبي تلغي هذا الموعد؟")) return;
+  const { error } = await sb.from("mentor_bookings").update({ status: "cancelled" }).eq("id", bookingId);
+  if(error){ alert("تعذّر الإلغاء: " + error.message); return; }
   renderMentorshipTab(cachedMembership);
 }
 

@@ -245,8 +245,8 @@ async function renderSlots(){
           booking.status === "completed" ? '<span class="badge badge-green">تم تسجيل الملاحظات</span>' :
           booking.status === "confirmed" ? '<span class="badge badge-gold">مؤكد</span>' :
           '<span class="badge badge-gray">قيد الانتظار — بانتظار تأكيدك</span>'}
-        ${booking && booking.status === "pending" ? `<div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button></div>` : ""}
-        ${booking && booking.status !== "completed" && booking.status !== "pending" ? `<div style="margin-top:8px"><button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name})})'>تسجيل ملاحظة</button></div>` : ""}
+        ${booking && booking.status === "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
+        ${booking && booking.status !== "completed" && booking.status !== "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name})})'>تسجيل ملاحظة (إغلاق)</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
       </div>
     </div>`;
   }).join("");
@@ -254,6 +254,12 @@ async function renderSlots(){
 async function confirmBooking(bookingId){
   const { error } = await sb.from("mentor_bookings").update({ status: "confirmed" }).eq("id", bookingId);
   if(error){ alert("تعذّر التأكيد: " + error.message); return; }
+  renderSlots();
+}
+async function cancelBookingByMentor(bookingId){
+  if(!confirm("متأكد تبي تلغي هذا الحجز؟")) return;
+  const { error } = await sb.from("mentor_bookings").update({ status: "cancelled" }).eq("id", bookingId);
+  if(error){ alert("تعذّر الإلغاء: " + error.message); return; }
   renderSlots();
 }
 

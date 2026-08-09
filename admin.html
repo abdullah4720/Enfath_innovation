@@ -889,30 +889,33 @@ async function renderMentorshipTeamsList(){
     .order("team_name");
 
   const { data: bookings } = await sb.from("mentor_bookings")
-    .select("id, team_id, status, mentor_slots(mentor_user_id, start_time, profiles(full_name))");
+    .select("id, team_id, status, mentor_slots(mentor_user_id, start_time, profiles(full_name))")
+    .neq("status", "cancelled");
 
   const box = document.getElementById("teams-mentorship-table");
   if(!teams || !teams.length){ box.innerHTML = `<div class="empty-state">لا توجد فرق مؤكدة بعد</div>`; return; }
 
-  const statusBadge = {pending:'<span class="badge badge-gray">قيد الانتظار</span>', confirmed:'<span class="badge badge-gold">مؤكد</span>', completed:'<span class="badge badge-green">مكتمل</span>', cancelled:'<span class="badge badge-red">ملغى</span>'};
+  const statusBadge = {pending:'<span class="badge badge-gray">قيد الانتظار</span>', confirmed:'<span class="badge badge-gold">مؤكد</span>', completed:'<span class="badge badge-green">مكتمل</span>'};
 
-  box.innerHTML = `<table><thead><tr>
-    <th>الفريق</th><th>المسار</th><th>المرشد المحجوز</th><th>الحالة</th><th></th>
-    </tr></thead><tbody>
-    ${teams.map(t => {
-      const booking = (bookings||[]).find(b => b.team_id === t.id);
-      return `<tr>
-        <td><strong>${esc(t.team_name)}</strong></td>
-        <td>${esc(t.tracks?.name_ar||"")}</td>
-        <td>${booking ? esc(booking.mentor_slots?.profiles?.full_name||"—") + " · " + fmtDate(booking.mentor_slots?.start_time) : '<span style="color:var(--muted)">بدون موعد</span>'}</td>
-        <td>${booking ? (statusBadge[booking.status]||booking.status) : "—"}</td>
-        <td class="row-actions">
-          ${!booking ? `<button class="btn btn-outline btn-sm" onclick="openManualAssignModal('${t.id}', ${JSON.stringify(t.team_name)})">+ تعيين مرشد</button>` :
-            `<button class="btn btn-danger btn-sm" onclick="cancelMentorBooking('${booking.id}')">إلغاء الموعد</button>`}
-        </td>
-      </tr>`;
-    }).join("")}
-    </tbody></table>`;
+  box.innerHTML = teams.map(t => {
+    const teamBookings = (bookings||[]).filter(b => b.team_id === t.id);
+    return `
+    <div class="card" style="margin-bottom:12px">
+      <div class="toolbar" style="margin-bottom:8px">
+        <div><strong>${esc(t.team_name)}</strong> <span style="color:var(--muted);font-size:12.5px">· ${esc(t.tracks?.name_ar||"")}</span></div>
+        <button class="btn btn-outline btn-sm" onclick="openManualAssignModal('${t.id}', ${JSON.stringify(t.team_name)})">+ تعيين مرشد إضافي</button>
+      </div>
+      ${!teamBookings.length ? '<p class="hint">بدون مواعيد إرشاد بعد</p>' : teamBookings.map(b => `
+        <div class="member-row">
+          <span>${esc(b.mentor_slots?.profiles?.full_name||"—")} · ${fmtDate(b.mentor_slots?.start_time)}</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            ${statusBadge[b.status]||b.status}
+            <button class="btn btn-danger btn-sm" onclick="cancelMentorBooking('${b.id}')">إلغاء</button>
+          </span>
+        </div>
+      `).join("")}
+    </div>`;
+  }).join("");
 }
 async function openManualAssignModal(teamId, teamName){
   const { data: slots } = await sb.from("mentor_slots")
@@ -938,10 +941,22 @@ async function openManualAssignModal(teamId, teamName){
 }
 async function manualAssignMentor(teamId){
   const slotId = document.getElementById("f-manual-slot").value;
+
+  const { data: targetSlot } = await sb.from("mentor_slots").select("start_time, end_time").eq("id", slotId).single();
+  const { data: existingBookings } = await sb.from("mentor_bookings")
+    .select("mentor_slots(start_time, end_time)")
+    .eq("team_id", teamId)
+    .neq("status", "cancelled");
+
+  const hasConflict = (existingBookings||[]).some(b =>
+    b.mentor_slots && new Date(targetSlot.start_time) < new Date(b.mentor_slots.end_time) && new Date(b.mentor_slots.start_time) < new Date(targetSlot.end_time)
+  );
+  if(hasConflict && !confirm("تنبيه: هذا الموعد يتعارض بالتوقيت مع موعد آخر للفريق. تبي تكمل التعيين رغم ذلك؟")) return;
+
   const { error } = await sb.from("mentor_bookings").insert({ slot_id: slotId, team_id: teamId, status: "confirmed" });
   if(error){ showToast("خطأ: " + error.message, true); return; }
   logActivity("تعيين مرشد يدويًا", "mentor_booking", teamId);
-  showToast("تم التعيين — سيصل إشعار للفريق تلقائيًا");
+  showToast("تم التعيين — سيصل إشعار للفريق والمرشد تلقائيًا");
   closeModal();
   renderMentorshipTeamsList();
 }
