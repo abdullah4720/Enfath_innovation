@@ -438,7 +438,7 @@ async function renderDashboard(){
   initCountdown();
 
   const { data: membership } = await sb.from("team_members")
-    .select("id, team_id, is_leader, teams(id, team_name, status, invite_code, track_id, tracks(name_ar))")
+    .select("id, team_id, is_leader, teams(id, team_name, team_code, status, invite_code, track_id, tracks(name_ar))")
     .eq("user_id", currentUser.id)
     .maybeSingle();
   cachedMembership = membership;
@@ -970,6 +970,7 @@ async function renderTeamView(membership){
         <div style="flex:1">
           <div id="team-name-display" style="display:flex;align-items:center;gap:8px">
             <h2 style="margin-bottom:2px">${esc(team.team_name)}</h2>
+            <code style="font-size:12px;color:var(--gold);background:#fbf3e2;padding:3px 10px;border-radius:8px;font-weight:700">${esc(team.team_code||"")}</code>
             ${membership.is_leader ? `<button class="btn-link" style="font-size:12px" onclick="toggleTeamNameEdit(true)">تعديل</button>` : ""}
           </div>
           <div id="team-name-edit" style="display:none;gap:8px;align-items:center;margin-bottom:8px">
@@ -978,6 +979,7 @@ async function renderTeamView(membership){
             <button class="btn-link" style="font-size:12px;color:var(--muted)" onclick="toggleTeamNameEdit(false)">إلغاء</button>
           </div>
           <p class="sub" style="margin:0">${esc(team.tracks?.name_ar || "")}</p>
+          <p class="hint" style="margin-top:2px">رمز فريقكم — استخدموه بالتواصل مع الإدارة والمرشدين والمحكّمين</p>
         </div>
         <span class="status-badge ${statusClass}">${statusText}</span>
       </div>
@@ -1059,5 +1061,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r30</div>
 </body>
 </html>

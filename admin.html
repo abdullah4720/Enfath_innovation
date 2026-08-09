@@ -600,7 +600,7 @@ async function renderTeams(){
     <div id="teams-table">جاري التحميل...</div>`;
 
   const { data, error } = await sb.from("teams")
-    .select("id, team_name, status, invite_code, created_at, tracks(name_ar, max_team_size), team_members(is_leader, profiles(full_name, email, organization))")
+    .select("id, team_name, team_code, status, invite_code, created_at, tracks(name_ar, max_team_size), team_members(is_leader, profiles(full_name, email, organization))")
     .order("created_at", {ascending:false});
 
   const box = document.getElementById("teams-table");
@@ -651,7 +651,7 @@ function renderTeamsTable(data){
     <div class="card" style="margin-bottom:14px;padding:16px 18px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
         <div>
-          <strong style="font-size:15px">${esc(t.team_name)}</strong>
+          <strong style="font-size:15px">${esc(t.team_name)}</strong> <code style="font-size:11px;color:var(--gold);background:#fbf3e2;padding:2px 8px;border-radius:6px;margin-right:6px">${esc(t.team_code||"")}</code>
           <div style="font-size:12.5px;color:var(--muted);margin-top:2px">
             ${esc(t.tracks?.name_ar || "—")} · ${members.length} / ${t.tracks?.max_team_size ?? "—"} أعضاء ·
             سُجّل ${fmtDate(t.created_at)} · رمز الدعوة: <code>${esc(t.invite_code)}</code>
@@ -955,7 +955,7 @@ async function renderMentorshipTeamsList(){
   body.innerHTML = `<div class="card"><div id="teams-mentorship-table">جاري التحميل...</div></div>`;
 
   const { data: teams } = await sb.from("teams")
-    .select("id, team_name, status, tracks(name_ar)")
+    .select("id, team_name, team_code, status, tracks(name_ar)")
     .eq("status", "confirmed")
     .order("team_name");
 
@@ -973,7 +973,7 @@ async function renderMentorshipTeamsList(){
     return `
     <div class="card" style="margin-bottom:12px">
       <div class="toolbar" style="margin-bottom:8px">
-        <div><strong>${esc(t.team_name)}</strong> <span style="color:var(--muted);font-size:12.5px">· ${esc(t.tracks?.name_ar||"")}</span></div>
+        <div><strong>${esc(t.team_name)}</strong> <code style="font-size:10.5px;color:var(--gold);background:#fbf3e2;padding:1px 7px;border-radius:6px">${esc(t.team_code||"")}</code> <span style="color:var(--muted);font-size:12.5px">· ${esc(t.tracks?.name_ar||"")}</span></div>
         <button class="btn btn-outline btn-sm" onclick='openManualAssignModal("${t.id}", ${JSON.stringify(t.team_name)})'>+ تعيين مرشد إضافي</button>
       </div>
       ${!teamBookings.length ? '<p class="hint">بدون مواعيد إرشاد بعد</p>' : teamBookings.map(b => `
@@ -1317,7 +1317,7 @@ async function loadJudgingAssignmentsList(){
   box.innerHTML = `<div class="card">جاري التحميل...</div>`;
 
   const { data: teams } = await sb.from("teams")
-    .select("id, team_name, status, tracks(name_ar)")
+    .select("id, team_name, team_code, status, tracks(name_ar)")
     .eq("status", "confirmed")
     .order("team_name");
 
@@ -1344,7 +1344,7 @@ function renderAssignmentsList(teams, assignments){
     <div class="card" style="margin-bottom:14px">
       <div class="toolbar" style="margin-bottom:10px">
         <div>
-          <strong>${esc(t.team_name)}</strong>
+          <strong>${esc(t.team_name)}</strong> <code style="font-size:10.5px;color:var(--gold);background:#fbf3e2;padding:1px 7px;border-radius:6px">${esc(t.team_code||"")}</code>
           <span style="color:var(--muted);font-size:12.5px"> · ${esc(t.tracks?.name_ar||"")}</span>
         </div>
         <button class="btn btn-outline btn-sm" onclick='openAssignJudgeModal("${t.id}", ${JSON.stringify(t.team_name)})'>+ تعيين محكّم</button>
@@ -1978,7 +1978,7 @@ async function renderProjects(){
     <div id="projects-list">جاري التحميل...</div>`;
 
   const { data, error } = await sb.from("submissions")
-    .select("id, title, description, file_url, version, submitted_at, teams(team_name, tracks(name_ar))")
+    .select("id, title, description, file_url, version, submitted_at, teams(team_name, team_code, tracks(name_ar))")
     .order("submitted_at", {ascending:false});
 
   const box = document.getElementById("projects-list");
@@ -2002,7 +2002,7 @@ function filterProjectsView(){
           <h3 style="margin:0 0 4px">${esc(p.title)}</h3>
           <span class="badge badge-gray">إصدار ${p.version}</span>
         </div>
-        <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">${esc(p.teams?.team_name||"")} · ${esc(p.teams?.tracks?.name_ar||"")}</p>
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">${esc(p.teams?.team_name||"")} <code style="font-size:10px;color:var(--gold)">${esc(p.teams?.team_code||"")}</code> · ${esc(p.teams?.tracks?.name_ar||"")}</p>
         <p style="font-size:13.5px;color:var(--ink);line-height:1.6">${esc((p.description||"").substring(0,160))}${(p.description||"").length>160?"…":""}</p>
         ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600">📎 فتح الملف المرفق</a>` : ""}
         <p class="hint" style="margin-top:10px">آخر تحديث: ${fmtDate(p.submitted_at)}</p>
@@ -2107,7 +2107,7 @@ async function renderParticipants(){
     <div class="card"><div id="participants-table">جاري التحميل...</div></div>`;
 
   const { data: profiles, error } = await sb.from("profiles")
-    .select("id, full_name, email, phone, organization, created_at, user_roles!user_roles_user_id_fkey(roles(name_ar)), team_members(is_leader, teams(team_name, tracks(name_ar)))")
+    .select("id, full_name, email, phone, organization, created_at, user_roles!user_roles_user_id_fkey(roles(name_ar)), team_members(is_leader, teams(team_name, team_code, tracks(name_ar)))")
     .order("created_at", {ascending:false});
 
   const box = document.getElementById("participants-table");
@@ -2188,7 +2188,7 @@ function renderParticipantsTable(data){
         <td>${esc(p.email||"—")}<br><span style="color:var(--muted);font-size:12px">${esc(p.phone||"")}</span></td>
         <td>${esc(p.organization||"—")}</td>
         <td>${(p.user_roles||[]).map(r=>`<span class="badge badge-green" style="margin-left:4px">${esc(r.roles?.name_ar||"")}</span>`).join("") || "—"}</td>
-        <td>${membership ? `${esc(membership.teams?.team_name||"")} ${membership.is_leader ? '<span class="badge badge-gold">قائد</span>' : ""}<br><span style="color:var(--muted);font-size:12px">${esc(membership.teams?.tracks?.name_ar||"")}</span>` : (p._track ? `<span style="color:var(--muted)">مسار متوقّع: ${esc(p._track)}</span>` : '<span style="color:var(--muted)">بدون فريق</span>')}</td>
+        <td>${membership ? `${esc(membership.teams?.team_name||"")} <code style="font-size:10px;color:var(--gold)">${esc(membership.teams?.team_code||"")}</code> ${membership.is_leader ? '<span class="badge badge-gold">قائد</span>' : ""}<br><span style="color:var(--muted);font-size:12px">${esc(membership.teams?.tracks?.name_ar||"")}</span>` : (p._track ? `<span style="color:var(--muted)">مسار متوقّع: ${esc(p._track)}</span>` : '<span style="color:var(--muted)">بدون فريق</span>')}</td>
         <td>${fmtDate(p.created_at)}</td>
       </tr>`;
     }).join("")}
@@ -2204,7 +2204,7 @@ function exportParticipantsExcel(){
     return {
       "الاسم": p.full_name, "البريد": p.email, "الجوال": p.phone || "",
       "الجهة": p.organization || "", "الأدوار": (p.user_roles||[]).map(r=>r.roles?.name_ar).join("، "),
-      "الفريق": membership?.teams?.team_name || "", "المسار": membership?.teams?.tracks?.name_ar || "",
+      "الفريق": membership?.teams?.team_name || "", "رمز الفريق": membership?.teams?.team_code || "", "المسار": membership?.teams?.tracks?.name_ar || "",
       "قائد فريق": membership?.is_leader ? "نعم" : "لا", "تاريخ التسجيل": fmtDate(p.created_at)
     };
   });
@@ -2243,5 +2243,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r30</div>
 </body>
 </html>

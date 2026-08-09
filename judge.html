@@ -76,7 +76,7 @@
   <header>
     <div class="header-row">
       <div>
-        <h1>لوحة التحكيم</h1>
+        <h1 id="judge-welcome">لوحة التحكيم</h1>
         <p id="round-name"></p>
       </div>
       <button class="btn-link" onclick="handleLogout()">تسجيل الخروج</button>
@@ -141,6 +141,8 @@ restoreSession();
 async function showContent(){
   document.getElementById("auth-gate-screen").style.display = "none";
   document.getElementById("content-screen").style.display = "block";
+  const { data: profile } = await sb.from("profiles").select("full_name").eq("id", currentUser.id).maybeSingle();
+  document.getElementById("judge-welcome").textContent = "مرحبًا، " + (profile?.full_name || currentUser.email);
   await loadAssignments();
 }
 
@@ -160,7 +162,7 @@ async function loadAssignments(){
   criteriaList = criteria || [];
 
   const { data: assignments, error } = await sb.from("judge_assignments")
-    .select("id, has_conflict, conflict_reason, team_id, teams(team_name, tracks(name_ar))")
+    .select("id, has_conflict, conflict_reason, team_id, teams(team_name, team_code, tracks(name_ar))")
     .eq("judge_user_id", currentUser.id)
     .eq("round_id", round.id);
 
@@ -173,7 +175,7 @@ async function loadAssignments(){
   for(const a of assignments){
     if(a.has_conflict){
       html += `<div class="card">
-        <div class="team-header"><div><h3>${esc(a.teams?.team_name||"")}</h3><span class="sub">${esc(a.teams?.tracks?.name_ar||"")}</span></div></div>
+        <div class="team-header"><div><h3>${esc(a.teams?.team_name||"")} <code style="font-size:11px;color:var(--gold);background:#fbf3e2;padding:2px 8px;border-radius:6px">${esc(a.teams?.team_code||"")}</code></h3><span class="sub">${esc(a.teams?.tracks?.name_ar||"")}</span></div></div>
         <div class="conflict-notice">⚠ تم استبعادك من تقييم هذا الفريق بسبب تعارض مصالح محتمل (${esc(a.conflict_reason||"")})</div>
       </div>`;
       continue;
@@ -185,7 +187,7 @@ async function loadAssignments(){
 
     html += `<div class="card">
       <div class="team-header">
-        <div><h3>${esc(a.teams?.team_name||"")}</h3><span class="sub">${esc(a.teams?.tracks?.name_ar||"")}</span></div>
+        <div><h3>${esc(a.teams?.team_name||"")} <code style="font-size:11px;color:var(--gold);background:#fbf3e2;padding:2px 8px;border-radius:6px">${esc(a.teams?.team_code||"")}</code></h3><span class="sub">${esc(a.teams?.tracks?.name_ar||"")}</span></div>
         ${alreadyScored ? '<span class="badge badge-green">تم التقييم</span>' : '<span class="badge badge-gray">بانتظار التقييم</span>'}
       </div>
       ${submission ? `
@@ -245,5 +247,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r30</div>
 </body>
 </html>
