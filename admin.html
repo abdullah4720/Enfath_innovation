@@ -1719,7 +1719,11 @@ async function renderMentorApplications(){
 }
 async function approveMentorApp(id){
   const { data, error } = await sb.rpc("approve_mentor_application", { p_application_id: id });
-  if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  if(error || !data.success){
+    const debugInfo = data?.debug_uid ? ` (uid: ${data.debug_uid})` : "";
+    showToast("خطأ: " + (data?.error || error?.message) + debugInfo, true);
+    return;
+  }
   logActivity("اعتماد طلب مرشد", "mentor_application", id);
   showToast("تم اعتماد الطلب — صار عنده دور مرشد الآن");
   renderMentorApplications();
@@ -1772,7 +1776,11 @@ async function renderJudgeApplications(){
 }
 async function approveJudgeApp(id){
   const { data, error } = await sb.rpc("approve_judge_application", { p_application_id: id });
-  if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  if(error || !data.success){
+    const debugInfo = data?.debug_uid ? ` (uid: ${data.debug_uid})` : "";
+    showToast("خطأ: " + (data?.error || error?.message) + debugInfo, true);
+    return;
+  }
   logActivity("اعتماد طلب محكّم", "judge_application", id);
   showToast("تم اعتماد الطلب — صار عنده دور محكّم الآن");
   renderJudgeApplications();
@@ -1834,6 +1842,14 @@ async function renderSystemCheck(){
     if(error) throw error;
     if(!data) throw new Error("الحساب الحالي ليس admin — تحقق من الأدوار");
     return true;
+  });
+  await check("تشخيص الحساب الحالي وأدواره", async () => {
+    const { data, error } = await sb.rpc("debug_my_access");
+    if(error) throw error;
+    if(!data.is_admin_or_coordinator){
+      throw new Error(`البريد: ${data.email} — الأدوار الحالية: [${data.roles.join(", ")||"لا يوجد"}] — هذا الحساب ما يملك admin أو coordinator`);
+    }
+    return `البريد: ${data.email} — الأدوار: [${data.roles.join(", ")}]`;
   });
   await check("قراءة جدول الفرق (teams)", async () => {
     const { error } = await sb.from("teams").select("id").limit(1);
