@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>التقديم كمحكّم | هاكاثون إنفاذ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root{
+    --navy:#0B1F3A; --navy-light:#122a52; --teal:#1F9E8E; --gold:#C89B3C;
+    --bg:#F5F6FA; --card:#FFFFFF; --ink:#1A1D29; --muted:#6B7280; --border:#E4E6EF; --danger:#C0392B; --radius:16px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--ink);}
+  .hero{background:linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 60%, #0e2745 100%); color:#fff; padding:48px 20px 60px; text-align:center;}
+  .hero h1{font-size:24px; margin:0 0 8px;}
+  .hero p{color:#c8d3e8; font-size:14px; max-width:480px; margin:0 auto;}
+  .wrap{max-width:520px; margin:-30px auto 60px; padding:0 20px;}
+  .panel{background:var(--card); border-radius:var(--radius); padding:30px 26px; box-shadow:0 20px 50px rgba(11,31,58,.14); border:1px solid var(--border);}
+  .field{margin-bottom:16px;}
+  .field label{display:block; font-size:13px; margin-bottom:6px; font-weight:500;}
+  .field input, .field textarea{width:100%; padding:11px 13px; border:1px solid var(--border); border-radius:9px; font-family:inherit; font-size:14px;}
+  .btn{width:100%; padding:13px; border:none; border-radius:10px; background:var(--teal); color:#fff; font-family:inherit; font-size:14.5px; font-weight:700; cursor:pointer;}
+  .alert{padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; display:none;}
+  .alert.error{background:#fdeceb; color:var(--danger); display:block;}
+  .alert.success{background:#e6f7f3; color:var(--teal); display:block;}
+  .switcher{display:flex; gap:8px; margin-bottom:20px; background:#f0f1f5; padding:4px; border-radius:11px;}
+  .switcher button{flex:1; padding:9px; border:none; border-radius:8px; background:none; font-family:inherit; font-size:13px; font-weight:600; color:var(--muted); cursor:pointer;}
+  .switcher button.active{background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(0,0,0,.08);}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>انضم كمحكّم لهاكاثون إنفاذ</h1>
+  <p>شارك خبرتك بتقييم حلول ذكاء اصطناعي واعدة لخدمة القطاع القضائي</p>
+</div>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="switcher">
+      <button id="tab-new" class="active" onclick="switchTab('new')">حساب جديد</button>
+      <button id="tab-existing" onclick="switchTab('existing')">لدي حساب مسبقًا</button>
+    </div>
+    <div id="form-alert" class="alert"></div>
+
+    <div id="new-account-fields">
+      <div class="field"><label>الاسم الكامل</label><input id="f-name"></div>
+      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="f-email"></div>
+      <div class="field"><label>رقم الجوال</label><input id="f-phone" placeholder="05xxxxxxxx"></div>
+      <div class="field"><label>الجهة</label><input id="f-org"></div>
+      <div class="field"><label>كلمة المرور</label><input type="password" id="f-password"></div>
+    </div>
+    <div id="existing-account-fields" style="display:none">
+      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="e-email"></div>
+      <div class="field"><label>كلمة المرور</label><input type="password" id="e-password"></div>
+    </div>
+
+    <div class="field"><label>التخصص</label><input id="f-spec" placeholder="مثال: الذكاء الاصطناعي، القانون التجاري، الأمن السيبراني"></div>
+    <div class="field"><label>نبذة عنك (اختياري)</label><textarea id="f-bio" rows="3" placeholder="خبرتك ذات الصلة بالبرنامج..."></textarea></div>
+
+    <button class="btn" onclick="handleApply()">إرسال طلب الانضمام</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://tuyomqhvdjpsayecystf.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let mode = "new";
+function switchTab(t){
+  mode = t;
+  document.getElementById("tab-new").classList.toggle("active", t==="new");
+  document.getElementById("tab-existing").classList.toggle("active", t==="existing");
+  document.getElementById("new-account-fields").style.display = t==="new" ? "block" : "none";
+  document.getElementById("existing-account-fields").style.display = t==="existing" ? "block" : "none";
+}
+
+function showAlert(msg, type="error"){
+  const box = document.getElementById("form-alert");
+  box.textContent = msg;
+  box.className = "alert " + type;
+}
+
+async function handleApply(){
+  const specialization = document.getElementById("f-spec").value.trim();
+  const bio = document.getElementById("f-bio").value.trim();
+  if(!specialization){ showAlert("التخصص مطلوب"); return; }
+
+  let userId = null;
+
+  if(mode === "new"){
+    const full_name = document.getElementById("f-name").value.trim();
+    const email = document.getElementById("f-email").value.trim();
+    const phone = document.getElementById("f-phone").value.trim();
+    const organization = document.getElementById("f-org").value.trim();
+    const password = document.getElementById("f-password").value;
+    if(!full_name || !email || !password){ showAlert("الاسم والبريد وكلمة المرور مطلوبة"); return; }
+    if(password.length < 6){ showAlert("كلمة المرور يجب ألا تقل عن 6 أحرف"); return; }
+
+    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name, phone, organization } } });
+    if(error){ showAlert(error.message.includes("already") ? "هذا البريد مسجّل مسبقًا، استخدم تبويب (لدي حساب مسبقًا)" : error.message); return; }
+    if(!data.session){ showAlert("تحقق من بريدك لتأكيد الحساب ثم عد لهذه الصفحة واستخدم (لدي حساب مسبقًا)", "success"); return; }
+    userId = data.user.id;
+  } else {
+    const email = document.getElementById("e-email").value.trim();
+    const password = document.getElementById("e-password").value;
+    if(!email || !password){ showAlert("أدخل البريد وكلمة المرور"); return; }
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if(error){ showAlert("بيانات الدخول غير صحيحة"); return; }
+    userId = data.user.id;
+  }
+
+  const { error: appError } = await sb.from("judge_applications").upsert({
+    user_id: userId, specialization, bio: bio || null, status: "pending"
+  }, { onConflict: "user_id" });
+
+  if(appError){ showAlert("تعذّر إرسال الطلب: " + appError.message); return; }
+
+  showAlert("تم إرسال طلبك بنجاح! سيتم التواصل معك بعد مراجعة الإدارة", "success");
+}
+</script>
+</body>
+</html>
