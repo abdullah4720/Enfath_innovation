@@ -440,7 +440,7 @@ const MIN_MENTOR_SLOTS = 3;
 async function renderMentorAlert(){
   const card = document.getElementById("mentor-alert-card");
   const { data: mentors } = await sb.from("user_roles")
-    .select("user_id, profiles(full_name, email), roles!inner(key)")
+    .select("user_id, profiles!user_roles_user_id_fkey(full_name, email), roles!inner(key)")
     .eq("roles.key", "mentor");
 
   if(!mentors || !mentors.length){
@@ -1006,7 +1006,7 @@ async function loadJudgingAssignmentsList(){
 }
 async function openAssignJudgeModal(teamId, teamName){
   const { data: judges } = await sb.from("user_roles")
-    .select("user_id, profiles(full_name, email), roles!inner(key)")
+    .select("user_id, profiles!user_roles_user_id_fkey(full_name, email), roles!inner(key)")
     .eq("roles.key", "judge");
 
   openModal(`
