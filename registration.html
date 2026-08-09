@@ -199,6 +199,13 @@ function esc(str){
   if(str === null || str === undefined) return "";
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+function formatAnnouncementText(str){
+  let s = esc(str||"");
+  s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\+\+(.+?)\+\+/g, '<span style="font-size:1.3em;font-weight:700">$1</span>');
+  s = s.replace(/--(.+?)--/g, '<span style="font-size:0.85em;color:var(--muted)">$1</span>');
+  return s.replace(/\n/g, "<br>");
+}
 function showAlert(msg, type="error"){
   const box = document.getElementById("auth-alert");
   box.textContent = msg;
@@ -656,7 +663,7 @@ async function renderMentorshipTab(membership){
 
   let bookingHtml = "";
   if(myBooking){
-    const statusLabels = {pending:["قيد الانتظار","status-pending"], confirmed:["مؤكد","status-confirmed"], completed:["تم عقد الجلسة","status-confirmed"], cancelled:["ملغى","status-withdrawn"]};
+    const statusLabels = {pending:["قيد الانتظار — بانتظار تأكيد المرشد","status-pending"], confirmed:["مؤكد","status-confirmed"], completed:["تم عقد الجلسة","status-confirmed"], cancelled:["ملغى","status-withdrawn"]};
     const [label, cls] = statusLabels[myBooking.status] || ["—","status-pending"];
     bookingHtml = `<div class="card">
       <h2>موعدك الحالي</h2>
@@ -668,36 +675,63 @@ async function renderMentorshipTab(membership){
     </div>`;
   }
 
-  // المواعيد المتاحة (غير محجوزة)
+  // المواعيد المتاحة (غير محجوزة) — لكل المسارات أو نفس مسار الفريق
   const { data: slots, error } = await sb.from("mentor_slots")
-    .select("id, start_time, end_time, is_online, location, is_booked, profiles(full_name)")
+    .select("id, start_time, end_time, is_online, location, is_booked, track_id, profiles(full_name, specialization, bio)")
     .eq("is_booked", false)
+    .or(`track_id.is.null,track_id.eq.${team.track_id}`)
     .gte("start_time", new Date().toISOString())
     .order("start_time");
 
-  const body2 = document.createElement("div");
   if(error){
     body.innerHTML = bookingHtml + `<div class="card"><p class="hint">تعذّر تحميل المواعيد المتاحة</p></div>`;
     return;
   }
 
-  const slotsHtml = !slots.length
+  cachedMentorSlots = slots || [];
+  const specializations = [...new Set(cachedMentorSlots.map(s => s.profiles?.specialization).filter(Boolean))];
+
+  const slotsHtml = !cachedMentorSlots.length
     ? `<div class="card"><h2>المواعيد المتاحة</h2><p class="sub">لا توجد مواعيد إرشاد متاحة حاليًا، تابع لاحقًا</p></div>`
     : `<div class="card">
         <h2>المواعيد المتاحة</h2>
-        <p class="sub">اختر موعدًا يناسبك — الحجز يظهر فورًا لبقية الفرق</p>
-        ${slots.map(s => `
-          <div class="member-row">
-            <div>
-              <strong>${fmtDate(s.start_time)}</strong><br>
-              <span class="hint">${esc(s.profiles?.full_name||"مرشد")} · ${esc(s.location || (s.is_online ? "عبر الإنترنت" : ""))}</span>
-            </div>
-            <button class="btn btn-outline" style="width:auto;padding:8px 16px" onclick="bookMentorSlot('${s.id}','${team.id}')">حجز</button>
+        <p class="sub">اختر مرشدًا يناسب احتياج فريقك — الحجز يظهر فورًا لبقية الفرق</p>
+        ${specializations.length ? `
+          <div class="field" style="margin-bottom:16px">
+            <label>فلترة حسب التخصص</label>
+            <select id="mentor-spec-filter" onchange="filterMentorSlots('${team.id}')">
+              <option value="">كل التخصصات</option>
+              ${specializations.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+            </select>
           </div>
-        `).join("")}
+        ` : ""}
+        <div id="mentor-slots-list"></div>
       </div>`;
 
   body.innerHTML = bookingHtml + slotsHtml;
+  renderMentorSlotsList(cachedMentorSlots, team.id);
+}
+let cachedMentorSlots = [];
+function filterMentorSlots(teamId){
+  const spec = document.getElementById("mentor-spec-filter").value;
+  const filtered = spec ? cachedMentorSlots.filter(s => s.profiles?.specialization === spec) : cachedMentorSlots;
+  renderMentorSlotsList(filtered, teamId);
+}
+function renderMentorSlotsList(slots, teamId){
+  const box = document.getElementById("mentor-slots-list");
+  if(!box) return;
+  if(!slots.length){ box.innerHTML = `<p class="hint">لا توجد مواعيد مطابقة لهذا التخصص</p>`; return; }
+  box.innerHTML = slots.map(s => `
+    <div class="member-row" style="align-items:flex-start">
+      <div>
+        <strong>${fmtDate(s.start_time)}</strong><br>
+        <span class="hint">${esc(s.profiles?.full_name||"مرشد")}${s.profiles?.specialization ? " · " + esc(s.profiles.specialization) : ""}</span><br>
+        ${s.profiles?.bio ? `<span class="hint" style="font-size:11.5px">${esc(s.profiles.bio.substring(0,90))}${s.profiles.bio.length>90?"…":""}</span><br>` : ""}
+        <span class="hint">${esc(s.location || (s.is_online ? "عبر الإنترنت" : ""))}</span>
+      </div>
+      <button class="btn btn-outline" style="width:auto;padding:8px 16px" onclick="bookMentorSlot('${s.id}','${teamId}')">حجز</button>
+    </div>
+  `).join("");
 }
 async function bookMentorSlot(slotId, teamId){
   const topic = prompt("اختياري: وش الموضوع اللي تبي تناقشه بالجلسة؟") || null;
@@ -780,7 +814,7 @@ async function renderUpdatesTab(membership){
       <div class="announcement-item">
         <h4>${a.is_pinned ? '<span class="pin-flag">📌</span>' : ''}${esc(a.title)}</h4>
         <div class="meta">${fmtDate(a.published_at)} · ${esc(a.tracks?.name_ar || "جميع المسارات")}</div>
-        <p>${esc(a.body||"")}</p>
+        <p>${formatAnnouncementText(a.body||"")}</p>
         ${a.file_url ? `<a href="${esc(a.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600">📎 فتح الملف المرفق</a>` : ""}
       </div>
     `).join("")}

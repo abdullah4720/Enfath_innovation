@@ -177,10 +177,24 @@ function renderTab(){
 async function renderMyProfile(){
   const main = document.getElementById("main-content");
   const { data: profile } = await sb.from("profiles").select("*").eq("id", currentUser.id).single();
+  const specOptions = ["الذكاء الاصطناعي وتعلم الآلة","هندسة البرمجيات وتطوير الأنظمة","الأمن السيبراني","القانون والتشريع","التنفيذ القضائي والإجراءات القانونية","تجربة المستخدم وتصميم المنتجات","إدارة المشاريع وريادة الأعمال","البيانات وتحليل الأعمال","أخرى"];
+  const domainOptions = ["أكاديمي / جامعي","قطاع حكومي","قطاع قضائي","قطاع خاص / شركات تقنية","ريادة أعمال / تأسيس شركات","أخرى"];
+  const [savedSpec, savedDomain] = (profile.specialization||"").split(" — ");
   main.innerHTML = `<div class="card">
     <h3 style="margin:0 0 16px">ملفي الشخصي</h3>
     <div class="field"><label>الاسم الكامل</label><input value="${esc(profile.full_name||"")}" disabled style="opacity:.6"></div>
-    <div class="field"><label>التخصص</label><input id="profile-spec" value="${esc(profile.specialization||"")}" placeholder="مثال: الذكاء الاصطناعي، القانون التجاري..."></div>
+    <div class="field"><label>التخصص</label>
+      <select id="profile-spec">
+        <option value="">اختر التخصص</option>
+        ${specOptions.map(o => `<option value="${esc(o)}" ${savedSpec===o?"selected":""}>${esc(o)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field"><label>المجال</label>
+      <select id="profile-domain">
+        <option value="">اختر المجال</option>
+        ${domainOptions.map(o => `<option value="${esc(o)}" ${savedDomain===o?"selected":""}>${esc(o)}</option>`).join("")}
+      </select>
+    </div>
     <div class="field"><label>نبذة تعريفية</label><textarea id="profile-bio" rows="4" placeholder="خبرتك ذات الصلة بالبرنامج...">${esc(profile.bio||"")}</textarea></div>
     <div id="profile-alert" class="alert"></div>
     <button class="btn btn-primary" onclick="saveMyProfile()">حفظ التعديلات</button>
@@ -189,7 +203,9 @@ async function renderMyProfile(){
 async function saveMyProfile(){
   const alertBox = document.getElementById("profile-alert");
   alertBox.className = "alert";
-  const specialization = document.getElementById("profile-spec").value.trim();
+  const specValue = document.getElementById("profile-spec").value;
+  const domainValue = document.getElementById("profile-domain").value;
+  const specialization = specValue + (domainValue ? " — " + domainValue : "");
   const bio = document.getElementById("profile-bio").value.trim();
   const { error } = await sb.from("profiles").update({ specialization, bio }).eq("id", currentUser.id);
   if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
@@ -227,11 +243,18 @@ async function renderSlots(){
       <div style="text-align:left">
         ${!booking ? '<span class="badge badge-gray">غير محجوز</span>' :
           booking.status === "completed" ? '<span class="badge badge-green">تم تسجيل الملاحظات</span>' :
-          '<span class="badge badge-gold">محجوز</span>'}
-        ${booking && booking.status !== "completed" ? `<div style="margin-top:8px"><button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name})})'>تسجيل ملاحظة</button></div>` : ""}
+          booking.status === "confirmed" ? '<span class="badge badge-gold">مؤكد</span>' :
+          '<span class="badge badge-gray">قيد الانتظار — بانتظار تأكيدك</span>'}
+        ${booking && booking.status === "pending" ? `<div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button></div>` : ""}
+        ${booking && booking.status !== "completed" && booking.status !== "pending" ? `<div style="margin-top:8px"><button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name})})'>تسجيل ملاحظة</button></div>` : ""}
       </div>
     </div>`;
   }).join("");
+}
+async function confirmBooking(bookingId){
+  const { error } = await sb.from("mentor_bookings").update({ status: "confirmed" }).eq("id", bookingId);
+  if(error){ alert("تعذّر التأكيد: " + error.message); return; }
+  renderSlots();
 }
 
 function openFeedbackModal({bookingId, teamId, teamName}){
@@ -274,13 +297,19 @@ async function saveFeedback(bookingId, teamId){
 }
 
 /* ---------------- إضافة موعد ---------------- */
-function renderAddSlot(){
+async function renderAddSlot(){
   const main = document.getElementById("main-content");
+  const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
   main.innerHTML = `<div class="card">
     <h3 style="margin:0 0 16px">إضافة موعد إرشاد جديد</h3>
     <div class="form-row-2">
       <div class="field"><label>من الساعة</label><input type="datetime-local" id="slot-start"></div>
       <div class="field"><label>إلى الساعة</label><input type="datetime-local" id="slot-end"></div>
+    </div>
+    <div class="field"><label>المسار (اختياري — اتركه فارغًا ليكون متاح لكل المسارات)</label>
+      <select id="slot-track"><option value="">كل المسارات</option>
+        ${(tracks||[]).map(t=>`<option value="${t.id}">${esc(t.name_ar)}</option>`).join("")}
+      </select>
     </div>
     <div class="field"><label><input type="checkbox" id="slot-online" checked> جلسة عبر الإنترنت</label></div>
     <div class="field"><label>الموقع / رابط الاجتماع</label><input id="slot-location" placeholder="اختياري"></div>
@@ -293,6 +322,7 @@ async function saveNewSlot(){
   alertBox.className = "alert";
   const start = document.getElementById("slot-start").value;
   const end = document.getElementById("slot-end").value;
+  const track_id = document.getElementById("slot-track").value || null;
   const is_online = document.getElementById("slot-online").checked;
   const location = document.getElementById("slot-location").value.trim();
 
@@ -301,7 +331,7 @@ async function saveNewSlot(){
 
   const { error } = await sb.from("mentor_slots").insert({
     mentor_user_id: currentUser.id, start_time: new Date(start).toISOString(),
-    end_time: new Date(end).toISOString(), is_online, location: location || null
+    end_time: new Date(end).toISOString(), track_id, is_online, location: location || null
   });
   if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
 

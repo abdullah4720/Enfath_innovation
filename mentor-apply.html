@@ -58,7 +58,31 @@
       <div class="field"><label>كلمة المرور</label><input type="password" id="e-password"></div>
     </div>
 
-    <div class="field"><label>التخصص</label><input id="f-spec" placeholder="مثال: الذكاء الاصطناعي، القانون التجاري، الأمن السيبراني"></div>
+    <div class="field"><label>التخصص</label>
+      <select id="f-spec">
+        <option value="">اختر التخصص</option>
+        <option value="الذكاء الاصطناعي وتعلم الآلة">الذكاء الاصطناعي وتعلم الآلة</option>
+        <option value="هندسة البرمجيات وتطوير الأنظمة">هندسة البرمجيات وتطوير الأنظمة</option>
+        <option value="الأمن السيبراني">الأمن السيبراني</option>
+        <option value="القانون والتشريع">القانون والتشريع</option>
+        <option value="التنفيذ القضائي والإجراءات القانونية">التنفيذ القضائي والإجراءات القانونية</option>
+        <option value="تجربة المستخدم وتصميم المنتجات">تجربة المستخدم وتصميم المنتجات</option>
+        <option value="إدارة المشاريع وريادة الأعمال">إدارة المشاريع وريادة الأعمال</option>
+        <option value="البيانات وتحليل الأعمال">البيانات وتحليل الأعمال</option>
+        <option value="أخرى">أخرى</option>
+      </select>
+    </div>
+    <div class="field"><label>المجال</label>
+      <select id="f-domain">
+        <option value="">اختر المجال</option>
+        <option value="أكاديمي / جامعي">أكاديمي / جامعي</option>
+        <option value="قطاع حكومي">قطاع حكومي</option>
+        <option value="قطاع قضائي">قطاع قضائي</option>
+        <option value="قطاع خاص / شركات تقنية">قطاع خاص / شركات تقنية</option>
+        <option value="ريادة أعمال / تأسيس شركات">ريادة أعمال / تأسيس شركات</option>
+        <option value="أخرى">أخرى</option>
+      </select>
+    </div>
     <div class="field"><label>نبذة عنك (اختياري)</label><textarea id="f-bio" rows="3" placeholder="خبرتك ذات الصلة بالبرنامج..."></textarea></div>
 
     <button class="btn" onclick="handleApply()">إرسال طلب الانضمام</button>
@@ -86,9 +110,12 @@ function showAlert(msg, type="error"){
 }
 
 async function handleApply(){
-  const specialization = document.getElementById("f-spec").value.trim();
+  const specValue = document.getElementById("f-spec").value;
+  const domainValue = document.getElementById("f-domain").value;
   const bio = document.getElementById("f-bio").value.trim();
-  if(!specialization){ showAlert("التخصص مطلوب"); return; }
+  if(!specValue){ showAlert("اختر التخصص"); return; }
+  if(!domainValue){ showAlert("اختر المجال"); return; }
+  const specialization = specValue + (domainValue ? " — " + domainValue : "");
 
   let userId = null;
 
