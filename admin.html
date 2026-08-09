@@ -921,17 +921,18 @@ async function openManualAssignModal(teamId, teamName){
   const { data: slots } = await sb.from("mentor_slots")
     .select("id, start_time, is_online, location, profiles(full_name, specialization)")
     .eq("is_booked", false)
-    .gte("start_time", new Date().toISOString())
     .order("start_time");
 
+  const now = new Date();
   openModal(`
     <h3>تعيين مرشد لفريق ${esc(teamName)}</h3>
-    ${!slots || !slots.length ? `<p class="hint">لا توجد مواعيد متاحة حاليًا — أضف مواعيد من حساب المرشد أول</p>` : `
+    ${!slots || !slots.length ? `<p class="hint">لا توجد مواعيد متاحة حاليًا — تأكد إن أحد المرشدين أضاف مواعيد من حسابه أولًا (كل المواعيد الحالية إما محجوزة أو غير موجودة)</p>` : `
       <div class="field"><label>اختر الموعد</label>
         <select id="f-manual-slot">
-          ${slots.map(s => `<option value="${s.id}">${esc(s.profiles?.full_name||"")} — ${fmtDate(s.start_time)} ${s.profiles?.specialization ? "· "+esc(s.profiles.specialization) : ""}</option>`).join("")}
+          ${slots.map(s => `<option value="${s.id}">${esc(s.profiles?.full_name||"")} — ${fmtDate(s.start_time)} ${s.profiles?.specialization ? "· "+esc(s.profiles.specialization) : ""}${new Date(s.start_time) < now ? " (⚠ موعد بتاريخ ماضٍ)" : ""}</option>`).join("")}
         </select>
       </div>
+      <p class="hint" style="margin-top:8px">سيُرسل التعيين كـ"قيد الانتظار" — يحتاج المرشد يؤكده بنفسه من لوحته</p>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
         <button class="btn btn-primary" onclick="manualAssignMentor('${teamId}')">تعيين</button>
@@ -953,10 +954,10 @@ async function manualAssignMentor(teamId){
   );
   if(hasConflict && !confirm("تنبيه: هذا الموعد يتعارض بالتوقيت مع موعد آخر للفريق. تبي تكمل التعيين رغم ذلك؟")) return;
 
-  const { error } = await sb.from("mentor_bookings").insert({ slot_id: slotId, team_id: teamId, status: "confirmed" });
+  const { error } = await sb.from("mentor_bookings").insert({ slot_id: slotId, team_id: teamId, status: "pending" });
   if(error){ showToast("خطأ: " + error.message, true); return; }
   logActivity("تعيين مرشد يدويًا", "mentor_booking", teamId);
-  showToast("تم التعيين — سيصل إشعار للفريق والمرشد تلقائيًا");
+  showToast("تم التعيين — بانتظار تأكيد المرشد، وسيصل إشعار له وللفريق تلقائيًا");
   closeModal();
   renderMentorshipTeamsList();
 }
