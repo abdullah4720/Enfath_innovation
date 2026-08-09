@@ -851,19 +851,25 @@ async function renderMentorshipOverview(){
 /* ---------------- المرشدون ---------------- */
 async function renderMentorshipMentorsList(){
   const body = document.getElementById("mentorship-body");
-  body.innerHTML = `<div class="card"><div id="mentors-mgmt-table">جاري التحميل...</div></div>`;
+  body.innerHTML = `<div class="card">
+      <div class="toolbar" style="margin-bottom:14px">
+        <div></div>
+        <button class="btn btn-primary btn-sm" onclick="openAddMentorModal()">+ إضافة مرشد</button>
+      </div>
+      <div id="mentors-mgmt-table">جاري التحميل...</div>
+    </div>`;
 
   const { data: mentorRoles } = await sb.from("user_roles")
-    .select("user_id, profiles!user_roles_user_id_fkey(full_name, email, specialization, bio), roles!inner(key)")
+    .select("id, user_id, profiles!user_roles_user_id_fkey(full_name, email, specialization, bio), roles!inner(key)")
     .eq("roles.key", "mentor");
 
   const { data: slots } = await sb.from("mentor_slots").select("id, mentor_user_id, is_booked");
 
   const box = document.getElementById("mentors-mgmt-table");
-  if(!mentorRoles || !mentorRoles.length){ box.innerHTML = `<div class="empty-state">لا يوجد مرشدون مسجّلون بعد</div>`; return; }
+  if(!mentorRoles || !mentorRoles.length){ box.innerHTML = `<div class="empty-state">لا يوجد مرشدون مسجّلون بعد — أضف أول مرشد بالزر أعلاه</div>`; return; }
 
   box.innerHTML = `<table><thead><tr>
-    <th>المرشد</th><th>التخصص</th><th>إجمالي المواعيد</th><th>المحجوزة</th>
+    <th>المرشد</th><th>التخصص</th><th>إجمالي المواعيد</th><th>المحجوزة</th><th></th>
     </tr></thead><tbody>
     ${mentorRoles.map(m => {
       const mySlots = (slots||[]).filter(s => s.mentor_user_id === m.user_id);
@@ -873,9 +879,74 @@ async function renderMentorshipMentorsList(){
         <td>${esc(m.profiles?.specialization||"—")}</td>
         <td>${mySlots.length}</td>
         <td>${myBooked}</td>
+        <td class="row-actions">
+          <button class="btn btn-danger btn-sm" onclick="removeMentorRole('${m.id}', ${JSON.stringify(m.profiles?.full_name||"")})">حذف من المرشدين</button>
+        </td>
       </tr>`;
     }).join("")}
     </tbody></table>`;
+}
+
+async function openAddMentorModal(){
+  openModal(`
+    <h3>إضافة مرشد</h3>
+    <p class="hint" style="margin:-8px 0 16px">ابحث بالبريد أو الاسم — لازم يكون الشخص عنده حساب مسجّل بالمنصة أصلًا (حتى لو بدور مشارك)</p>
+    <div class="field"><label>بحث</label><input id="add-mentor-search" placeholder="اكتب للبحث..." oninput="debouncedSearchAddMentor()"></div>
+    <div id="add-mentor-results" style="margin-top:10px; max-height:280px; overflow-y:auto"></div>
+    <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
+  `);
+}
+let addMentorSearchTimer;
+function debouncedSearchAddMentor(){
+  clearTimeout(addMentorSearchTimer);
+  addMentorSearchTimer = setTimeout(searchAddMentor, 400);
+}
+async function searchAddMentor(){
+  const term = document.getElementById("add-mentor-search").value.trim();
+  const box = document.getElementById("add-mentor-results");
+  if(!term){ box.innerHTML = ""; return; }
+  box.innerHTML = `<div style="font-size:12.5px;color:var(--muted)">جاري البحث...</div>`;
+
+  const { data, error } = await sb.from("profiles")
+    .select("id, full_name, email, user_roles!user_roles_user_id_fkey(roles(key))")
+    .or(`email.ilike.%${term}%,full_name.ilike.%${term}%`)
+    .limit(8);
+
+  if(error){ box.innerHTML = `<div style="color:var(--danger);font-size:12.5px">خطأ: ${esc(error.message)}</div>`; return; }
+  if(!data.length){ box.innerHTML = `<div style="font-size:12.5px;color:var(--muted)">لا توجد نتائج — تأكد إن الشخص سجّل حساب بالمنصة أولًا (من registration.html)</div>`; return; }
+
+  box.innerHTML = data.map(u => {
+    const alreadyMentor = (u.user_roles||[]).some(r => r.roles?.key === "mentor");
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:13.5px;font-weight:600">${esc(u.full_name)}</div>
+          <div style="font-size:12px;color:var(--muted)">${esc(u.email)}</div>
+        </div>
+        ${alreadyMentor
+          ? `<span class="badge badge-gray">مرشد بالفعل</span>`
+          : `<button class="btn btn-primary btn-sm" style="width:auto;padding:7px 14px" onclick="addMentorRole('${u.id}', ${JSON.stringify(u.full_name)})">إضافة</button>`
+        }
+      </div>
+    `;
+  }).join("");
+}
+async function addMentorRole(userId, userName){
+  const { data: roleRow } = await sb.from("roles").select("id").eq("key","mentor").single();
+  const { error } = await sb.from("user_roles").insert({ user_id: userId, role_id: roleRow.id });
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("إضافة مرشد", "user", userId, {name: userName});
+  showToast(`تمت إضافة ${userName} كمرشد`);
+  closeModal();
+  renderMentorshipMentorsList();
+}
+async function removeMentorRole(userRoleId, userName){
+  if(!confirm(`متأكد تبي تحذف ${userName} من قائمة المرشدين؟ مواعيده وحجوزاته السابقة تبقى محفوظة، بس ما يقدر يدخل لوحة الإرشاد بعدها.`)) return;
+  const { error } = await sb.from("user_roles").delete().eq("id", userRoleId);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("حذف مرشد", "user", null, {name: userName});
+  showToast(`تم حذف ${userName} من المرشدين`);
+  renderMentorshipMentorsList();
 }
 
 /* ---------------- الفرق ---------------- */
