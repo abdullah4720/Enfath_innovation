@@ -24,10 +24,20 @@
     --danger:#C0392B;
     --radius:14px;
   }
+  body.dark{
+    --bg:#0d1520; --card:#151f30; --ink:#e5e9f0; --muted:#8b96a8; --border:#26324a;
+  }
+  body.dark .stat-card, body.dark .card, body.dark .modal, body.dark table{ color:var(--ink); }
+  body.dark th{ color:var(--muted); border-color:var(--border); }
+  body.dark td{ border-color:var(--border); }
+  body.dark input, body.dark select, body.dark textarea{
+    background:#0f1826 !important; color:var(--ink) !important; border-color:var(--border) !important;
+  }
+  body.dark .empty-state{ color:var(--muted); }
   *{box-sizing:border-box;}
   body{
     margin:0; font-family:'IBM Plex Sans Arabic', sans-serif;
-    background:var(--bg); color:var(--ink);
+    background:var(--bg); color:var(--ink); transition:background .2s, color .2s;
   }
   /* ---------- شاشة الدخول ---------- */
   #login-screen{
@@ -70,7 +80,29 @@
     background:var(--navy); color:#fff; padding:24px 18px; position:sticky; top:0; height:100vh;
     overflow-y:auto;
   }
-  .brand{display:flex; align-items:center; gap:10px; margin-bottom:28px; padding:0 6px;}
+  .brand{display:flex; align-items:center; gap:10px; margin-bottom:16px; padding:0 6px;}
+  .nav-group-label{
+    font-size:10.5px; color:#5f7299; text-transform:uppercase; letter-spacing:.06em;
+    margin:16px 6px 6px; font-weight:700;
+  }
+  .global-search-box{position:relative; margin-bottom:16px; padding:0 2px;}
+  .global-search-box input{
+    width:100%; padding:9px 12px; border-radius:9px; border:1px solid rgba(255,255,255,.15);
+    background:rgba(255,255,255,.06); color:#fff; font-family:inherit; font-size:12.5px;
+  }
+  .global-search-box input::placeholder{color:#7d8db3;}
+  .global-search-box input:focus{outline:none; border-color:var(--teal); background:rgba(255,255,255,.1);}
+  #global-search-results{
+    display:none; position:absolute; top:calc(100% + 4px); right:0; left:0; background:#fff; border-radius:10px;
+    box-shadow:0 12px 32px rgba(0,0,0,.3); max-height:340px; overflow-y:auto; z-index:200;
+  }
+  #global-search-results.show{display:block;}
+  .gsr-item{padding:10px 14px; border-bottom:1px solid var(--border); cursor:pointer; text-align:right;}
+  .gsr-item:last-child{border-bottom:none;}
+  .gsr-item:hover{background:#f2fbf9;}
+  .gsr-item .gsr-name{font-size:13px; font-weight:600; color:var(--ink);}
+  .gsr-item .gsr-meta{font-size:11px; color:var(--muted); margin-top:2px;}
+  .gsr-type-badge{font-size:9.5px; padding:2px 7px; border-radius:8px; background:#f0f1f5; color:var(--muted); margin-left:6px;}
   .brand-dot{width:10px; height:10px; border-radius:50%; background:var(--gold);}
   .brand h2{font-size:15px; margin:0; font-weight:700; letter-spacing:.3px;}
   .brand span{display:block; font-size:11px; color:#9db3d6; font-weight:400;}
@@ -175,22 +207,35 @@
         <h2>هاكاثون إنفاذ</h2>
         <span>لوحة التحكم الإدارية</span>
       </div>
+      <button id="theme-toggle" onclick="toggleTheme()" title="تبديل الوضع الداكن/الفاتح" style="margin-right:auto;background:none;border:1px solid rgba(255,255,255,.2);border-radius:8px;width:32px;height:32px;color:#fff;cursor:pointer;font-size:14px">🌙</button>
+    </div>
+    <div class="global-search-box">
+      <input type="text" id="global-search-input" placeholder="🔍 بحث عام (فريق، مشارك، بريد...)" oninput="debouncedGlobalSearch()" onfocus="showGlobalSearchResults()">
+      <div id="global-search-results"></div>
     </div>
     <nav id="nav-menu">
       <a data-page="overview" class="active">📊 &nbsp;نظرة عامة</a>
       <a data-page="analytics">📈 &nbsp;التحليلات</a>
+
+      <div class="nav-group-label">المشاركون</div>
       <a data-page="participants">🧑‍🤝‍🧑 &nbsp;المشاركون</a>
-      <a data-page="tracks">🧭 &nbsp;المسارات</a>
       <a data-page="teams">👥 &nbsp;الفرق</a>
       <a data-page="projects">💡 &nbsp;المشاريع</a>
+
+      <div class="nav-group-label">البرنامج</div>
       <a data-page="prep">🎓 &nbsp;جلسات التحضير</a>
       <a data-page="mentorship">🧭 &nbsp;إدارة الإرشاد</a>
-      <a data-page="announcements">📢 &nbsp;التحديثات والملفات</a>
       <a data-page="judging">⚖️ &nbsp;التحكيم</a>
       <a data-page="events">📍 &nbsp;الفعاليات والحضور</a>
       <a href="./scan.html" target="_blank" style="opacity:.9">📷 &nbsp;تسجيل الحضور (مسح QR)</a>
       <a data-page="certificates">🏅 &nbsp;الشهادات</a>
       <a data-page="surveys">📋 &nbsp;الاستبيانات والرضا</a>
+
+      <div class="nav-group-label">التواصل</div>
+      <a data-page="announcements">📢 &nbsp;التحديثات والملفات</a>
+
+      <div class="nav-group-label">الإعدادات والإدارة</div>
+      <a data-page="tracks">🧭 &nbsp;المسارات</a>
       <a data-page="users">🔐 &nbsp;المستخدمون والأدوار</a>
       <a data-page="mentorApps">📥 &nbsp;طلبات الانضمام كمرشد</a>
       <a data-page="judgeApps">📥 &nbsp;طلبات الانضمام كمحكّم</a>
@@ -252,6 +297,86 @@ function fmtDate(d){
   if(!d) return "—";
   return new Date(d).toLocaleString("ar-SA", {dateStyle:"medium", timeStyle:"short"});
 }
+
+/* ---------------- الوضع الداكن/الفاتح ---------------- */
+function initTheme(){
+  const saved = localStorage.getItem("enfath-admin-theme");
+  if(saved === "dark"){
+    document.body.classList.add("dark");
+    document.getElementById("theme-toggle").textContent = "☀️";
+  }
+}
+function toggleTheme(){
+  const isDark = document.body.classList.toggle("dark");
+  document.getElementById("theme-toggle").textContent = isDark ? "☀️" : "🌙";
+  localStorage.setItem("enfath-admin-theme", isDark ? "dark" : "light");
+}
+initTheme();
+
+/* ---------------- البحث العام ---------------- */
+let globalSearchTimer;
+function debouncedGlobalSearch(){
+  clearTimeout(globalSearchTimer);
+  globalSearchTimer = setTimeout(runGlobalSearch, 350);
+}
+async function runGlobalSearch(){
+  const term = document.getElementById("global-search-input").value.trim();
+  const box = document.getElementById("global-search-results");
+  if(!term || term.length < 2){ box.classList.remove("show"); return; }
+
+  const [teamsRes, profilesRes] = await Promise.all([
+    sb.from("teams").select("id, team_name, team_code, tracks(name_ar)").or(`team_name.ilike.%${term}%,team_code.ilike.%${term}%`).limit(5),
+    sb.from("profiles").select("id, full_name, email").or(`full_name.ilike.%${term}%,email.ilike.%${term}%`).limit(5),
+  ]);
+
+  const teams = teamsRes.data || [];
+  const profiles = profilesRes.data || [];
+
+  if(!teams.length && !profiles.length){
+    box.innerHTML = `<div class="gsr-item" style="cursor:default;color:var(--muted)">لا توجد نتائج</div>`;
+    box.classList.add("show");
+    return;
+  }
+
+  box.innerHTML = [
+    ...teams.map(t => `
+      <div class="gsr-item" onclick='goToSearchResult("team", ${JSON.stringify(t.team_name)})'>
+        <span class="gsr-type-badge">فريق</span>
+        <span class="gsr-name">${esc(t.team_name)} <code style="color:var(--gold);font-size:10px">${esc(t.team_code||"")}</code></span>
+        <div class="gsr-meta">${esc(t.tracks?.name_ar||"")}</div>
+      </div>
+    `),
+    ...profiles.map(p => `
+      <div class="gsr-item" onclick='goToSearchResult("participant", ${JSON.stringify(p.full_name)})'>
+        <span class="gsr-type-badge">مشارك</span>
+        <span class="gsr-name">${esc(p.full_name)}</span>
+        <div class="gsr-meta">${esc(p.email)}</div>
+      </div>
+    `)
+  ].join("");
+  box.classList.add("show");
+}
+function showGlobalSearchResults(){
+  const box = document.getElementById("global-search-results");
+  if(box.innerHTML.trim()) box.classList.add("show");
+}
+document.addEventListener("click", (e) => {
+  if(!e.target.closest(".global-search-box")){
+    document.getElementById("global-search-results")?.classList.remove("show");
+  }
+});
+function goToSearchResult(type, searchTerm){
+  document.getElementById("global-search-results").classList.remove("show");
+  document.getElementById("global-search-input").value = "";
+  if(type === "team") navigateTo("teams");
+  else navigateTo("participants");
+  setTimeout(() => {
+    const inputId = type === "team" ? "team-search" : "participants-search";
+    const input = document.getElementById(inputId);
+    if(input){ input.value = searchTerm; input.dispatchEvent(new Event("input")); }
+  }, 300);
+}
+
 async function logActivity(action, entityType, entityId, metadata={}){
   try {
     await sb.from("activity_log").insert({
@@ -372,6 +497,10 @@ function navigateTo(page){
 async function renderOverview(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header"><div><h1>نظرة عامة</h1><p>مؤشرات عامة عن سير البرنامج</p></div></div>
+    <div class="card" style="background:linear-gradient(135deg,#f2fbf9,#fdfdfb); border-color:var(--teal)">
+      <h3 style="margin:0 0 12px">📌 نظرة اليوم</h3>
+      <div class="grid-stats" id="today-stats">جاري التحميل...</div>
+    </div>
     <div class="grid-stats" id="stats-grid">جاري التحميل...</div>
     <div class="grid-stats" id="stats-grid-extra" style="margin-top:-6px"></div>
     <div class="card">
@@ -422,6 +551,7 @@ async function renderOverview(){
     }
   });
 
+  await renderTodayStats();
   await renderMentorAlert();
 
   const { data: stats, error } = await sb.from("dashboard_stats").select("*").single();
@@ -480,6 +610,25 @@ async function saveProgramSchedule(){
   setTimeout(() => alertEl.style.display = "none", 2500);
 }
 const MIN_MENTOR_SLOTS = 3;
+async function renderTodayStats(){
+  const box = document.getElementById("today-stats");
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayIso = todayStart.toISOString();
+
+  const [newTeams, pendingMentorApps, pendingJudgeApps, todayBookings] = await Promise.all([
+    sb.from("teams").select("id", {count:"exact", head:true}).gte("created_at", todayIso),
+    sb.from("mentor_applications").select("id", {count:"exact", head:true}).eq("status","pending"),
+    sb.from("judge_applications").select("id", {count:"exact", head:true}).eq("status","pending"),
+    sb.from("mentor_bookings").select("id", {count:"exact", head:true}).gte("created_at", todayIso),
+  ]);
+
+  box.innerHTML = `
+    ${statCard(newTeams.count ?? 0, "فرق جديدة اليوم", true)}
+    ${statCard(todayBookings.count ?? 0, "حجوزات إرشاد اليوم")}
+    ${statCard(pendingMentorApps.count ?? 0, "طلبات مرشدين بانتظار المراجعة")}
+    ${statCard(pendingJudgeApps.count ?? 0, "طلبات محكّمين بانتظار المراجعة")}
+  `;
+}
 async function renderExtraStats(){
   const box = document.getElementById("stats-grid-extra");
   const [mentorsCount, judgesCount, prepCount, bookingsCount, roundsCount, eventsCount] = await Promise.all([
@@ -1848,7 +1997,13 @@ async function renderSurveys(){
 async function renderMentorApplications(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header"><div><h1>طلبات الانضمام كمرشد</h1><p>راجع طلبات المتقدمين للإرشاد واعتمدها</p></div></div>
-    <div class="card"><div id="mentor-apps-table">جاري التحميل...</div></div>`;
+    <div class="card">
+      <div class="toolbar" style="margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500"><input type="checkbox" id="mentor-select-all" onchange="toggleSelectAllMentorApps(this.checked)"> تحديد الكل</label>
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="bulkApproveMentorApps()">✓ اعتماد المحدَّد</button>
+      </div>
+      <div id="mentor-apps-table">جاري التحميل...</div>
+    </div>`;
 
   const { data, error } = await sb.from("mentor_applications")
     .select("*, profiles!mentor_applications_user_id_fkey(full_name, email, phone, organization)")
@@ -1865,9 +2020,10 @@ async function renderMentorApplications(){
   };
 
   box.innerHTML = `<table><thead><tr>
-    <th>المتقدم</th><th>التخصص</th><th>النبذة</th><th>الحالة</th><th></th>
+    <th></th><th>المتقدم</th><th>التخصص</th><th>النبذة</th><th>الحالة</th><th></th>
     </tr></thead><tbody>
     ${data.map(a => `<tr>
+      <td>${a.status === "pending" ? `<input type="checkbox" class="mentor-app-checkbox" value="${a.id}">` : ""}</td>
       <td><strong>${esc(a.profiles?.full_name||"—")}</strong><br><span style="color:var(--muted);font-size:12px">${esc(a.profiles?.email||"")}</span></td>
       <td>${esc(a.specialization)}</td>
       <td style="max-width:220px;font-size:12.5px;color:var(--muted)">${esc((a.bio||"").substring(0,100))}</td>
@@ -1880,6 +2036,23 @@ async function renderMentorApplications(){
       </td>
     </tr>`).join("")}
     </tbody></table>`;
+}
+function toggleSelectAllMentorApps(checked){
+  document.querySelectorAll(".mentor-app-checkbox").forEach(cb => cb.checked = checked);
+}
+async function bulkApproveMentorApps(){
+  const ids = [...document.querySelectorAll(".mentor-app-checkbox:checked")].map(cb => cb.value);
+  if(!ids.length){ showToast("حدّد طلب واحد على الأقل", true); return; }
+  if(!confirm(`اعتماد ${ids.length} طلب دفعة وحدة؟`)) return;
+
+  let successCount = 0;
+  for(const id of ids){
+    const { data, error } = await sb.rpc("approve_mentor_application", { p_application_id: id });
+    if(!error && data.success) successCount++;
+  }
+  logActivity("اعتماد جماعي لطلبات مرشدين", "mentor_application", null, {count: successCount});
+  showToast(`تم اعتماد ${successCount} من ${ids.length} طلب`);
+  renderMentorApplications();
 }
 async function approveMentorApp(id){
   const { data, error } = await sb.rpc("approve_mentor_application", { p_application_id: id });
@@ -1905,7 +2078,13 @@ async function rejectMentorApp(id){
 async function renderJudgeApplications(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header"><div><h1>طلبات الانضمام كمحكّم</h1><p>راجع طلبات المتقدمين للتحكيم واعتمدها</p></div></div>
-    <div class="card"><div id="judge-apps-table">جاري التحميل...</div></div>`;
+    <div class="card">
+      <div class="toolbar" style="margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500"><input type="checkbox" id="judge-select-all" onchange="toggleSelectAllJudgeApps(this.checked)"> تحديد الكل</label>
+        <button class="btn btn-primary btn-sm" style="width:auto" onclick="bulkApproveJudgeApps()">✓ اعتماد المحدَّد</button>
+      </div>
+      <div id="judge-apps-table">جاري التحميل...</div>
+    </div>`;
 
   const { data, error } = await sb.from("judge_applications")
     .select("*, profiles!judge_applications_user_id_fkey(full_name, email, phone, organization)")
@@ -1922,9 +2101,10 @@ async function renderJudgeApplications(){
   };
 
   box.innerHTML = `<table><thead><tr>
-    <th>المتقدم</th><th>التخصص</th><th>النبذة</th><th>الحالة</th><th></th>
+    <th></th><th>المتقدم</th><th>التخصص</th><th>النبذة</th><th>الحالة</th><th></th>
     </tr></thead><tbody>
     ${data.map(a => `<tr>
+      <td>${a.status === "pending" ? `<input type="checkbox" class="judge-app-checkbox" value="${a.id}">` : ""}</td>
       <td><strong>${esc(a.profiles?.full_name||"—")}</strong><br><span style="color:var(--muted);font-size:12px">${esc(a.profiles?.email||"")}</span></td>
       <td>${esc(a.specialization)}</td>
       <td style="max-width:220px;font-size:12.5px;color:var(--muted)">${esc((a.bio||"").substring(0,100))}</td>
@@ -1937,6 +2117,23 @@ async function renderJudgeApplications(){
       </td>
     </tr>`).join("")}
     </tbody></table>`;
+}
+function toggleSelectAllJudgeApps(checked){
+  document.querySelectorAll(".judge-app-checkbox").forEach(cb => cb.checked = checked);
+}
+async function bulkApproveJudgeApps(){
+  const ids = [...document.querySelectorAll(".judge-app-checkbox:checked")].map(cb => cb.value);
+  if(!ids.length){ showToast("حدّد طلب واحد على الأقل", true); return; }
+  if(!confirm(`اعتماد ${ids.length} طلب دفعة وحدة؟`)) return;
+
+  let successCount = 0;
+  for(const id of ids){
+    const { data, error } = await sb.rpc("approve_judge_application", { p_application_id: id });
+    if(!error && data.success) successCount++;
+  }
+  logActivity("اعتماد جماعي لطلبات محكّمين", "judge_application", null, {count: successCount});
+  showToast(`تم اعتماد ${successCount} من ${ids.length} طلب`);
+  renderJudgeApplications();
 }
 async function approveJudgeApp(id){
   const { data, error } = await sb.rpc("approve_judge_application", { p_application_id: id });
@@ -2407,6 +2604,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r34</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r35</div>
 </body>
 </html>
