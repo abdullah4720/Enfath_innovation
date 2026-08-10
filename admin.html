@@ -536,10 +536,15 @@ async function renderMentorAlert(){
 async function renderTracks(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
-      <div><h1>المسارات</h1><p>إدارة مسارات الهاكاثون والحد الأدنى/الأقصى لحجم الفريق</p></div>
+      <div><h1>المسارات</h1><p>إدارة مسارات الهاكاثون، حجم الفريق، والتحكم بسعة التسجيل لكل مسار</p></div>
       <button class="btn btn-primary" onclick="openTrackModal()">+ إضافة مسار</button>
     </div>
-    <div class="card"><div id="tracks-table">جاري التحميل...</div></div>`;
+    <div class="card"><div id="tracks-table">جاري التحميل...</div></div>
+    <div class="card">
+      <h3 style="margin:0 0 6px">التحكم بالتسجيل لكل مسار</h3>
+      <p class="hint" style="margin-bottom:16px">حدّد السعة القصوى لكل مسار (تُغلق تلقائيًا عند الاكتمال)، أو أغلقه يدويًا بغض النظر عن السعة</p>
+      <div id="capacity-controls">جاري التحميل...</div>
+    </div>`;
 
   const { data, error } = await sb.from("tracks").select("*").order("display_order");
   const box = document.getElementById("tracks-table");
@@ -560,6 +565,43 @@ async function renderTracks(){
       </td>
     </tr>`).join("")}
     </tbody></table>`;
+
+  await renderCapacityControls(data);
+}
+async function renderCapacityControls(tracks){
+  const box = document.getElementById("capacity-controls");
+  const counts = await Promise.all(tracks.map(t => sb.rpc("get_track_participant_count", { p_track_id: t.id })));
+
+  box.innerHTML = tracks.map((t, i) => {
+    const count = counts[i].data ?? 0;
+    return `
+    <div class="member-row">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-sm ${t.registration_open ? 'btn-outline' : 'btn-danger'}" style="width:auto" onclick="toggleTrackOpen('${t.id}', ${!t.registration_open})">${t.registration_open ? "مفتوح" : "مقفل"}</button>
+        <input type="number" id="cap-input-${t.id}" value="${t.max_participants ?? ""}" placeholder="بلا حد" style="width:90px;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
+        <button class="btn btn-outline btn-sm" style="width:auto" onclick="saveTrackCapacity('${t.id}')">حفظ السعة</button>
+      </div>
+      <div style="text-align:left">
+        <strong>${count}${t.max_participants ? " / " + t.max_participants : ""}</strong>
+        <span class="hint"> مسجّل</span>
+        <br><span style="font-weight:600">${esc(t.name_ar)}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+async function toggleTrackOpen(trackId, newValue){
+  const { error } = await sb.from("tracks").update({ registration_open: newValue }).eq("id", trackId);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity(newValue ? "فتح تسجيل مسار" : "إغلاق تسجيل مسار", "track", trackId);
+  renderTracks();
+}
+async function saveTrackCapacity(trackId){
+  const val = document.getElementById(`cap-input-${trackId}`).value;
+  const max_participants = val ? parseInt(val) : null;
+  const { error } = await sb.from("tracks").update({ max_participants }).eq("id", trackId);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  showToast("تم حفظ السعة");
+  renderTracks();
 }
 function openTrackModal(t=null){
   const isEdit = !!t;
@@ -1108,7 +1150,7 @@ async function selectMentorshipMode(mode){
 async function renderPrep(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
-      <div><h1>جلسات التحضير</h1><p>الورش والتدريبات قبل الهاكاثون</p></div>
+      <div><h1>جلسات التحضير</h1><p>الورش والتدريبات قبل الهاكاثون — فعّل الجلسة النشطة لكل مسار عشان الميسّر يقدر يسجّل حضورها بس</p></div>
       <button class="btn btn-primary" onclick="openPrepModal()">+ إضافة جلسة</button>
     </div>
     <div class="card"><div id="prep-table">جاري التحميل...</div></div>`;
@@ -1122,19 +1164,30 @@ async function renderPrep(){
   if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد جلسات مضافة بعد</div>`;
 
   box.innerHTML = `<table><thead><tr>
-    <th>الجلسة</th><th>المسار</th><th>الموعد</th><th>الحضور المسجَّل</th><th></th>
+    <th>الجلسة</th><th>المسار</th><th>الموعد</th><th>الحضور المسجَّل</th><th>نشطة لتسجيل الحضور</th><th></th>
     </tr></thead><tbody>
     ${data.map(p => `<tr>
       <td><strong>${esc(p.title)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(p.location||(p.is_online?"عبر الإنترنت":""))}</span></td>
       <td>${esc(p.tracks?.name_ar || "جميع المسارات")}</td>
       <td>${fmtDate(p.session_date)}</td>
       <td>${p.prep_attendance?.[0]?.count ?? 0}${p.capacity ? " / " + p.capacity : ""}</td>
+      <td>
+        <button class="btn btn-sm ${p.is_checkin_active ? 'btn-primary' : 'btn-outline'}" style="width:auto" onclick="togglePrepActive('${p.id}', ${!p.is_checkin_active})">${p.is_checkin_active ? "✓ نشطة الآن" : "تفعيل"}</button>
+      </td>
       <td class="row-actions">
         <button class="btn btn-outline btn-sm" onclick='openPrepModal(${JSON.stringify(p)})'>تعديل</button>
         <button class="btn btn-danger btn-sm" onclick="deleteRow('prep_sessions','${p.id}', renderPrep)">حذف</button>
       </td>
     </tr>`).join("")}
     </tbody></table>`;
+}
+async function togglePrepActive(sessionId, activate){
+  const rpcName = activate ? "activate_prep_session" : "deactivate_prep_session";
+  const { data, error } = await sb.rpc(rpcName, { p_session_id: sessionId });
+  if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  logActivity(activate ? "تفعيل جلسة تحضير" : "إلغاء تفعيل جلسة", "prep_session", sessionId);
+  showToast(activate ? "تم تفعيل الجلسة — الميسّر يقدر يسجّل حضورها الآن" : "تم إلغاء التفعيل");
+  renderPrep();
 }
 async function openPrepModal(p=null){
   const isEdit = !!p;
@@ -2285,6 +2338,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r32</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r33</div>
 </body>
 </html>
