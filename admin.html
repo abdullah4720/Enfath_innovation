@@ -1150,10 +1150,10 @@ async function selectMentorshipMode(mode){
 async function renderPrep(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
-      <div><h1>جلسات التحضير</h1><p>الورش والتدريبات قبل الهاكاثون — فعّل الجلسة النشطة لكل مسار عشان الميسّر يقدر يسجّل حضورها بس</p></div>
+      <div><h1>جلسات التحضير</h1><p>الورش والتدريبات قبل الهاكاثون — سجّل الحضور يدويًا أو فعّل الجلسة النشطة لمسح QR</p></div>
       <button class="btn btn-primary" onclick="openPrepModal()">+ إضافة جلسة</button>
     </div>
-    <div class="card"><div id="prep-table">جاري التحميل...</div></div>`;
+    <div id="prep-page-body"><div class="card"><div id="prep-table">جاري التحميل...</div></div></div>`;
 
   const { data, error } = await sb.from("prep_sessions")
     .select("*, tracks(name_ar), prep_attendance(count)")
@@ -1164,7 +1164,7 @@ async function renderPrep(){
   if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد جلسات مضافة بعد</div>`;
 
   box.innerHTML = `<table><thead><tr>
-    <th>الجلسة</th><th>المسار</th><th>الموعد</th><th>الحضور المسجَّل</th><th>نشطة لتسجيل الحضور</th><th></th>
+    <th>الجلسة</th><th>المسار</th><th>الموعد</th><th>الحضور المسجَّل</th><th>QR نشط</th><th></th>
     </tr></thead><tbody>
     ${data.map(p => `<tr>
       <td><strong>${esc(p.title)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(p.location||(p.is_online?"عبر الإنترنت":""))}</span></td>
@@ -1172,15 +1172,84 @@ async function renderPrep(){
       <td>${fmtDate(p.session_date)}</td>
       <td>${p.prep_attendance?.[0]?.count ?? 0}${p.capacity ? " / " + p.capacity : ""}</td>
       <td>
-        <button class="btn btn-sm ${p.is_checkin_active ? 'btn-primary' : 'btn-outline'}" style="width:auto" onclick="togglePrepActive('${p.id}', ${!p.is_checkin_active})">${p.is_checkin_active ? "✓ نشطة الآن" : "تفعيل"}</button>
+        <button class="btn btn-sm ${p.is_checkin_active ? 'btn-primary' : 'btn-outline'}" style="width:auto" onclick="togglePrepActive('${p.id}', ${!p.is_checkin_active})">${p.is_checkin_active ? "✓ نشطة" : "تفعيل"}</button>
       </td>
       <td class="row-actions">
+        <button class="btn btn-primary btn-sm" onclick='openPrepAttendanceManager("${p.id}", ${JSON.stringify(p.title)}, "${p.track_id||""}")'>📋 إدارة الحضور</button>
         <button class="btn btn-outline btn-sm" onclick='openPrepModal(${JSON.stringify(p)})'>تعديل</button>
         <button class="btn btn-danger btn-sm" onclick="deleteRow('prep_sessions','${p.id}', renderPrep)">حذف</button>
       </td>
     </tr>`).join("")}
     </tbody></table>`;
 }
+
+/* ---------------- إدارة الحضور اليدوي ---------------- */
+let prepAttendanceCache = { participants: [], presentIds: new Set() };
+async function openPrepAttendanceManager(sessionId, sessionTitle, trackId){
+  const container = document.getElementById("prep-page-body");
+  container.innerHTML = `<div class="card">
+    <div class="toolbar" style="margin-bottom:14px">
+      <div><h3 style="margin:0">إدارة الحضور: ${esc(sessionTitle)}</h3><p class="hint" style="margin:2px 0 0">اضغط ✓/✗ لتسجيل أو إلغاء حضور أي مشارك يدويًا</p></div>
+      <button class="btn btn-outline btn-sm" onclick="renderPrep()">← رجوع لكل الجلسات</button>
+    </div>
+    <div class="field" style="margin-bottom:14px"><input id="prep-attendance-search" placeholder="بحث بالاسم أو البريد..." oninput="filterPrepAttendance()"></div>
+    <div id="prep-attendance-table">جاري التحميل...</div>
+  </div>`;
+
+  // جلب كل أعضاء الفرق المؤكدة (بالمسار المحدد أو الكل لو الجلسة عامة)
+  let query = sb.from("team_members")
+    .select("user_id, profiles(full_name, email), teams!inner(status, track_id, team_name, team_code)")
+    .eq("teams.status", "confirmed");
+  if(trackId) query = query.eq("teams.track_id", trackId);
+  const { data: members } = await query;
+
+  const { data: attendance } = await sb.from("prep_attendance").select("user_id").eq("session_id", sessionId);
+  prepAttendanceCache = {
+    sessionId,
+    participants: members || [],
+    presentIds: new Set((attendance||[]).map(a => a.user_id))
+  };
+  renderPrepAttendanceTable(prepAttendanceCache.participants);
+}
+function filterPrepAttendance(){
+  const term = (document.getElementById("prep-attendance-search")?.value || "").trim().toLowerCase();
+  const filtered = !term ? prepAttendanceCache.participants : prepAttendanceCache.participants.filter(m =>
+    (m.profiles?.full_name||"").toLowerCase().includes(term) || (m.profiles?.email||"").toLowerCase().includes(term)
+  );
+  renderPrepAttendanceTable(filtered);
+}
+function renderPrepAttendanceTable(members){
+  const box = document.getElementById("prep-attendance-table");
+  if(!members.length){ box.innerHTML = `<div class="empty-state">لا يوجد مشاركون مؤهّلون بهذا المسار بعد</div>`; return; }
+
+  box.innerHTML = `<table><thead><tr><th>الاسم</th><th>البريد</th><th>الفريق</th><th>الحضور</th></tr></thead><tbody>
+    ${members.map(m => {
+      const isPresent = prepAttendanceCache.presentIds.has(m.user_id);
+      return `<tr>
+        <td>${esc(m.profiles?.full_name||"—")}</td>
+        <td style="color:var(--muted);font-size:12.5px">${esc(m.profiles?.email||"")}</td>
+        <td>${esc(m.teams?.team_name||"")} <code style="font-size:10px;color:var(--gold)">${esc(m.teams?.team_code||"")}</code></td>
+        <td>
+          <button class="btn btn-sm ${isPresent ? 'btn-primary' : 'btn-outline'}" style="width:auto;padding:6px 16px" onclick="togglePrepAttendance('${m.user_id}', ${isPresent})">${isPresent ? "✓ حاضر" : "تسجيل حضور"}</button>
+        </td>
+      </tr>`;
+    }).join("")}
+    </tbody></table>`;
+}
+async function togglePrepAttendance(userId, isCurrentlyPresent){
+  const sessionId = prepAttendanceCache.sessionId;
+  if(isCurrentlyPresent){
+    const { error } = await sb.from("prep_attendance").delete().eq("session_id", sessionId).eq("user_id", userId);
+    if(error){ showToast("خطأ: " + error.message, true); return; }
+    prepAttendanceCache.presentIds.delete(userId);
+  } else {
+    const { error } = await sb.from("prep_attendance").insert({ session_id: sessionId, user_id: userId });
+    if(error){ showToast("خطأ: " + error.message, true); return; }
+    prepAttendanceCache.presentIds.add(userId);
+  }
+  filterPrepAttendance();
+}
+
 async function togglePrepActive(sessionId, activate){
   const rpcName = activate ? "activate_prep_session" : "deactivate_prep_session";
   const { data, error } = await sb.rpc(rpcName, { p_session_id: sessionId });
@@ -2338,6 +2407,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r33</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r34</div>
 </body>
 </html>

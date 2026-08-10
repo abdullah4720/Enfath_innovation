@@ -194,28 +194,9 @@
   <div class="section-inner">
     <span class="section-tag">/ 01 — المسارات</span>
     <h2 class="section-title">اختر ملف قضيتك</h2>
-    <p class="section-sub">أربعة مسارات تقنية، كل واحد يعالج تحديًا حقيقيًا بمنظومة التنفيذ القضائي.</p>
-    <div class="tracks-grid">
-      <div class="track-card">
-        <span class="track-ref">TRACK / 01</span>
-        <h3>العدالة الرقمية</h3>
-        <p>حلول تقنية لتحسين إجراءات التقاضي والتنفيذ القضائي، وتسريع دورة القضايا من الرفع حتى التنفيذ.</p>
-      </div>
-      <div class="track-card">
-        <span class="track-ref">TRACK / 02</span>
-        <h3>الذكاء الاصطناعي القانوني</h3>
-        <p>تطبيقات الذكاء الاصطناعي في تحليل القضايا والأنظمة، ودعم القرار بالاعتماد على البيانات.</p>
-      </div>
-      <div class="track-card">
-        <span class="track-ref">TRACK / 03</span>
-        <h3>تجربة المستخدم الحكومي</h3>
-        <p>تحسين تجربة المستفيدين من الخدمات القضائية والحكومية، من التقديم إلى المتابعة.</p>
-      </div>
-      <div class="track-card">
-        <span class="track-ref">TRACK / 04</span>
-        <h3>الأمن السيبراني القضائي</h3>
-        <p>حماية الأنظمة والبيانات القضائية الحساسة من التهديدات الرقمية المتطورة.</p>
-      </div>
+    <p class="section-sub" id="tracks-sub">مسارات تقنية، كل واحد يعالج تحديًا حقيقيًا بمنظومة التنفيذ القضائي.</p>
+    <div class="tracks-grid" id="tracks-grid">
+      <p class="hint">جاري تحميل المسارات...</p>
     </div>
   </div>
 </section>
@@ -287,6 +268,9 @@
   <div class="footer-inner">
     <span>مركز الابتكار والملكية الفكرية (ICIP) — جامعة القصيم</span>
     <span style="display:flex;gap:16px">
+      <a href="./portal.html" style="color:#C89B3C;font-weight:600">بوابة الوصول لكل الصفحات</a>
+      <a href="./mentor-apply.html" style="color:#5fe4cf">انضم كمرشد</a>
+      <a href="./judge-apply.html" style="color:#5fe4cf">انضم كمحكّم</a>
       <a href="./mentor.html" style="color:#8fa1c4">دخول المرشدين</a>
       <a href="./judge.html" style="color:#8fa1c4">دخول المحكّمين</a>
     </span>
@@ -296,11 +280,36 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
+const sb = supabase.createClient(
+  "https://tuyomqhvdjpsayecystf.supabase.co",
+  "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA"
+);
+function esc(str){
+  if(str === null || str === undefined) return "";
+  return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+(async function loadTracks(){
+  const grid = document.getElementById("tracks-grid");
+  const sub = document.getElementById("tracks-sub");
+  const { data, error } = await sb.from("tracks").select("*").eq("is_active", true).order("display_order");
+
+  if(error || !data || !data.length){
+    grid.innerHTML = `<p class="hint">لا توجد مسارات معلَنة حاليًا — تابعونا قريبًا</p>`;
+    return;
+  }
+
+  sub.textContent = `${data.length} مسارات تقنية، كل واحد يعالج تحديًا حقيقيًا بمنظومة التنفيذ القضائي.`;
+  grid.innerHTML = data.map((t, i) => `
+    <div class="track-card">
+      <span class="track-ref">TRACK / ${String(i+1).padStart(2,"0")}</span>
+      <h3>${esc(t.name_ar)}</h3>
+      <p>${esc(t.description || "")}</p>
+    </div>
+  `).join("");
+})();
+
 (async function(){
-  const sb = supabase.createClient(
-    "https://tuyomqhvdjpsayecystf.supabase.co",
-    "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA"
-  );
   const { data } = await sb.from("platform_settings").select("value").eq("key","hackathon_start_date").maybeSingle();
   if(!data?.value) return;
   const target = new Date(data.value).getTime();
@@ -320,5 +329,6 @@
   setInterval(tick, 60000);
 })();
 </script>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r34</div>
 </body>
 </html>
