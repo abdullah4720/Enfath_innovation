@@ -81,6 +81,7 @@
     <div class="tabs" id="tabs-bar">
       <div class="tab active" data-t="slots">مواعيدي</div>
       <div class="tab" data-t="add">إضافة موعد جديد</div>
+      <div class="tab" data-t="bulk">إضافة مواعيد بالجملة</div>
       <div class="tab" data-t="profile">ملفي الشخصي</div>
     </div>
     <div id="main-content">جاري التحميل...</div>
@@ -170,6 +171,7 @@ async function showContent(){
 function renderTab(){
   if(currentTab === "slots") renderSlots();
   else if(currentTab === "add") renderAddSlot();
+  else if(currentTab === "bulk") renderBulkAddSlots();
   else renderMyProfile();
 }
 
@@ -263,13 +265,22 @@ async function renderSlots(){
       <div style="text-align:left">
         ${!booking ? '<span class="badge badge-gray">غير محجوز</span>' :
           booking.status === "completed" ? '<span class="badge badge-green">تم تسجيل الملاحظات</span>' :
+          booking.status === "no_show_team" ? '<span class="badge badge-red">لم يحضر الفريق</span>' :
+          booking.status === "no_show_mentor" ? '<span class="badge badge-red">لم تحضر (مسجَّل من الفريق)</span>' :
           booking.status === "confirmed" ? '<span class="badge badge-gold">مؤكد</span>' :
           '<span class="badge badge-gray">قيد الانتظار — بانتظار تأكيدك</span>'}
         ${booking && booking.status === "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
-        ${booking && booking.status !== "completed" && booking.status !== "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name})})'>تسجيل ملاحظة (إغلاق)</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
+        ${booking && booking.status === "confirmed" && new Date(s.end_time) > new Date() ? `<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
+        ${booking && booking.status === "confirmed" && new Date(s.end_time) <= new Date() ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name})})'>تسجيل ملاحظة (إغلاق)</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="markNoShow('${booking.id}','no_show_team')">لم يحضر الفريق</button></div>` : ""}
       </div>
     </div>`;
   }).join("");
+}
+async function markNoShow(bookingId, statusValue){
+  if(!confirm("متأكد؟ هذا الإجراء يسجّل عدم حضور بشكل نهائي بسجل هذا الموعد.")) return;
+  const { error } = await sb.from("mentor_bookings").update({ status: statusValue }).eq("id", bookingId);
+  if(error){ alert("خطأ: " + error.message); return; }
+  renderSlots();
 }
 async function confirmBooking(bookingId){
   const { error } = await sb.from("mentor_bookings").update({ status: "confirmed" }).eq("id", bookingId);
@@ -367,6 +378,105 @@ function generateTimeOptions(){
   }
   return options.join("");
 }
+
+/* ---------------- إضافة مواعيد بالجملة ---------------- */
+async function renderBulkAddSlots(){
+  const main = document.getElementById("main-content");
+  const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  main.innerHTML = `<div class="card">
+    <h3 style="margin:0 0 6px">إضافة مواعيد بالجملة</h3>
+    <p class="hint" style="margin:0 0 16px">حدّد يوم ونطاق وقت، والنظام يولّد لك مواعيد متتالية تلقائيًا</p>
+    <div class="field"><label>التاريخ</label><input type="date" id="bulk-date"></div>
+    <div class="form-row-2">
+      <div class="field"><label>من الساعة</label><select id="bulk-start-time">${generateTimeOptions()}</select></div>
+      <div class="field"><label>إلى الساعة</label><select id="bulk-end-time">${generateTimeOptions()}</select></div>
+    </div>
+    <div class="form-row-2">
+      <div class="field"><label>مدة كل جلسة</label>
+        <select id="bulk-duration">
+          <option value="15">15 دقيقة</option>
+          <option value="30" selected>30 دقيقة</option>
+          <option value="45">45 دقيقة</option>
+          <option value="60">60 دقيقة</option>
+        </select>
+      </div>
+      <div class="field"><label>فاصل بين الجلسات</label>
+        <select id="bulk-gap">
+          <option value="0">بدون فاصل</option>
+          <option value="5" selected>5 دقائق</option>
+          <option value="10">10 دقائق</option>
+          <option value="15">15 دقيقة</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>المسار (اختياري)</label>
+      <select id="bulk-track"><option value="">كل المسارات</option>
+        ${(tracks||[]).map(t=>`<option value="${t.id}">${esc(t.name_ar)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field"><label><input type="checkbox" id="bulk-online" checked> جلسات عبر الإنترنت</label></div>
+    <div class="field"><label>الموقع / رابط الاجتماع (يُطبَّق على كل الجلسات)</label><input id="bulk-location" placeholder="اختياري"></div>
+    <div id="bulk-preview" class="hint" style="margin-bottom:10px"></div>
+    <div id="bulk-alert" class="alert"></div>
+    <button class="btn btn-primary" onclick="saveBulkSlots()">إضافة كل المواعيد</button>
+  </div>`;
+
+  ["bulk-date","bulk-start-time","bulk-end-time","bulk-duration","bulk-gap"].forEach(id => {
+    document.getElementById(id).addEventListener("change", updateBulkPreview);
+  });
+}
+function computeBulkSlots(){
+  const date = document.getElementById("bulk-date").value;
+  const startTime = document.getElementById("bulk-start-time").value;
+  const endTime = document.getElementById("bulk-end-time").value;
+  const duration = parseInt(document.getElementById("bulk-duration").value);
+  const gap = parseInt(document.getElementById("bulk-gap").value);
+  if(!date) return [];
+
+  const rangeStart = new Date(`${date}T${startTime}:00`);
+  const rangeEnd = new Date(`${date}T${endTime}:00`);
+  const slots = [];
+  let cursor = new Date(rangeStart);
+  while(true){
+    const slotEnd = new Date(cursor.getTime() + duration * 60000);
+    if(slotEnd > rangeEnd) break;
+    slots.push({ start: new Date(cursor), end: slotEnd });
+    cursor = new Date(slotEnd.getTime() + gap * 60000);
+  }
+  return slots;
+}
+function updateBulkPreview(){
+  const slots = computeBulkSlots();
+  const box = document.getElementById("bulk-preview");
+  if(!box) return;
+  box.textContent = slots.length ? `سيتم إنشاء ${slots.length} موعد` : "حدّد نطاق وقت صحيح لعرض المعاينة";
+}
+async function saveBulkSlots(){
+  const alertBox = document.getElementById("bulk-alert");
+  alertBox.className = "alert";
+  const slots = computeBulkSlots();
+  if(!slots.length){ alertBox.textContent = "تأكد من التاريخ ونطاق الوقت"; alertBox.className = "alert error"; return; }
+  if(slots[0].start < new Date()){ alertBox.textContent = "لا يمكن إضافة مواعيد بتاريخ/وقت ماضٍ"; alertBox.className = "alert error"; return; }
+
+  const track_id = document.getElementById("bulk-track").value || null;
+  const is_online = document.getElementById("bulk-online").checked;
+  const location = document.getElementById("bulk-location").value.trim();
+
+  const rows = slots.map(s => ({
+    mentor_user_id: currentUser.id, start_time: s.start.toISOString(), end_time: s.end.toISOString(),
+    track_id, is_online, location: location || null
+  }));
+
+  const { error } = await sb.from("mentor_slots").insert(rows);
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+
+  alertBox.textContent = `تمت إضافة ${rows.length} موعد بنجاح`; alertBox.className = "alert success";
+  setTimeout(() => {
+    currentTab = "slots";
+    document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.t === "slots"));
+    renderSlots();
+  }, 1000);
+}
 async function saveNewSlot(){
   const alertBox = document.getElementById("add-slot-alert");
   alertBox.className = "alert";
@@ -400,6 +510,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r30</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r31</div>
 </body>
 </html>

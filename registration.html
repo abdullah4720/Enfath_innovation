@@ -656,29 +656,48 @@ async function renderMentorshipTab(membership){
 
   // كل مواعيد الفريق النشطة (غير الملغاة)
   const { data: myBookings } = await sb.from("mentor_bookings")
-    .select("id, status, requested_topic, mentor_slots(id, start_time, end_time, is_online, location, profiles(full_name))")
+    .select("id, status, requested_topic, mentor_slots(id, start_time, end_time, is_online, location, mentor_user_id, profiles(full_name))")
     .eq("team_id", team.id)
     .neq("status", "cancelled")
     .order("created_at", {ascending:false});
 
   cachedTeamBookings = myBookings || [];
 
+  // التقييمات الموجودة مسبقًا (عشان ما نكرر عرض نموذج التقييم)
+  const bookingIds = cachedTeamBookings.map(b => b.id);
+  let ratedBookingIds = new Set();
+  if(bookingIds.length){
+    const { data: ratings } = await sb.from("mentor_ratings").select("booking_id").in("booking_id", bookingIds);
+    ratedBookingIds = new Set((ratings||[]).map(r => r.booking_id));
+  }
+
   let bookingHtml = "";
   if(cachedTeamBookings.length){
-    const statusLabels = {pending:["قيد الانتظار — بانتظار تأكيد المرشد","status-pending"], confirmed:["مؤكد","status-confirmed"], completed:["تم عقد الجلسة","status-confirmed"]};
+    const statusLabels = {
+      pending:["قيد الانتظار — بانتظار تأكيد المرشد","status-pending"],
+      confirmed:["مؤكد","status-confirmed"],
+      completed:["تم عقد الجلسة","status-confirmed"],
+      no_show_team:["مسجَّل: لم يحضر فريقكم","status-withdrawn"],
+      no_show_mentor:["مسجَّل: لم يحضر المرشد","status-withdrawn"],
+    };
     bookingHtml = `<div class="card">
       <h2>مواعيدك الحالية (${cachedTeamBookings.length})</h2>
       ${cachedTeamBookings.map(b => {
         const [label, cls] = statusLabels[b.status] || ["—","status-pending"];
+        const sessionEnded = b.mentor_slots && new Date(b.mentor_slots.end_time) <= new Date();
         return `
         <div class="member-row" style="align-items:flex-start">
           <div>
             <strong>${fmtDate(b.mentor_slots?.start_time)}</strong> — ${esc(b.mentor_slots?.profiles?.full_name||"مرشد")}<br>
             <span class="hint">${esc(b.mentor_slots?.location || (b.mentor_slots?.is_online ? "عبر الإنترنت" : ""))}</span>
+            ${b.status === "completed" && !ratedBookingIds.has(b.id) ? renderRatingPrompt(b.id, b.mentor_slots?.mentor_user_id, team.id) : ""}
+            ${b.status === "completed" && ratedBookingIds.has(b.id) ? `<p class="hint" style="margin-top:6px">✓ شكرًا على تقييمكم لهذه الجلسة</p>` : ""}
+            ${b.status === "completed" ? `<button class="btn-link" style="font-size:12px;margin-top:4px" onclick='bookFollowUpWithMentor("${b.mentor_slots?.mentor_user_id}", ${JSON.stringify(b.mentor_slots?.profiles?.full_name||"")})'>احجز موعد آخر مع نفس المرشد</button>` : ""}
           </div>
           <div style="text-align:left">
             <span class="status-badge ${cls}">${label}</span>
-            ${b.status !== "completed" ? `<div style="margin-top:6px"><button class="btn-link" style="color:var(--danger);font-size:12px" onclick="cancelMyMentorBooking('${b.id}')">إلغاء</button></div>` : ""}
+            ${b.status !== "completed" && b.status !== "no_show_team" && b.status !== "no_show_mentor" ? `<div style="margin-top:6px"><button class="btn-link" style="color:var(--danger);font-size:12px" onclick="cancelMyMentorBooking('${b.id}')">إلغاء</button></div>` : ""}
+            ${b.status === "confirmed" && sessionEnded ? `<div style="margin-top:6px"><button class="btn-link" style="color:var(--danger);font-size:12px" onclick="markMentorNoShow('${b.id}')">المرشد لم يحضر</button></div>` : ""}
           </div>
         </div>`;
       }).join("")}
@@ -694,7 +713,7 @@ async function renderMentorshipTab(membership){
   }
 
   const { data: slots, error } = await sb.from("mentor_slots")
-    .select("id, start_time, end_time, is_online, location, is_booked, track_id, profiles(full_name, specialization, bio)")
+    .select("id, start_time, end_time, is_online, location, is_booked, track_id, mentor_user_id, profiles(full_name, specialization, bio)")
     .eq("is_booked", false)
     .or(`track_id.is.null,track_id.eq.${team.track_id}`)
     .gte("start_time", new Date().toISOString())
@@ -718,12 +737,22 @@ async function renderMentorshipTab(membership){
   cachedMentorSlots = (slots || []).sort((a,b) => (isRecommended(b.profiles?.specialization)?1:0) - (isRecommended(a.profiles?.specialization)?1:0));
   const specializations = [...new Set(cachedMentorSlots.map(s => s.profiles?.specialization).filter(Boolean))];
 
-  const slotsHtml = !cachedMentorSlots.length
-    ? `<div class="card"><h2>المواعيد المتاحة</h2><p class="sub">لا توجد مواعيد إرشاد متاحة حاليًا، تابع لاحقًا</p></div>`
+  let displaySlots = cachedMentorSlots;
+  let followUpBanner = "";
+  if(followUpMentorFilter){
+    displaySlots = cachedMentorSlots.filter(s => s.profiles && s.mentor_user_id === followUpMentorFilter.id);
+    followUpBanner = `<div class="card" style="background:#f2fbf9;border:1px dashed var(--teal)">
+      <p style="margin:0;font-size:13.5px">🔍 تعرض فقط مواعيد <strong>${esc(followUpMentorFilter.name)}</strong> —
+      <button class="btn-link" style="font-size:12.5px" onclick="clearFollowUpFilter('${team.id}')">إلغاء الفلترة وعرض الكل</button></p>
+    </div>`;
+  }
+
+  const slotsHtml = !displaySlots.length
+    ? `<div class="card"><h2>المواعيد المتاحة</h2><p class="sub">${followUpMentorFilter ? "لا توجد مواعيد متاحة حاليًا لهذا المرشد" : "لا توجد مواعيد إرشاد متاحة حاليًا، تابع لاحقًا"}</p></div>`
     : `<div class="card">
         <h2>المواعيد المتاحة</h2>
         <p class="sub">مرتّبة حسب الأنسب لمسار فريقكم — يمكنكم حجز أكثر من مرشد بشرط عدم تعارض الأوقات</p>
-        ${specializations.length ? `
+        ${specializations.length && !followUpMentorFilter ? `
           <div class="field" style="margin-bottom:16px">
             <label>فلترة حسب التخصص</label>
             <select id="mentor-spec-filter" onchange="filterMentorSlots('${team.id}')">
@@ -735,8 +764,8 @@ async function renderMentorshipTab(membership){
         <div id="mentor-slots-list"></div>
       </div>`;
 
-  body.innerHTML = bookingHtml + slotsHtml;
-  renderMentorSlotsList(cachedMentorSlots, team.id, isRecommended);
+  body.innerHTML = bookingHtml + followUpBanner + slotsHtml;
+  renderMentorSlotsList(displaySlots, team.id, isRecommended);
 }
 let cachedMentorSlots = [];
 let cachedTeamBookings = [];
@@ -784,6 +813,39 @@ async function cancelMyMentorBooking(bookingId){
   if(!confirm("متأكد تبي تلغي هذا الموعد؟")) return;
   const { error } = await sb.from("mentor_bookings").update({ status: "cancelled" }).eq("id", bookingId);
   if(error){ alert("تعذّر الإلغاء: " + error.message); return; }
+  renderMentorshipTab(cachedMembership);
+}
+async function markMentorNoShow(bookingId){
+  if(!confirm("متأكد إن المرشد ما حضر الجلسة؟ سيتم تسجيل ذلك رسميًا.")) return;
+  const { error } = await sb.from("mentor_bookings").update({ status: "no_show_mentor" }).eq("id", bookingId);
+  if(error){ alert("خطأ: " + error.message); return; }
+  renderMentorshipTab(cachedMembership);
+}
+function renderRatingPrompt(bookingId, mentorId, teamId){
+  return `
+    <div style="margin-top:8px;padding:10px;background:#f8f9fb;border-radius:9px">
+      <p class="hint" style="margin:0 0 6px">قيّموا هذه الجلسة</p>
+      <div id="stars-${bookingId}" style="display:flex;gap:4px;font-size:20px;cursor:pointer">
+        ${[1,2,3,4,5].map(n => `<span onclick="submitMentorRating('${bookingId}','${mentorId}','${teamId}',${n})" style="opacity:.35">⭐</span>`).join("")}
+      </div>
+    </div>
+  `;
+}
+async function submitMentorRating(bookingId, mentorId, teamId, rating){
+  const { error } = await sb.from("mentor_ratings").insert({
+    booking_id: bookingId, mentor_user_id: mentorId, team_id: teamId, rating
+  });
+  if(error){ alert("تعذّر إرسال التقييم: " + error.message); return; }
+  renderMentorshipTab(cachedMembership);
+}
+async function bookFollowUpWithMentor(mentorId, mentorName){
+  followUpMentorFilter = { id: mentorId, name: mentorName };
+  dashTab = "mentorship";
+  renderDashboard();
+}
+let followUpMentorFilter = null;
+function clearFollowUpFilter(teamId){
+  followUpMentorFilter = null;
   renderMentorshipTab(cachedMembership);
 }
 
@@ -1061,6 +1123,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r30</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r31</div>
 </body>
 </html>
