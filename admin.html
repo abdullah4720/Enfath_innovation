@@ -682,11 +682,31 @@ async function renderMentorAlert(){
 /* ============================================================
    2. المسارات
    ============================================================ */
+let cachedTracksData = [];
 async function renderTracks(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
       <div><h1>المسارات</h1><p>إدارة مسارات الهاكاثون، حجم الفريق، والتحكم بسعة التسجيل لكل مسار</p></div>
       <button class="btn btn-primary" onclick="openTrackModal()">+ إضافة مسار</button>
+    </div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="form-row-2" style="grid-template-columns:2fr 1fr 1fr">
+        <div class="field" style="margin:0"><label>بحث بالاسم</label><input id="track-search" placeholder="اسم المسار..." oninput="filterTracksView()"></div>
+        <div class="field" style="margin:0"><label>حالة التسجيل</label>
+          <select id="track-filter-status" onchange="filterTracksView()">
+            <option value="">الكل</option>
+            <option value="open">مفتوح</option>
+            <option value="closed">مغلق</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0"><label>ترتيب حسب</label>
+          <select id="track-sort" onchange="filterTracksView()">
+            <option value="order">الترتيب اليدوي</option>
+            <option value="name">الاسم (أبجدي)</option>
+            <option value="count">عدد المسجَّلين (الأكثر أولًا)</option>
+          </select>
+        </div>
+      </div>
     </div>
     <div class="card"><div id="tracks-table">جاري التحميل...</div></div>
     <div class="card">
@@ -700,12 +720,45 @@ async function renderTracks(){
   if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
   if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد مسارات بعد. أضف أول مسار.</div>`;
 
+  const counts = await Promise.all(data.map(t => sb.rpc("get_track_participant_count", { p_track_id: t.id })));
+  cachedTracksData = data.map((t, i) => ({...t, _count: counts[i].data ?? 0}));
+
+  filterTracksView();
+  await renderCapacityControls(data);
+}
+function filterTracksView(){
+  const term = (document.getElementById("track-search")?.value || "").trim().toLowerCase();
+  const statusFilter = document.getElementById("track-filter-status")?.value || "";
+  const sortBy = document.getElementById("track-sort")?.value || "order";
+
+  let filtered = cachedTracksData.filter(t => {
+    const matchesTerm = !term || t.name_ar.toLowerCase().includes(term);
+    const matchesStatus = !statusFilter || (statusFilter === "open" ? t.registration_open : !t.registration_open);
+    return matchesTerm && matchesStatus;
+  });
+
+  if(sortBy === "name") filtered = [...filtered].sort((a,b) => a.name_ar.localeCompare(b.name_ar, "ar"));
+  else if(sortBy === "count") filtered = [...filtered].sort((a,b) => b._count - a._count);
+  else filtered = [...filtered].sort((a,b) => a.display_order - b.display_order);
+
+  renderTracksTable(filtered, sortBy === "order");
+}
+function renderTracksTable(data, allowReorder){
+  const box = document.getElementById("tracks-table");
+  if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج مطابقة</div>`; return; }
+
   box.innerHTML = `<table><thead><tr>
-    <th>المسار</th><th>حجم الفريق</th><th>التسجيل</th><th>الحالة</th><th></th>
+    ${allowReorder ? '<th style="width:70px">الترتيب</th>' : ''}
+    <th>المسار</th><th>حجم الفريق</th><th>المسجّلون</th><th>التسجيل</th><th>الحالة</th><th></th>
     </tr></thead><tbody>
-    ${data.map(t => `<tr>
+    ${data.map((t, idx) => `<tr>
+      ${allowReorder ? `<td class="row-actions">
+        <button class="btn-link" style="font-size:14px" onclick="moveTrack('${t.id}', -1)" ${idx===0?'disabled':''}>▲</button>
+        <button class="btn-link" style="font-size:14px" onclick="moveTrack('${t.id}', 1)" ${idx===data.length-1?'disabled':''}>▼</button>
+      </td>` : ''}
       <td><strong>${esc(t.name_ar)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(t.description||"")}</span></td>
       <td>${t.min_team_size}–${t.max_team_size}</td>
+      <td>${t._count}${t.max_participants ? " / " + t.max_participants : ""}</td>
       <td>${t.registration_open ? '<span class="badge badge-green">مفتوح</span>' : '<span class="badge badge-gray">مغلق</span>'}</td>
       <td>${t.is_active ? '<span class="badge badge-green">نشط</span>' : '<span class="badge badge-gray">غير نشط</span>'}</td>
       <td class="row-actions">
@@ -714,8 +767,17 @@ async function renderTracks(){
       </td>
     </tr>`).join("")}
     </tbody></table>`;
+}
+async function moveTrack(trackId, direction){
+  const sorted = [...cachedTracksData].sort((a,b) => a.display_order - b.display_order);
+  const idx = sorted.findIndex(t => t.id === trackId);
+  const swapIdx = idx + direction;
+  if(swapIdx < 0 || swapIdx >= sorted.length) return;
 
-  await renderCapacityControls(data);
+  const a = sorted[idx], b = sorted[swapIdx];
+  await sb.from("tracks").update({ display_order: b.display_order }).eq("id", a.id);
+  await sb.from("tracks").update({ display_order: a.display_order }).eq("id", b.id);
+  renderTracks();
 }
 async function renderCapacityControls(tracks){
   const box = document.getElementById("capacity-controls");
@@ -1296,13 +1358,29 @@ async function selectMentorshipMode(mode){
   renderMentorshipSettings();
 }
 
+let cachedPrepData = [];
 async function renderPrep(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
       <div><h1>جلسات التحضير</h1><p>الورش والتدريبات قبل الهاكاثون — سجّل الحضور يدويًا أو فعّل الجلسة النشطة لمسح QR</p></div>
       <button class="btn btn-primary" onclick="openPrepModal()">+ إضافة جلسة</button>
     </div>
-    <div id="prep-page-body"><div class="card"><div id="prep-table">جاري التحميل...</div></div></div>`;
+    <div id="prep-page-body">
+      <div class="card" style="margin-bottom:16px">
+        <div class="form-row-2" style="grid-template-columns:2fr 1fr 1fr">
+          <div class="field" style="margin:0"><label>بحث بعنوان الجلسة</label><input id="prep-search" placeholder="اكتب للبحث..." oninput="filterPrepView()"></div>
+          <div class="field" style="margin:0"><label>المسار</label><select id="prep-filter-track" onchange="filterPrepView()"><option value="">الكل</option></select></div>
+          <div class="field" style="margin:0"><label>ترتيب حسب</label>
+            <select id="prep-sort" onchange="filterPrepView()">
+              <option value="date">الموعد (الأقرب أولًا)</option>
+              <option value="name">العنوان (أبجدي)</option>
+              <option value="attendance">عدد الحضور (الأكثر أولًا)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="card"><div id="prep-table">جاري التحميل...</div></div>
+    </div>`;
 
   const { data, error } = await sb.from("prep_sessions")
     .select("*, tracks(name_ar), prep_attendance(count)")
@@ -1310,7 +1388,38 @@ async function renderPrep(){
 
   const box = document.getElementById("prep-table");
   if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
-  if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد جلسات مضافة بعد</div>`;
+  cachedPrepData = data || [];
+
+  const { data: tracks } = await sb.from("tracks").select("id,name_ar");
+  const trackSelect = document.getElementById("prep-filter-track");
+  (tracks||[]).forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.id; opt.textContent = t.name_ar;
+    trackSelect.appendChild(opt);
+  });
+
+  filterPrepView();
+}
+function filterPrepView(){
+  const term = (document.getElementById("prep-search")?.value || "").trim().toLowerCase();
+  const trackFilter = document.getElementById("prep-filter-track")?.value || "";
+  const sortBy = document.getElementById("prep-sort")?.value || "date";
+
+  let filtered = cachedPrepData.filter(p => {
+    const matchesTerm = !term || p.title.toLowerCase().includes(term);
+    const matchesTrack = !trackFilter || p.track_id === trackFilter;
+    return matchesTerm && matchesTrack;
+  });
+
+  if(sortBy === "name") filtered = [...filtered].sort((a,b) => a.title.localeCompare(b.title, "ar"));
+  else if(sortBy === "attendance") filtered = [...filtered].sort((a,b) => (b.prep_attendance?.[0]?.count??0) - (a.prep_attendance?.[0]?.count??0));
+  else filtered = [...filtered].sort((a,b) => new Date(a.session_date) - new Date(b.session_date));
+
+  renderPrepTable(filtered);
+}
+function renderPrepTable(data){
+  const box = document.getElementById("prep-table");
+  if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج مطابقة</div>`; return; }
 
   box.innerHTML = `<table><thead><tr>
     <th>الجلسة</th><th>المسار</th><th>الموعد</th><th>الحضور المسجَّل</th><th>QR نشط</th><th></th>
@@ -2604,6 +2713,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r35</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r36</div>
 </body>
 </html>
