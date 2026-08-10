@@ -376,14 +376,31 @@ async function renderOverview(){
     <div class="grid-stats" id="stats-grid-extra" style="margin-top:-6px"></div>
     <div class="card">
       <div class="toolbar">
-        <h3 style="margin:0">تاريخ انطلاق الهاكاثون</h3>
+        <h3 style="margin:0">📅 الجدول الزمني للبرنامج</h3>
       </div>
-      <p class="hint" style="margin-bottom:10px">يظهر كعداد تنازلي بصفحة المشارك والصفحة الرئيسية</p>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <input type="datetime-local" id="hackathon-date-input" style="padding:9px 12px;border:1px solid var(--border);border-radius:8px;font-family:inherit">
-        <button class="btn btn-primary btn-sm" onclick="saveHackathonDate()">حفظ</button>
-        <span id="hackathon-date-alert" style="font-size:12.5px;color:var(--teal);display:none">تم الحفظ ✓</span>
+      <p class="hint" style="margin-bottom:16px">هذي التواريخ تتحكم بالعداد التنازلي، وتحدد الفترة المسموحة للمرشدين بإضافة مواعيد الإرشاد</p>
+
+      <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px">🚀 أيام الهاكاثون</h4>
+      <div class="form-row-2" style="margin-bottom:16px">
+        <div class="field" style="margin:0"><label>بداية الهاكاثون</label><input type="datetime-local" id="date-hackathon-start"></div>
+        <div class="field" style="margin:0"><label>نهاية الهاكاثون</label><input type="datetime-local" id="date-hackathon-end"></div>
       </div>
+
+      <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px">🎓 فترة الإرشاد</h4>
+      <div class="form-row-2" style="margin-bottom:16px">
+        <div class="field" style="margin:0"><label>بداية فترة الإرشاد</label><input type="datetime-local" id="date-mentorship-start"></div>
+        <div class="field" style="margin:0"><label>نهاية فترة الإرشاد</label><input type="datetime-local" id="date-mentorship-end"></div>
+      </div>
+      <p class="hint" style="margin:-10px 0 16px">لو تركتها فاضية، المرشدون يقدرون يضيفون مواعيد بأي وقت بدون قيد</p>
+
+      <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px">⚖️ فترة التحكيم</h4>
+      <div class="form-row-2" style="margin-bottom:16px">
+        <div class="field" style="margin:0"><label>بداية التحكيم</label><input type="datetime-local" id="date-judging-start"></div>
+        <div class="field" style="margin:0"><label>نهاية التحكيم</label><input type="datetime-local" id="date-judging-end"></div>
+      </div>
+
+      <button class="btn btn-primary btn-sm" onclick="saveProgramSchedule()">حفظ الجدول الزمني</button>
+      <span id="schedule-alert" style="font-size:12.5px;color:var(--teal);display:none;margin-right:10px">تم الحفظ ✓</span>
     </div>
     <div class="card" id="mentor-alert-card"></div>
     <div class="card">
@@ -391,10 +408,19 @@ async function renderOverview(){
       <div id="satisfaction-table">جاري التحميل...</div>
     </div>`;
 
-  const { data: dateRow } = await sb.from("platform_settings").select("value").eq("key","hackathon_start_date").maybeSingle();
-  if(dateRow?.value){
-    document.getElementById("hackathon-date-input").value = dateRow.value.substring(0,16);
-  }
+  const scheduleKeys = ["hackathon_start_date","hackathon_end_date","mentorship_start_date","mentorship_end_date","judging_start_date","judging_end_date"];
+  const scheduleInputIds = {
+    hackathon_start_date: "date-hackathon-start", hackathon_end_date: "date-hackathon-end",
+    mentorship_start_date: "date-mentorship-start", mentorship_end_date: "date-mentorship-end",
+    judging_start_date: "date-judging-start", judging_end_date: "date-judging-end",
+  };
+  const { data: scheduleRows } = await sb.from("platform_settings").select("key,value").in("key", scheduleKeys);
+  (scheduleRows||[]).forEach(row => {
+    if(row.value){
+      const el = document.getElementById(scheduleInputIds[row.key]);
+      if(el) el.value = row.value.substring(0,16);
+    }
+  });
 
   await renderMentorAlert();
 
@@ -435,15 +461,23 @@ async function renderOverview(){
 function statCard(num, label, accent=false){
   return `<div class="stat-card ${accent ? 'accent' : ''}"><div class="num">${num ?? "—"}</div><div class="label">${label}</div></div>`;
 }
-async function saveHackathonDate(){
-  const val = document.getElementById("hackathon-date-input").value;
-  if(!val) return;
-  const { error } = await sb.from("platform_settings")
-    .upsert({ key: "hackathon_start_date", value: new Date(val).toISOString() });
-  const alertEl = document.getElementById("hackathon-date-alert");
+async function saveProgramSchedule(){
+  const scheduleInputIds = {
+    hackathon_start_date: "date-hackathon-start", hackathon_end_date: "date-hackathon-end",
+    mentorship_start_date: "date-mentorship-start", mentorship_end_date: "date-mentorship-end",
+    judging_start_date: "date-judging-start", judging_end_date: "date-judging-end",
+  };
+  const rows = Object.entries(scheduleInputIds).map(([key, inputId]) => {
+    const val = document.getElementById(inputId).value;
+    return { key, value: val ? new Date(val).toISOString() : null };
+  });
+
+  const { error } = await sb.from("platform_settings").upsert(rows);
+  const alertEl = document.getElementById("schedule-alert");
   if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("تحديث الجدول الزمني للبرنامج", "platform_settings");
   alertEl.style.display = "inline";
-  setTimeout(() => alertEl.style.display = "none", 2000);
+  setTimeout(() => alertEl.style.display = "none", 2500);
 }
 const MIN_MENTOR_SLOTS = 3;
 async function renderExtraStats(){
@@ -1251,7 +1285,15 @@ async function saveAnnouncement(id){
 let judgingTab = "rounds";
 async function renderJudging(){
   const main = document.getElementById("main-content");
+  const { data: judgingDates } = await sb.from("platform_settings").select("key,value").in("key",["judging_start_date","judging_end_date"]);
+  const jMap = {};
+  (judgingDates||[]).forEach(r => jMap[r.key] = r.value);
+  const judgingWindowNote = (jMap.judging_start_date || jMap.judging_end_date)
+    ? `<p class="hint" style="margin:-6px 0 14px;padding:8px 12px;background:#f8f9fb;border-radius:8px">📅 فترة التحكيم المحددة: ${jMap.judging_start_date ? fmtDate(jMap.judging_start_date) : "—"} → ${jMap.judging_end_date ? fmtDate(jMap.judging_end_date) : "—"} (عدّلها من صفحة "نظرة عامة")</p>`
+    : "";
+
   main.innerHTML = `<div class="page-header"><div><h1>التحكيم</h1><p>إدارة جولات التحكيم ومعايير التقييم وتعيين المحكّمين ونتائج الفرق</p></div></div>
+    ${judgingWindowNote}
     <div class="tabs" id="judging-tabs">
       <div class="tab ${judgingTab==='rounds'?'active':''}" data-t="rounds">الجولات والمعايير</div>
       <div class="tab ${judgingTab==='assignments'?'active':''}" data-t="assignments">تعيين المحكّمين</div>
@@ -2243,6 +2285,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r30</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r32</div>
 </body>
 </html>

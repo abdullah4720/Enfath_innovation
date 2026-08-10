@@ -337,8 +337,10 @@ async function saveFeedback(bookingId, teamId){
 async function renderAddSlot(){
   const main = document.getElementById("main-content");
   const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  const win = await getMentorshipWindow();
   main.innerHTML = `<div class="card">
     <h3 style="margin:0 0 16px">إضافة موعد إرشاد جديد</h3>
+    ${(win.start || win.end) ? `<p class="hint" style="margin:-10px 0 16px;padding:8px 12px;background:#f8f9fb;border-radius:8px">📅 الفترة المسموحة: ${win.start ? fmtDate(win.start) : "بلا حد أدنى"} → ${win.end ? fmtDate(win.end) : "بلا حد أقصى"}</p>` : ""}
     <div class="field"><label>التاريخ</label><input type="date" id="slot-date"></div>
     <div class="form-row-2">
       <div class="field"><label>وقت البداية</label>
@@ -364,6 +366,24 @@ async function renderAddSlot(){
     <button class="btn btn-primary" onclick="saveNewSlot()">إضافة الموعد</button>
   </div>`;
 }
+let cachedMentorshipWindow = null;
+async function getMentorshipWindow(){
+  if(cachedMentorshipWindow) return cachedMentorshipWindow;
+  const { data } = await sb.from("platform_settings").select("key,value").in("key",["mentorship_start_date","mentorship_end_date"]);
+  const map = {};
+  (data||[]).forEach(r => map[r.key] = r.value);
+  cachedMentorshipWindow = { start: map.mentorship_start_date || null, end: map.mentorship_end_date || null };
+  return cachedMentorshipWindow;
+}
+function validateWithinMentorshipWindow(startDate, endDate, win){
+  if(win.start && startDate < new Date(win.start)){
+    return `الموعد قبل بداية فترة الإرشاد المحددة (${fmtDate(win.start)})`;
+  }
+  if(win.end && endDate > new Date(win.end)){
+    return `الموعد بعد نهاية فترة الإرشاد المحددة (${fmtDate(win.end)})`;
+  }
+  return null;
+}
 function generateTimeOptions(){
   const options = [];
   for(let h = 7; h <= 23; h++){
@@ -383,9 +403,11 @@ function generateTimeOptions(){
 async function renderBulkAddSlots(){
   const main = document.getElementById("main-content");
   const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  const win = await getMentorshipWindow();
   main.innerHTML = `<div class="card">
     <h3 style="margin:0 0 6px">إضافة مواعيد بالجملة</h3>
-    <p class="hint" style="margin:0 0 16px">حدّد يوم ونطاق وقت، والنظام يولّد لك مواعيد متتالية تلقائيًا</p>
+    <p class="hint" style="margin:0 0 10px">حدّد يوم ونطاق وقت، والنظام يولّد لك مواعيد متتالية تلقائيًا</p>
+    ${(win.start || win.end) ? `<p class="hint" style="margin:0 0 16px;padding:8px 12px;background:#f8f9fb;border-radius:8px">📅 الفترة المسموحة: ${win.start ? fmtDate(win.start) : "بلا حد أدنى"} → ${win.end ? fmtDate(win.end) : "بلا حد أقصى"}</p>` : ""}
     <div class="field"><label>التاريخ</label><input type="date" id="bulk-date"></div>
     <div class="form-row-2">
       <div class="field"><label>من الساعة</label><select id="bulk-start-time">${generateTimeOptions()}</select></div>
@@ -458,6 +480,11 @@ async function saveBulkSlots(){
   if(!slots.length){ alertBox.textContent = "تأكد من التاريخ ونطاق الوقت"; alertBox.className = "alert error"; return; }
   if(slots[0].start < new Date()){ alertBox.textContent = "لا يمكن إضافة مواعيد بتاريخ/وقت ماضٍ"; alertBox.className = "alert error"; return; }
 
+  const mentorshipWindow = await getMentorshipWindow();
+  const lastSlot = slots[slots.length - 1];
+  const windowError = validateWithinMentorshipWindow(slots[0].start, lastSlot.end, mentorshipWindow);
+  if(windowError){ alertBox.textContent = windowError; alertBox.className = "alert error"; return; }
+
   const track_id = document.getElementById("bulk-track").value || null;
   const is_online = document.getElementById("bulk-online").checked;
   const location = document.getElementById("bulk-location").value.trim();
@@ -496,6 +523,10 @@ async function saveNewSlot(){
     alertBox.textContent = "لا يمكن إضافة موعد بتاريخ ماضٍ"; alertBox.className = "alert error"; return;
   }
 
+  const mentorshipWindow = await getMentorshipWindow();
+  const windowError = validateWithinMentorshipWindow(startDate, endDate, mentorshipWindow);
+  if(windowError){ alertBox.textContent = windowError; alertBox.className = "alert error"; return; }
+
   const { error } = await sb.from("mentor_slots").insert({
     mentor_user_id: currentUser.id, start_time: startDate.toISOString(),
     end_time: endDate.toISOString(), track_id, is_online, location: location || null
@@ -510,6 +541,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r31</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r32</div>
 </body>
 </html>
