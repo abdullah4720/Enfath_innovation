@@ -7,12 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   :root{
-    --navy:#0B1F3A; --navy-light:#122a52; --purple:#5B3E96; --teal:#1F9E8E;
-    --gold:#C89B3C; --bg:#F5F6FA; --card:#FFFFFF; --ink:#1A1D29; --muted:#6B7280;
-    --border:#E4E6EF; --danger:#C0392B; --radius:16px;
+    --navy:#1A2E5A; --navy-dark:#0D1B3E; --navy-light:#2A3D6B; --purple:#5B3E96; --teal:#1F9E8E;
+    --gold:#C9922A; --bg:#F7F8FA; --card:#FFFFFF; --ink:#1A1A2E; --muted:#6B7A99;
+    --border:#E4E6EF; --border-light:#EEF0F5; --danger:#C0392B; --radius:16px;
   }
   *{box-sizing:border-box;}
   body{margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--ink);}
@@ -102,7 +103,9 @@
 
   .dash-tabs{display:flex; gap:4px; background:#eef0f6; padding:4px; border-radius:12px; margin-bottom:20px; overflow-x:auto;}
   .dash-tab{flex:1; white-space:nowrap; padding:10px 14px; border:none; border-radius:9px; background:none; font-family:inherit;
-    font-size:13.5px; font-weight:600; color:var(--muted); cursor:pointer; transition:.15s;}
+    font-size:13.5px; font-weight:600; color:var(--muted); cursor:pointer; transition:.15s;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;}
+  .dash-tab i{width:14px; height:14px; flex-shrink:0;}
   .dash-tab.active{background:#fff; color:var(--navy); box-shadow:0 1px 5px rgba(0,0,0,.08);}
 
   .eligible-yes{color:var(--teal); font-weight:600;}
@@ -559,17 +562,18 @@ async function renderDashboard(){
       <div id="countdown-value" style="font-size:20px; font-weight:800; color:var(--navy)"></div>
     </div>
     <div class="dash-tabs" id="dash-tabs-bar">
-      <button class="dash-tab ${dashTab==='team'?'active':''}" data-t="team">فريقي</button>
-      <button class="dash-tab ${dashTab==='chat'?'active':''}" data-t="chat">دردشة الفريق</button>
-      <button class="dash-tab ${dashTab==='prep'?'active':''}" data-t="prep">التحضير</button>
-      <button class="dash-tab ${dashTab==='mentorship'?'active':''}" data-t="mentorship">الإرشاد</button>
-      <button class="dash-tab ${dashTab==='judging'?'active':''}" data-t="judging">معايير التحكيم</button>
-      <button class="dash-tab ${dashTab==='certs'?'active':''}" data-t="certs">الشهادات</button>
-      <button class="dash-tab ${dashTab==='updates'?'active':''}" data-t="updates">التحديثات والملفات</button>
-      <button class="dash-tab ${dashTab==='profile'?'active':''}" data-t="profile">ملفي الشخصي</button>
+      <button class="dash-tab ${dashTab==='team'?'active':''}" data-t="team"><i data-lucide="users-round"></i> فريقي</button>
+      <button class="dash-tab ${dashTab==='chat'?'active':''}" data-t="chat"><i data-lucide="message-circle"></i> دردشة الفريق</button>
+      <button class="dash-tab ${dashTab==='prep'?'active':''}" data-t="prep"><i data-lucide="graduation-cap"></i> التحضير</button>
+      <button class="dash-tab ${dashTab==='mentorship'?'active':''}" data-t="mentorship"><i data-lucide="compass"></i> الإرشاد</button>
+      <button class="dash-tab ${dashTab==='judging'?'active':''}" data-t="judging"><i data-lucide="scale"></i> معايير التحكيم</button>
+      <button class="dash-tab ${dashTab==='certs'?'active':''}" data-t="certs"><i data-lucide="award"></i> الشهادات</button>
+      <button class="dash-tab ${dashTab==='updates'?'active':''}" data-t="updates"><i data-lucide="megaphone"></i> التحديثات والملفات</button>
+      <button class="dash-tab ${dashTab==='profile'?'active':''}" data-t="profile"><i data-lucide="user-round"></i> ملفي الشخصي</button>
     </div>
     <div id="dash-tab-body"><div class="card">جاري التحميل...</div></div>
   `;
+  if(window.lucide) lucide.createIcons();
   document.getElementById("dash-tabs-bar").addEventListener("click", (e)=>{
     const btn = e.target.closest(".dash-tab");
     if(!btn) return;
@@ -1351,6 +1355,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r43</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r45</div>
 </body>
 </html>
