@@ -522,6 +522,10 @@ async function renderOverview(){
       </div>
       <p class="hint" style="margin:-10px 0 16px">لو تركتها فاضية، المرشدون يقدرون يضيفون مواعيد بأي وقت بدون قيد</p>
 
+      <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px">💡 موعد تقديم المشاريع</h4>
+      <div class="field" style="margin-bottom:16px"><label>الموعد النهائي لتقديم/تعديل الفكرة</label><input type="datetime-local" id="date-submission-deadline"></div>
+      <p class="hint" style="margin:-10px 0 16px">بعد هذا الموعد، قائد الفريق ما يقدر يعدّل فكرة فريقه — تركه فاضي يعني بلا موعد نهائي</p>
+
       <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px">⚖️ فترة التحكيم</h4>
       <div class="form-row-2" style="margin-bottom:16px">
         <div class="field" style="margin:0"><label>بداية التحكيم</label><input type="datetime-local" id="date-judging-start"></div>
@@ -537,11 +541,12 @@ async function renderOverview(){
       <div id="satisfaction-table">جاري التحميل...</div>
     </div>`;
 
-  const scheduleKeys = ["hackathon_start_date","hackathon_end_date","mentorship_start_date","mentorship_end_date","judging_start_date","judging_end_date"];
+  const scheduleKeys = ["hackathon_start_date","hackathon_end_date","mentorship_start_date","mentorship_end_date","judging_start_date","judging_end_date","submission_deadline"];
   const scheduleInputIds = {
     hackathon_start_date: "date-hackathon-start", hackathon_end_date: "date-hackathon-end",
     mentorship_start_date: "date-mentorship-start", mentorship_end_date: "date-mentorship-end",
     judging_start_date: "date-judging-start", judging_end_date: "date-judging-end",
+    submission_deadline: "date-submission-deadline",
   };
   const { data: scheduleRows } = await sb.from("platform_settings").select("key,value").in("key", scheduleKeys);
   (scheduleRows||[]).forEach(row => {
@@ -596,6 +601,7 @@ async function saveProgramSchedule(){
     hackathon_start_date: "date-hackathon-start", hackathon_end_date: "date-hackathon-end",
     mentorship_start_date: "date-mentorship-start", mentorship_end_date: "date-mentorship-end",
     judging_start_date: "date-judging-start", judging_end_date: "date-judging-end",
+    submission_deadline: "date-submission-deadline",
   };
   const rows = Object.entries(scheduleInputIds).map(([key, inputId]) => {
     const val = document.getElementById(inputId).value;
@@ -2442,6 +2448,7 @@ async function renderProjects(){
       <div><h1>المشاريع</h1><p>الأفكار المقدَّمة من الفرق — نفس ما يشاهده المرشدون والمحكّمون</p></div>
       <a href="./projects.html" target="_blank"><button class="btn btn-outline">↗ فتح صفحة العرض المشتركة</button></a>
     </div>
+    <div class="card" id="missing-submissions-card" style="margin-bottom:16px"></div>
     <div class="card" style="margin-bottom:16px">
       <div class="field" style="margin:0"><label>بحث بعنوان الفكرة أو اسم الفريق</label><input id="projects-search" placeholder="اكتب للبحث..." oninput="filterProjectsView()"></div>
     </div>
@@ -2455,6 +2462,25 @@ async function renderProjects(){
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
   allProjectsCache = data || [];
   filterProjectsView();
+  await renderMissingSubmissions(data || []);
+}
+async function renderMissingSubmissions(submissions){
+  const box = document.getElementById("missing-submissions-card");
+  // نجيب أسماء الفرق المؤكدة اللي ما قدّمت
+  const { data: teams } = await sb.from("teams").select("id, team_name, team_code, tracks(name_ar)").eq("status","confirmed");
+  const submittedIds = new Set();
+  const { data: subTeamIds } = await sb.from("submissions").select("team_id");
+  (subTeamIds||[]).forEach(s => submittedIds.add(s.team_id));
+
+  const missing = (teams||[]).filter(t => !submittedIds.has(t.id));
+  if(!missing.length){
+    box.innerHTML = `<h3 style="margin:0 0 4px">📋 حالة التقديم</h3><p class="hint" style="margin:0">✅ كل الفرق المؤكدة قدّمت أفكارها</p>`;
+    return;
+  }
+  box.innerHTML = `<h3 style="margin:0 0 8px">⚠ فرق لم تقدّم فكرتها بعد (${missing.length})</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${missing.map(t => `<span class="badge badge-red">${esc(t.team_name)} <code style="font-size:9.5px">${esc(t.team_code||"")}</code></span>`).join("")}
+    </div>`;
 }
 let allProjectsCache = [];
 function filterProjectsView(){
@@ -2717,6 +2743,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r38</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r39</div>
 </body>
 </html>
