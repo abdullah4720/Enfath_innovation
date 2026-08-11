@@ -163,6 +163,23 @@
       <div class="field"><label>البريد الإلكتروني</label><input type="email" id="li-email"></div>
       <div class="field"><label>كلمة المرور</label><input type="password" id="li-password"></div>
       <button class="btn btn-primary" id="li-btn" onclick="handleLogin()">تسجيل الدخول</button>
+      <button class="btn-link" style="margin-top:12px;display:block;text-align:center;width:100%" onclick="showForgotPassword()">نسيت كلمة المرور؟</button>
+    </div>
+
+    <!-- نسيت كلمة المرور -->
+    <div id="forgot-password-form" style="display:none">
+      <h2>استعادة كلمة المرور</h2>
+      <p class="sub">أدخل بريدك وراح يوصلك رابط لتعيين كلمة مرور جديدة</p>
+      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="fp-email"></div>
+      <button class="btn btn-primary" onclick="handleForgotPassword()">إرسال رابط الاستعادة</button>
+      <button class="btn-link" style="margin-top:12px;display:block;text-align:center;width:100%" onclick="switchAuthTab('login')">رجوع لتسجيل الدخول</button>
+    </div>
+
+    <!-- تعيين كلمة مرور جديدة (بعد الضغط على رابط الاستعادة) -->
+    <div id="reset-password-form" style="display:none">
+      <h2>تعيين كلمة مرور جديدة</h2>
+      <div class="field"><label>كلمة المرور الجديدة</label><input type="password" id="rp-password"></div>
+      <button class="btn btn-primary" onclick="handleResetPassword()">حفظ كلمة المرور</button>
     </div>
   </div>
 </div>
@@ -220,7 +237,43 @@ function switchAuthTab(tab){
   document.getElementById("tab-login").classList.toggle("active", tab==="login");
   document.getElementById("signup-form").style.display = tab==="signup" ? "block" : "none";
   document.getElementById("login-form").style.display = tab==="login" ? "block" : "none";
+  document.getElementById("forgot-password-form").style.display = "none";
+  document.getElementById("reset-password-form").style.display = "none";
 }
+function showForgotPassword(){
+  document.getElementById("login-form").style.display = "none";
+  document.getElementById("forgot-password-form").style.display = "block";
+}
+async function handleForgotPassword(){
+  const email = document.getElementById("fp-email").value.trim();
+  if(!email){ showAlert("أدخل بريدك الإلكتروني"); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + window.location.pathname });
+  if(error){ showAlert("تعذّر الإرسال: " + error.message); return; }
+  showAlert("تم إرسال رابط الاستعادة إلى بريدك — تحقق من صندوق الوارد", "success");
+}
+async function handleResetPassword(){
+  const newPassword = document.getElementById("rp-password").value;
+  if(newPassword.length < 6){ showAlert("كلمة المرور يجب ألا تقل عن 6 أحرف"); return; }
+  const { error } = await sb.auth.updateUser({ password: newPassword });
+  if(error){ showAlert("تعذّر تحديث كلمة المرور: " + error.message); return; }
+  showAlert("تم تحديث كلمة المرور بنجاح، سجّل دخولك الآن", "success");
+  setTimeout(() => {
+    document.getElementById("reset-password-form").style.display = "none";
+    switchAuthTab("login");
+  }, 1800);
+}
+// اكتشاف رابط استعادة كلمة المرور القادم من البريد
+sb.auth.onAuthStateChange((event) => {
+  if(event === "PASSWORD_RECOVERY"){
+    document.getElementById("auth-screen").style.display = "block";
+    document.querySelector(".hero").style.display = "block";
+    document.getElementById("dash-screen").style.display = "none";
+    document.getElementById("signup-form").style.display = "none";
+    document.getElementById("login-form").style.display = "none";
+    document.getElementById("forgot-password-form").style.display = "none";
+    document.getElementById("reset-password-form").style.display = "block";
+  }
+});
 
 /* ---------------- إنشاء حساب ---------------- */
 function validateSignupFields(){
@@ -425,6 +478,7 @@ async function renderDashboard(){
       <button class="dash-tab ${dashTab==='judging'?'active':''}" data-t="judging">معايير التحكيم</button>
       <button class="dash-tab ${dashTab==='certs'?'active':''}" data-t="certs">الشهادات</button>
       <button class="dash-tab ${dashTab==='updates'?'active':''}" data-t="updates">التحديثات والملفات</button>
+      <button class="dash-tab ${dashTab==='profile'?'active':''}" data-t="profile">ملفي الشخصي</button>
     </div>
     <div id="dash-tab-body"><div class="card">جاري التحميل...</div></div>
   `;
@@ -449,7 +503,36 @@ async function renderDashboard(){
   else if(dashTab === "mentorship") renderMentorshipTab(membership);
   else if(dashTab === "judging") renderJudgingCriteriaTab(membership);
   else if(dashTab === "certs") renderCertsTab();
-  else renderUpdatesTab(membership);
+  else if(dashTab === "updates") renderUpdatesTab(membership);
+  else renderMyProfileTab();
+}
+
+/* ---------------- تبويب: ملفي الشخصي ---------------- */
+async function renderMyProfileTab(){
+  const body = document.getElementById("dash-tab-body");
+  const { data: profile } = await sb.from("profiles").select("*").eq("id", currentUser.id).single();
+  body.innerHTML = `<div class="card">
+    <h2>ملفي الشخصي</h2>
+    <p class="sub">عدّل بياناتك — الاسم والبريد ثابتان، الجوال والجهة قابلان للتعديل</p>
+    <div class="field"><label>الاسم الكامل</label><input value="${esc(profile.full_name||"")}" disabled style="opacity:.6"></div>
+    <div class="field"><label>البريد الإلكتروني</label><input value="${esc(profile.email||"")}" disabled style="opacity:.6"></div>
+    <div class="field"><label>رقم الجوال</label><input id="profile-phone" value="${esc(profile.phone||"")}" placeholder="05xxxxxxxx"></div>
+    <div class="field"><label>الجهة</label><input id="profile-org" value="${esc(profile.organization||"")}"></div>
+    <div id="my-profile-alert" class="alert"></div>
+    <button class="btn btn-primary" onclick="saveMyProfileInfo()">حفظ التعديلات</button>
+  </div>`;
+}
+async function saveMyProfileInfo(){
+  const alertBox = document.getElementById("my-profile-alert");
+  alertBox.className = "alert";
+  const phone = document.getElementById("profile-phone").value.trim();
+  const organization = document.getElementById("profile-org").value.trim();
+  if(phone && !/^(05|5)\d{8}$/.test(phone.replace(/\s|-/g,""))){
+    alertBox.textContent = "صيغة الجوال غير صحيحة (05xxxxxxxx)"; alertBox.className = "alert error"; return;
+  }
+  const { error } = await sb.from("profiles").update({ phone, organization }).eq("id", currentUser.id);
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  alertBox.textContent = "تم الحفظ بنجاح"; alertBox.className = "alert success";
 }
 
 /* ---------------- العداد التنازلي ---------------- */
@@ -933,7 +1016,7 @@ async function renderUpdatesTab(membership){
 /* ---------------- حالة: لا يوجد فريق بعد ---------------- */
 async function renderNoTeamView(){
   const content = document.getElementById("dash-tab-body");
-  const { data: tracks } = await sb.from("tracks").select("*").eq("is_active", true).order("display_order");
+  const { data: tracks } = await sb.from("tracks").select("*").eq("is_active", true).eq("registration_open", true).order("display_order");
 
   content.innerHTML = `
     <div class="switcher" style="max-width:320px">
@@ -1014,7 +1097,7 @@ async function renderTeamView(membership){
   const team = membership.teams;
 
   const { data: members } = await sb.from("team_members")
-    .select("is_leader, profiles(full_name, organization)")
+    .select("id, user_id, is_leader, profiles(full_name, organization)")
     .eq("team_id", team.id);
 
   const { data: submission } = await sb.from("submissions")
@@ -1057,7 +1140,13 @@ async function renderTeamView(membership){
       ${(members||[]).map(m => `
         <div class="member-row">
           <span>${esc(m.profiles?.full_name||"—")} ${m.is_leader ? '<span class="leader-tag">قائد الفريق</span>' : ""}</span>
-          <span class="hint">${esc(m.profiles?.organization||"")}</span>
+          <span style="display:flex;align-items:center;gap:10px">
+            <span class="hint">${esc(m.profiles?.organization||"")}</span>
+            ${membership.is_leader && !m.is_leader ? `
+              <button class="btn-link" style="font-size:11.5px;color:var(--teal)" onclick='transferLeadership("${team.id}","${m.user_id}", ${JSON.stringify(m.profiles?.full_name||"")})'>نقل القيادة</button>
+              <button class="btn-link" style="font-size:11.5px;color:var(--danger)" onclick='kickMember("${m.id}", ${JSON.stringify(m.profiles?.full_name||"")})'>إزالة</button>
+            ` : ""}
+          </span>
         </div>
       `).join("")}
 
@@ -1098,6 +1187,18 @@ async function leaveTeam(membershipId){
   if(error){ alert("تعذّرت المغادرة: " + error.message); return; }
   renderDashboard();
 }
+async function kickMember(memberRowId, memberName){
+  if(!confirm(`متأكد تبي تزيل ${memberName} من الفريق؟`)) return;
+  const { error } = await sb.from("team_members").delete().eq("id", memberRowId);
+  if(error){ alert("تعذّرت الإزالة: " + error.message); return; }
+  renderDashboard();
+}
+async function transferLeadership(teamId, newLeaderId, memberName){
+  if(!confirm(`متأكد تبي تنقل قيادة الفريق لـ${memberName}؟ ما تقدر ترجع قائد إلا لو نقلها لك مرة ثانية.`)) return;
+  const { data, error } = await sb.rpc("transfer_team_leadership", { p_team_id: teamId, p_new_leader_id: newLeaderId });
+  if(error || !data.success){ alert("خطأ: " + (data?.error || error?.message)); return; }
+  renderDashboard();
+}
 async function saveTeamName(teamId){
   const alertBox = document.getElementById("team-name-alert");
   const newName = document.getElementById("team-name-input").value.trim();
@@ -1123,6 +1224,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r31</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r37</div>
 </body>
 </html>
