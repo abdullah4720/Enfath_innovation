@@ -84,6 +84,7 @@
         <option value="أخرى">أخرى</option>
       </select>
     </div>
+    <div class="field"><label>المسمى الوظيفي / جهة العمل الحالية</label><input id="f-position" placeholder="مثال: مهندس برمجيات أول، شركة كذا"></div>
     <div class="field"><label>نبذة عنك (اختياري)</label><textarea id="f-bio" rows="3" placeholder="خبرتك ذات الصلة بالبرنامج..."></textarea></div>
 
     <button class="btn" onclick="handleApply()">إرسال طلب الانضمام</button>
@@ -113,6 +114,7 @@ function showAlert(msg, type="error"){
 async function handleApply(){
   const specValue = document.getElementById("f-spec").value;
   const domainValue = document.getElementById("f-domain").value;
+  const position = document.getElementById("f-position").value.trim();
   const bio = document.getElementById("f-bio").value.trim();
   if(!specValue){ showAlert("اختر التخصص"); return; }
   if(!domainValue){ showAlert("اختر المجال"); return; }
@@ -140,6 +142,10 @@ async function handleApply(){
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if(error){ showAlert("بيانات الدخول غير صحيحة"); return; }
     userId = data.user.id;
+  }
+
+  if(position){
+    await sb.from("profiles").update({ current_position: position }).eq("id", userId);
   }
 
   const { error: appError } = await sb.from("mentor_applications").upsert({

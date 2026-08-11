@@ -182,14 +182,28 @@ async function loadAssignments(){
     }
 
     const { data: submission } = await sb.from("submissions").select("*").eq("team_id", a.team_id).order("version",{ascending:false}).limit(1).maybeSingle();
+    const { data: teamMembers } = await sb.from("team_members").select("is_leader, profiles(full_name, email, phone)").eq("team_id", a.team_id);
     const teamScores = (myScores||[]).filter(s => s.team_id === a.team_id);
     const alreadyScored = teamScores.length === criteriaList.length && criteriaList.length > 0;
+    const isLocked = round.results_published;
 
     html += `<div class="card">
       <div class="team-header">
         <div><h3>${esc(a.teams?.team_name||"")} <code style="font-size:11px;color:var(--gold);background:#fbf3e2;padding:2px 8px;border-radius:6px">${esc(a.teams?.team_code||"")}</code></h3><span class="sub">${esc(a.teams?.tracks?.name_ar||"")}</span></div>
         ${alreadyScored ? '<span class="badge badge-green">تم التقييم</span>' : '<span class="badge badge-gray">بانتظار التقييم</span>'}
       </div>
+      <details style="margin:8px 0">
+        <summary style="cursor:pointer;font-size:12px;color:var(--muted)">أعضاء الفريق (${teamMembers?.length||0})</summary>
+        <div style="margin-top:8px">
+          ${(teamMembers||[]).map(m => `
+            <div style="font-size:12.5px;padding:4px 0;border-top:1px solid var(--border)">
+              ${esc(m.profiles?.full_name||"")} ${m.is_leader ? '<span class="badge badge-gold" style="font-size:9.5px">قائد</span>' : ""}
+              <br><span style="color:var(--muted)">${esc(m.profiles?.email||"")} · ${esc(m.profiles?.phone||"")}</span>
+            </div>
+          `).join("")}
+        </div>
+      </details>
+      ${isLocked ? `<div class="alert" style="display:block;background:#fef3e2;color:#92600a">🔒 تم نشر النتائج — التعديل مقفل</div>` : ""}
       ${submission ? `
         <div class="project-box">
           <h4>${esc(submission.title)}</h4>
@@ -204,14 +218,14 @@ async function loadAssignments(){
             const existing = teamScores.find(s => s.criteria_id === c.id);
             return `<div class="criteria-row">
               <div><div class="c-name">${esc(c.name_ar)}</div><div class="c-hint">الوزن ${c.weight}% · من ${c.max_score}</div></div>
-              <input type="number" min="0" max="${c.max_score}" id="score-${a.team_id}-${c.id}" value="${existing?.score ?? ''}">
+              <input type="number" min="0" max="${c.max_score}" id="score-${a.team_id}-${c.id}" value="${existing?.score ?? ''}" ${isLocked ? 'disabled' : ''}>
             </div>`;
           }).join("")}
           <div class="field" style="margin-top:14px"><label>تغذية راجعة للفريق</label>
-            <textarea id="comments-${a.team_id}" rows="3" placeholder="اكتب ملاحظاتك — راح تظهر للفريق بعد إعلان النتائج">${esc(teamScores[0]?.comments||"")}</textarea>
+            <textarea id="comments-${a.team_id}" rows="3" placeholder="اكتب ملاحظاتك — راح تظهر للفريق بعد إعلان النتائج" ${isLocked ? 'disabled' : ''}>${esc(teamScores[0]?.comments||"")}</textarea>
           </div>
           <div id="submit-alert-${a.team_id}" class="alert"></div>
-          <button class="btn btn-primary" onclick="submitScores('${a.team_id}')">${alreadyScored ? "تحديث التقييم" : "إرسال التقييم"}</button>
+          ${!isLocked ? `<button class="btn btn-primary" onclick="submitScores('${a.team_id}')">${alreadyScored ? "تحديث التقييم" : "إرسال التقييم"}</button>` : ""}
         </div>
       ` : `<p style="color:var(--muted);font-size:13px">لم يتم تحديد معايير تقييم لهذه الجولة بعد</p>`}
     </div>`;
@@ -224,6 +238,22 @@ async function submitScores(teamId){
   alertBox.className = "alert";
   const comments = document.getElementById(`comments-${teamId}`).value.trim();
 
+  // فرض فترة التحكيم المحددة (إن وُجدت)
+  const { data: windowRows } = await sb.from("platform_settings").select("key,value").in("key",["judging_start_date","judging_end_date"]);
+  const wMap = {};
+  (windowRows||[]).forEach(r => wMap[r.key] = r.value);
+  const now = new Date();
+  if(wMap.judging_start_date && now < new Date(wMap.judging_start_date)){
+    alertBox.textContent = `التحكيم لم يبدأ بعد — يبدأ ${new Date(wMap.judging_start_date).toLocaleString('ar-SA')}`;
+    alertBox.className = "alert error";
+    return;
+  }
+  if(wMap.judging_end_date && now > new Date(wMap.judging_end_date)){
+    alertBox.textContent = `انتهت فترة التحكيم المحددة`;
+    alertBox.className = "alert error";
+    return;
+  }
+
   const rows = [];
   for(const c of criteriaList){
     const input = document.getElementById(`score-${teamId}-${c.id}`);
@@ -234,19 +264,18 @@ async function submitScores(teamId){
       input.focus();
       return;
     }
-    rows.push({
-      judge_user_id: currentUser.id, team_id: teamId, round_id: activeRound.id,
-      criteria_id: c.id, score: val, comments: comments || null
-    });
+    rows.push({ criteria_id: c.id, score: val, comments: comments || null });
   }
 
-  const { error } = await sb.from("scores").upsert(rows, { onConflict: "judge_user_id,team_id,round_id,criteria_id" });
-  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  const { data, error } = await sb.rpc("upsert_scores_guarded", {
+    p_round_id: activeRound.id, p_team_id: teamId, p_rows: rows
+  });
+  if(error || !data.success){ alertBox.textContent = "خطأ: " + (data?.error || error?.message); alertBox.className = "alert error"; return; }
 
   alertBox.textContent = "تم حفظ التقييم بنجاح"; alertBox.className = "alert success";
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r30</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r40</div>
 </body>
 </html>

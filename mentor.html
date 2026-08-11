@@ -197,6 +197,7 @@ async function renderMyProfile(){
         ${domainOptions.map(o => `<option value="${esc(o)}" ${savedDomain===o?"selected":""}>${esc(o)}</option>`).join("")}
       </select>
     </div>
+    <div class="field"><label>المسمى الوظيفي / جهة العمل الحالية</label><input id="profile-position" value="${esc(profile.current_position||"")}" placeholder="مثال: مهندس برمجيات أول، شركة كذا"></div>
     <div class="field"><label>نبذة تعريفية</label><textarea id="profile-bio" rows="4" placeholder="خبرتك ذات الصلة بالبرنامج...">${esc(profile.bio||"")}</textarea></div>
     <div id="profile-alert" class="alert"></div>
     <button class="btn btn-primary" onclick="saveMyProfile()">حفظ التعديلات</button>
@@ -208,8 +209,9 @@ async function saveMyProfile(){
   const specValue = document.getElementById("profile-spec").value;
   const domainValue = document.getElementById("profile-domain").value;
   const specialization = specValue + (domainValue ? " — " + domainValue : "");
+  const current_position = document.getElementById("profile-position").value.trim();
   const bio = document.getElementById("profile-bio").value.trim();
-  const { error } = await sb.from("profiles").update({ specialization, bio }).eq("id", currentUser.id);
+  const { error } = await sb.from("profiles").update({ specialization, current_position, bio }).eq("id", currentUser.id);
   if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
   alertBox.textContent = "تم الحفظ بنجاح"; alertBox.className = "alert success";
 }
@@ -541,6 +543,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r32</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r41</div>
 </body>
 </html>
