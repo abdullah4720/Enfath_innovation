@@ -177,6 +177,7 @@
     main{padding:20px;}
   }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 </head>
 <body>
 
@@ -240,6 +241,7 @@
       <a data-page="mentorApps">📥 &nbsp;طلبات الانضمام كمرشد</a>
       <a data-page="judgeApps">📥 &nbsp;طلبات الانضمام كمحكّم</a>
       <a data-page="systemCheck">🩺 &nbsp;فحص النظام</a>
+      <a data-page="finalReport">📊 &nbsp;التقرير النهائي</a>
       <a data-page="activity">🕒 &nbsp;سجل النشاط</a>
     </nav>
     <div class="logout-box">
@@ -486,6 +488,7 @@ function navigateTo(page){
     mentorApps: renderMentorApplications,
     judgeApps: renderJudgeApplications,
     systemCheck: renderSystemCheck,
+    finalReport: renderFinalReportPage,
     activity: renderActivityLog,
   };
   (renderers[page] || renderOverview)();
@@ -2164,17 +2167,24 @@ async function renderCertificates(){
       <button class="btn btn-primary" onclick="openCertTypeModal()">+ نوع شهادة</button>
     </div>
     <div class="card"><div id="cert-types-table">جاري التحميل...</div></div>
-    <div class="card"><h3>آخر الشهادات الصادرة</h3><div id="certs-issued">جاري التحميل...</div></div>`;
+    <div class="card">
+      <div class="toolbar" style="margin-bottom:12px">
+        <h3 style="margin:0">حالة الشهادات لكل مشارك</h3>
+        <div class="field" style="margin:0"><input id="cert-matrix-search" placeholder="بحث بالاسم..." oninput="filterCertMatrix()"></div>
+      </div>
+      <div id="cert-matrix-table">جاري التحميل...</div>
+    </div>`;
 
   const { data: types, error } = await sb.from("certificate_types").select("*, certificates(count)");
   const box = document.getElementById("cert-types-table");
   if(error) box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
   else if(!types.length) box.innerHTML = `<div class="empty-state">لا توجد أنواع شهادات بعد</div>`;
   else box.innerHTML = `<table><thead><tr>
-      <th>النوع</th><th>الحد الأدنى للحضور</th><th>يشترط استبيان</th><th>عدد الصادرة</th><th></th>
+      <th>النوع</th><th>الفئة</th><th>الحد الأدنى للحضور</th><th>يشترط استبيان</th><th>عدد الصادرة</th><th></th>
       </tr></thead><tbody>
       ${types.map(c => `<tr>
         <td><strong>${esc(c.name_ar)}</strong></td>
+        <td>${{participant:"المشاركون",mentor:"المرشدون",judge:"المحكّمون"}[c.role_key] || "عام للجميع"}</td>
         <td>${c.min_attendance_pct}%</td>
         <td>${c.requires_survey ? '<span class="badge badge-gold">نعم</span>' : '<span class="badge badge-gray">لا</span>'}</td>
         <td>${c.certificates?.[0]?.count ?? 0}</td>
@@ -2185,29 +2195,123 @@ async function renderCertificates(){
       </tr>`).join("")}
       </tbody></table>`;
 
-  const { data: issued } = await sb.from("certificates")
-    .select("issued_at, verification_code, profiles(full_name), certificate_types(name_ar)")
-    .order("issued_at", {ascending:false}).limit(15);
-  const box2 = document.getElementById("certs-issued");
-  if(!issued || !issued.length) box2.innerHTML = `<div class="empty-state">لم تُصدر شهادات بعد</div>`;
-  else box2.innerHTML = `<table><thead><tr><th>المستفيد</th><th>النوع</th><th>تاريخ الإصدار</th><th>رمز التحقق</th></tr></thead><tbody>
-    ${issued.map(c => `<tr>
-      <td>${esc(c.profiles?.full_name||"—")}</td>
-      <td>${esc(c.certificate_types?.name_ar||"—")}</td>
-      <td>${fmtDate(c.issued_at)}</td>
-      <td><code style="font-size:11px">${esc(c.verification_code)}</code></td>
+  await loadCertMatrix();
+}
+let certMatrixCache = [];
+async function loadCertMatrix(){
+  const box = document.getElementById("cert-matrix-table");
+  const { data, error } = await sb.from("certificate_status_matrix").select("*").order("full_name");
+  if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
+
+  // نجمّع الصفوف حسب المشارك
+  const byUser = {};
+  (data||[]).forEach(row => {
+    if(!byUser[row.user_id]) byUser[row.user_id] = { full_name: row.full_name, email: row.email, certs: [] };
+    byUser[row.user_id].certs.push(row);
+  });
+  certMatrixCache = Object.values(byUser);
+  filterCertMatrix();
+}
+function filterCertMatrix(){
+  const term = (document.getElementById("cert-matrix-search")?.value || "").trim().toLowerCase();
+  const filtered = !term ? certMatrixCache : certMatrixCache.filter(u => u.full_name.toLowerCase().includes(term));
+  renderCertMatrixTable(filtered);
+}
+function renderCertMatrixTable(users){
+  const box = document.getElementById("cert-matrix-table");
+  if(!users.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج</div>`; return; }
+  if(!users[0]?.certs?.length){ box.innerHTML = `<div class="empty-state">أضف نوع شهادة أولاً</div>`; return; }
+
+  const certTypeNames = users[0].certs.map(c => c.cert_type_name);
+
+  box.innerHTML = `<table><thead><tr>
+    <th>المشارك</th>
+    ${certTypeNames.map(n => `<th>${esc(n)}</th>`).join("")}
+    </tr></thead><tbody>
+    ${users.map(u => `<tr>
+      <td>${esc(u.full_name)}<br><span style="color:var(--muted);font-size:11.5px">${esc(u.email)}</span></td>
+      ${u.certs.map(c => {
+        const eligible = c.attendance_pct >= c.min_attendance_pct && c.survey_ok;
+        if(c.certificate_id){
+          return `<td>
+            <span class="badge badge-green">صادرة</span>
+            <div style="margin-top:5px;display:flex;gap:4px">
+              <button class="btn-link" style="font-size:11px" onclick='previewCertificate(${JSON.stringify({name: u.full_name, typeName: c.cert_type_name, text: c.certificate_text, code: c.verification_code, date: c.issued_at})})'>معاينة</button>
+              <button class="btn-link" style="font-size:11px;color:var(--danger)" onclick='deleteCertificate("${c.certificate_id}", ${JSON.stringify(u.full_name)})'>حذف</button>
+            </div>
+          </td>`;
+        } else if(eligible){
+          return `<td>
+            <span class="badge badge-gold">مؤهل</span>
+            <div style="margin-top:5px">
+              <button class="btn-link" style="font-size:11px" onclick="manualIssueCertificate('${u.user_id}', '${c.cert_type_key}')">إصدار الآن</button>
+            </div>
+          </td>`;
+        } else {
+          return `<td><span class="badge badge-gray">غير مؤهل</span><div class="hint" style="font-size:10px;margin-top:3px">حضور ${Math.round(c.attendance_pct)}%${c.requires_survey && !c.survey_ok ? " · استبيان ناقص" : ""}</div></td>`;
+        }
+      }).join("")}
     </tr>`).join("")}
     </tbody></table>`;
 }
+async function manualIssueCertificate(userId, certTypeKey){
+  const { data, error } = await sb.rpc("issue_certificate", { p_cert_type_key: certTypeKey, p_user_id: userId });
+  if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  logActivity("إصدار شهادة يدوي", "certificate", userId);
+  showToast("تم إصدار الشهادة");
+  loadCertMatrix();
+}
+async function deleteCertificate(certId, userName){
+  if(!confirm(`متأكد تبي تحذف شهادة ${userName}؟ هذا إجراء لا يمكن التراجع عنه.`)) return;
+  const { error } = await sb.from("certificates").delete().eq("id", certId);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("حذف شهادة", "certificate", certId, {name: userName});
+  showToast("تم حذف الشهادة");
+  loadCertMatrix();
+}
+function previewCertificate({name, typeName, text, code, date}){
+  const bodyText = (text || "نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ.")
+    .replace(/\{\{name\}\}/g, name)
+    .replace(/\{\{type\}\}/g, typeName)
+    .replace(/\{\{date\}\}/g, date ? fmtDate(date) : "")
+    .replace(/\{\{code\}\}/g, code || "");
+
+  openModal(`
+    <div style="border:3px double var(--gold); border-radius:12px; padding:30px 24px; text-align:center; background:linear-gradient(180deg,#fdfdfb,#f7f5ef)">
+      <div style="font-size:11px; letter-spacing:.1em; color:var(--gold); font-weight:700; margin-bottom:10px">شهادة ${esc(typeName)}</div>
+      <h2 style="margin:0 0 4px; color:var(--ink)">${esc(name)}</h2>
+      <div style="width:60px; height:2px; background:var(--gold); margin:14px auto">&nbsp;</div>
+      <p style="font-size:14px; line-height:1.9; color:var(--ink); margin:16px 0">${esc(bodyText)}</p>
+      <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:24px; border-top:1px solid var(--border); padding-top:12px">
+        <span>رمز التحقق: ${esc(code||"—")}</span>
+        <span>${date ? fmtDate(date) : ""}</span>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
+  `);
+}
 function openCertTypeModal(c=null){
   const isEdit = !!c;
-  c = c || {key:"",name_ar:"",min_attendance_pct:50,requires_survey:false};
+  c = c || {key:"",name_ar:"",min_attendance_pct:50,requires_survey:false,certificate_text:"",role_key:"participant"};
   openModal(`
     <h3>${isEdit ? "تعديل نوع شهادة" : "إضافة نوع شهادة"}</h3>
     <div class="field"><label>المفتاح (بالإنجليزي، بدون مسافات)</label><input id="f-cert-key" value="${esc(c.key)}" ${isEdit?'disabled style="opacity:.6"':''}></div>
     <div class="field"><label>الاسم بالعربي</label><input id="f-cert-name" value="${esc(c.name_ar)}"></div>
+    <div class="field"><label>الفئة المستهدفة</label>
+      <select id="f-cert-role">
+        <option value="participant" ${c.role_key==="participant"?"selected":""}>المشاركون</option>
+        <option value="mentor" ${c.role_key==="mentor"?"selected":""}>المرشدون</option>
+        <option value="judge" ${c.role_key==="judge"?"selected":""}>المحكّمون</option>
+        <option value="" ${!c.role_key?"selected":""}>عام لكل الأدوار</option>
+      </select>
+      <p class="hint" style="margin-top:4px">تحدد لمين تظهر هذي الشهادة بصفحته الشخصية</p>
+    </div>
     <div class="field"><label>الحد الأدنى لنسبة الحضور (%)</label><input type="number" id="f-cert-attendance" value="${c.min_attendance_pct}"></div>
     <div class="field"><label><input type="checkbox" id="f-cert-survey" ${c.requires_survey?"checked":""}> يشترط تعبئة استبيان</label></div>
+    <div class="field"><label>نص الشهادة</label>
+      <textarea id="f-cert-text" rows="4" placeholder="نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ بتاريخ {{date}}">${esc(c.certificate_text||"")}</textarea>
+      <p class="hint" style="margin-top:4px">استخدم {{name}} للاسم، {{type}} لنوع الشهادة، {{date}} للتاريخ، {{code}} لرمز التحقق</p>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
       <button class="btn btn-primary" onclick="saveCertType('${c.id||""}')">حفظ</button>
@@ -2217,11 +2321,13 @@ function openCertTypeModal(c=null){
 async function saveCertType(id){
   const key = document.getElementById("f-cert-key").value.trim();
   const name_ar = document.getElementById("f-cert-name").value.trim();
+  const role_key = document.getElementById("f-cert-role").value || null;
   const min_attendance_pct = parseFloat(document.getElementById("f-cert-attendance").value) || 0;
   const requires_survey = document.getElementById("f-cert-survey").checked;
+  const certificate_text = document.getElementById("f-cert-text").value.trim();
   if(!key || !name_ar){ showToast("المفتاح والاسم مطلوبان", true); return; }
 
-  const payload = { name_ar, min_attendance_pct, requires_survey };
+  const payload = { name_ar, role_key, min_attendance_pct, requires_survey, certificate_text };
   if(!id) payload.key = key;
   const q = id ? sb.from("certificate_types").update(payload).eq("id", id) : sb.from("certificate_types").insert({...payload, key});
   const { error } = await q;
@@ -2425,6 +2531,193 @@ async function rejectJudgeApp(id){
 /* ============================================================
    فحص النظام
    ============================================================ */
+/* ============================================================
+   التقرير النهائي (PowerPoint)
+   ============================================================ */
+async function renderFinalReportPage(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header"><div><h1>التقرير النهائي</h1><p>تقرير بوربوينت شامل يُولَّد مباشرة من البيانات الحية</p></div></div>
+    <div class="card">
+      <h3 style="margin:0 0 10px">محتويات التقرير</h3>
+      <p class="hint" style="margin-bottom:16px">نظرة عامة · توزيع المسارات · حالة الفرق · الإرشاد والتحكيم · الشهادات الصادرة · الرضا والتقييم</p>
+      <button class="btn btn-primary" id="gen-report-btn" onclick="generateFinalReport()">📥 توليد وتحميل التقرير</button>
+      <div id="report-progress" class="hint" style="margin-top:12px"></div>
+    </div>`;
+}
+async function generateFinalReport(){
+  const btn = document.getElementById("gen-report-btn");
+  const progress = document.getElementById("report-progress");
+  btn.disabled = true;
+  progress.textContent = "جاري جمع البيانات...";
+
+  const NAVY = "0B1F3A", TEAL = "1F9E8E", GOLD = "C89B3C", PAPER = "F7F5EF", INK = "1A1D29";
+
+  // ---- جمع كل البيانات اللازمة ----
+  const [statsRes, extraMentors, extraJudges, extraPrep, extraBookings, extraRounds, extraEvents,
+         tracksRes, teamsRes, satisfactionRes, certTypesRes, certsRes, submissionsRes] = await Promise.all([
+    sb.from("dashboard_stats").select("*").single(),
+    sb.from("user_roles").select("id, roles!inner(key)", {count:"exact", head:true}).eq("roles.key","mentor"),
+    sb.from("user_roles").select("id, roles!inner(key)", {count:"exact", head:true}).eq("roles.key","judge"),
+    sb.from("prep_sessions").select("id", {count:"exact", head:true}),
+    sb.from("mentor_bookings").select("id", {count:"exact", head:true}),
+    sb.from("judging_rounds").select("id", {count:"exact", head:true}),
+    sb.from("events").select("id", {count:"exact", head:true}),
+    sb.from("tracks").select("id, name_ar"),
+    sb.from("teams").select("status"),
+    sb.from("satisfaction_by_stage").select("*"),
+    sb.from("certificate_types").select("id, name_ar, certificates(count)"),
+    sb.from("certificates").select("id", {count:"exact", head:true}),
+    sb.from("submissions").select("team_id", {count:"exact", head:true}),
+  ]);
+
+  const stats = statsRes.data || {};
+  const tracks = tracksRes.data || [];
+  const trackCounts = await Promise.all(tracks.map(t => sb.rpc("get_track_participant_count", { p_track_id: t.id })));
+  const trackData = tracks.map((t,i) => ({ name: t.name_ar, count: trackCounts[i].data ?? 0 }));
+
+  const teamStatusCounts = { pending:0, confirmed:0, disqualified:0, withdrawn:0 };
+  (teamsRes.data||[]).forEach(t => { if(teamStatusCounts[t.status] !== undefined) teamStatusCounts[t.status]++; });
+
+  progress.textContent = "جاري بناء الشرائح...";
+
+  const pptx = new PptxGenJS();
+  pptx.layout = "LAYOUT_WIDE";
+  pptx.defineSlideMaster({ title: "MASTER", background: { color: PAPER } });
+
+  // ---------- شريحة 1: العنوان ----------
+  let s = pptx.addSlide();
+  s.background = { color: NAVY };
+  s.addText("التقرير النهائي", { x:0.6, y:2.6, w:12, h:1, fontSize:40, bold:true, color:"FFFFFF", align:"right", fontFace:"Arial" });
+  s.addText("هاكاثون إنفاذ 2026 — مركز الابتكار والملكية الفكرية، جامعة القصيم", { x:0.6, y:3.5, w:12, h:0.6, fontSize:16, color:"C8D3E8", align:"right", fontFace:"Arial" });
+  s.addText(new Date().toLocaleDateString('ar-SA', {year:'numeric', month:'long', day:'numeric'}), { x:0.6, y:6.6, w:6, h:0.4, fontSize:11, color:"7d8db3", align:"right", fontFace:"Arial" });
+  s.addShape(pptx.ShapeType.rect, { x:0.6, y:4.2, w:1.2, h:0.05, fill:{color:GOLD} });
+
+  // ---------- شريحة 2: نظرة عامة ----------
+  s = pptx.addSlide();
+  s.addText("نظرة عامة", { x:0.5, y:0.35, w:12, h:0.7, fontSize:26, bold:true, color:NAVY, align:"right", fontFace:"Arial" });
+  const overviewCards = [
+    ["إجمالي المستخدمين", stats.total_users ?? "—"],
+    ["المشاركون", stats.total_participants ?? "—"],
+    ["الفرق المؤكدة", `${stats.confirmed_teams ?? 0} / ${stats.total_teams ?? 0}`],
+    ["المسارات النشطة", stats.active_tracks ?? "—"],
+    ["الأفكار المقدَّمة", submissionsRes.count ?? 0],
+    ["الشهادات الصادرة", certsRes.count ?? 0],
+  ];
+  overviewCards.forEach((card, i) => {
+    const col = i % 3, row = Math.floor(i / 3);
+    const x = 0.5 + col * 4.15, y = 1.3 + row * 2.1;
+    s.addShape(pptx.ShapeType.roundRect, { x, y, w:3.85, h:1.8, rectRadius:0.12, fill:{color:"FFFFFF"}, line:{color:"E4E6EF", width:1} });
+    s.addText(String(card[1]), { x, y:y+0.25, w:3.85, h:0.8, fontSize:32, bold:true, color:TEAL, align:"center", fontFace:"Arial" });
+    s.addText(card[0], { x, y:y+1.05, w:3.85, h:0.5, fontSize:13, color:INK, align:"center", fontFace:"Arial" });
+  });
+
+  // ---------- شريحة 3: توزيع المسارات ----------
+  if(trackData.length){
+    s = pptx.addSlide();
+    s.addText("توزيع المشاركين على المسارات", { x:0.5, y:0.35, w:12, h:0.7, fontSize:26, bold:true, color:NAVY, align:"right", fontFace:"Arial" });
+    s.addChart(pptx.ChartType.pie, [{
+      name: "المسارات",
+      labels: trackData.map(t => t.name),
+      values: trackData.map(t => t.count),
+    }], {
+      x:2.5, y:1.3, w:8, h:5.5,
+      showTitle:false, showLegend:true, legendPos:"b",
+      showValue:true, dataLabelColor:"FFFFFF", dataLabelFontSize:11,
+      chartColors:[NAVY, TEAL, GOLD, "5B3E96", "C0392B", "8b96a8"],
+    });
+  }
+
+  // ---------- شريحة 4: حالة الفرق ----------
+  s = pptx.addSlide();
+  s.addText("حالة الفرق", { x:0.5, y:0.35, w:12, h:0.7, fontSize:26, bold:true, color:NAVY, align:"right", fontFace:"Arial" });
+  s.addChart(pptx.ChartType.bar, [{
+    name: "عدد الفرق",
+    labels: ["مؤكدة","قيد المراجعة","منسحبة","مستبعدة"],
+    values: [teamStatusCounts.confirmed, teamStatusCounts.pending, teamStatusCounts.withdrawn, teamStatusCounts.disqualified],
+  }], {
+    x:1, y:1.3, w:11, h:5.5,
+    showTitle:false, showLegend:false, showValue:true,
+    dataLabelPosition:"outEnd", dataLabelColor:INK,
+    chartColors:[TEAL],
+    catAxisLabelColor:INK, valAxisLabelColor:INK,
+    valGridLine:{color:"E4E6EF", size:1}, catGridLine:{style:"none"},
+    barDir:"col",
+  });
+
+  // ---------- شريحة 5: الإرشاد والتحكيم ----------
+  s = pptx.addSlide();
+  s.addText("الإرشاد والتحكيم", { x:0.5, y:0.35, w:12, h:0.7, fontSize:26, bold:true, color:NAVY, align:"right", fontFace:"Arial" });
+  const mjCards = [
+    ["عدد المرشدين", extraMentors.count ?? 0],
+    ["عدد المحكّمين", extraJudges.count ?? 0],
+    ["جلسات الإرشاد المحجوزة", extraBookings.count ?? 0],
+    ["جولات التحكيم", extraRounds.count ?? 0],
+    ["جلسات/ورش التحضير", extraPrep.count ?? 0],
+    ["الفعاليات العامة", extraEvents.count ?? 0],
+  ];
+  mjCards.forEach((card, i) => {
+    const col = i % 3, row = Math.floor(i / 3);
+    const x = 0.5 + col * 4.15, y = 1.3 + row * 2.1;
+    s.addShape(pptx.ShapeType.roundRect, { x, y, w:3.85, h:1.8, rectRadius:0.12, fill:{color:"FFFFFF"}, line:{color:"E4E6EF", width:1} });
+    s.addText(String(card[1]), { x, y:y+0.25, w:3.85, h:0.8, fontSize:32, bold:true, color:GOLD, align:"center", fontFace:"Arial" });
+    s.addText(card[0], { x, y:y+1.05, w:3.85, h:0.5, fontSize:13, color:INK, align:"center", fontFace:"Arial" });
+  });
+
+  // ---------- شريحة 6: الشهادات الصادرة ----------
+  const certTypes = certTypesRes.data || [];
+  if(certTypes.length){
+    s = pptx.addSlide();
+    s.addText("الشهادات الصادرة حسب النوع", { x:0.5, y:0.35, w:12, h:0.7, fontSize:26, bold:true, color:NAVY, align:"right", fontFace:"Arial" });
+    s.addChart(pptx.ChartType.bar, [{
+      name: "عدد الشهادات",
+      labels: certTypes.map(c => c.name_ar),
+      values: certTypes.map(c => c.certificates?.[0]?.count ?? 0),
+    }], {
+      x:1, y:1.3, w:11, h:5.5,
+      showTitle:false, showLegend:false, showValue:true,
+      dataLabelPosition:"outEnd", dataLabelColor:INK,
+      chartColors:[NAVY],
+      catAxisLabelColor:INK, valAxisLabelColor:INK,
+      valGridLine:{color:"E4E6EF", size:1}, catGridLine:{style:"none"},
+      barDir:"col",
+    });
+  }
+
+  // ---------- شريحة 7: الرضا والتقييم ----------
+  const sat = satisfactionRes.data || [];
+  if(sat.length){
+    s = pptx.addSlide();
+    s.addText("الرضا والتقييم", { x:0.5, y:0.35, w:12, h:0.7, fontSize:26, bold:true, color:NAVY, align:"right", fontFace:"Arial" });
+    const rows = [
+      [
+        { text:"الاستبيان", options:{bold:true, color:"FFFFFF", fill:{color:NAVY}} },
+        { text:"المرحلة", options:{bold:true, color:"FFFFFF", fill:{color:NAVY}} },
+        { text:"عدد الردود", options:{bold:true, color:"FFFFFF", fill:{color:NAVY}} },
+        { text:"متوسط NPS", options:{bold:true, color:"FFFFFF", fill:{color:NAVY}} },
+        { text:"نسبة المروّجين", options:{bold:true, color:"FFFFFF", fill:{color:NAVY}} },
+      ],
+      ...sat.map(row => [
+        String(row.survey_title||""), String(row.target_stage||""),
+        String(row.responses_count ?? 0), String(row.avg_nps ?? "—"),
+        (row.promoters_pct ?? "—") + "%",
+      ])
+    ];
+    s.addTable(rows, { x:0.5, y:1.3, w:12.3, fontSize:12, color:INK, align:"center", border:{color:"E4E6EF", pt:1}, autoPage:false });
+  }
+
+  // ---------- شريحة الختام ----------
+  s = pptx.addSlide();
+  s.background = { color: NAVY };
+  s.addText("شكرًا لكم", { x:0.6, y:2.9, w:12, h:1, fontSize:36, bold:true, color:"FFFFFF", align:"right", fontFace:"Arial" });
+  s.addText("مركز الابتكار والملكية الفكرية (ICIP) — جامعة القصيم", { x:0.6, y:3.8, w:12, h:0.5, fontSize:14, color:"C8D3E8", align:"right", fontFace:"Arial" });
+
+  progress.textContent = "جاري التنزيل...";
+  await pptx.writeFile({ fileName: `تقرير-هاكاثون-إنفاذ-${new Date().toISOString().slice(0,10)}.pptx` });
+
+  progress.textContent = "✅ تم تنزيل التقرير بنجاح";
+  btn.disabled = false;
+}
+
 async function renderSystemCheck(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header"><div><h1>فحص النظام</h1><p>تحقق سريع من أن كل مكوّنات المنصة تعمل بشكل صحيح</p></div></div>
@@ -2897,6 +3190,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r41</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r43</div>
 </body>
 </html>

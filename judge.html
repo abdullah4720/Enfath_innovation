@@ -82,14 +82,30 @@
       <button class="btn-link" onclick="handleLogout()">تسجيل الخروج</button>
     </div>
   </header>
-  <main id="main-content">جاري التحميل...</main>
+  <main>
+    <div class="tabs" style="display:flex;gap:8px;margin-bottom:16px">
+      <div class="tab active" id="judge-tab-teams" onclick="switchJudgeTab('teams')" style="cursor:pointer;padding:9px 18px;border-radius:20px;background:var(--navy);color:#fff;font-size:13px">الفرق والتقييم</div>
+      <div class="tab" id="judge-tab-certs" onclick="switchJudgeTab('certs')" style="cursor:pointer;padding:9px 18px;border-radius:20px;background:#f0f1f5;color:var(--ink);font-size:13px">شهاداتي</div>
+    </div>
+    <div id="main-content">جاري التحميل...</div>
+  </main>
 </div>
+
+<div id="modal-overlay" style="display:flex; position:fixed; inset:0; background:rgba(11,19,38,.5); align-items:center; justify-content:center; z-index:100; padding:20px; opacity:0; pointer-events:none; transition:opacity .15s;">
+  <div id="modal-box" style="background:#fff; border-radius:14px; padding:24px; width:100%; max-width:440px;"></div>
+</div>
+<style>
+  #modal-overlay.active{ opacity:1; pointer-events:auto; }
+</style>
 
 <script>
 const SUPABASE_URL = "https://tuyomqhvdjpsayecystf.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+document.getElementById("modal-overlay").addEventListener("click", (e)=>{
+  if(e.target.id === "modal-overlay") e.target.classList.remove("active");
+});
 let currentUser = null;
 let activeRound = null;
 let criteriaList = [];
@@ -146,6 +162,69 @@ async function showContent(){
   await loadAssignments();
 }
 
+function switchJudgeTab(tab){
+  document.getElementById("judge-tab-teams").style.background = tab==="teams" ? "var(--navy)" : "#f0f1f5";
+  document.getElementById("judge-tab-teams").style.color = tab==="teams" ? "#fff" : "var(--ink)";
+  document.getElementById("judge-tab-certs").style.background = tab==="certs" ? "var(--navy)" : "#f0f1f5";
+  document.getElementById("judge-tab-certs").style.color = tab==="certs" ? "#fff" : "var(--ink)";
+  if(tab === "teams") loadAssignments();
+  else renderJudgeCertsTab();
+}
+async function renderJudgeCertsTab(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="card">جاري التحميل...</div>`;
+
+  const { data: types, error } = await sb.from("certificate_types").select("*").eq("is_active", true).or("role_key.eq.judge,role_key.is.null");
+  if(error){ main.innerHTML = `<div class="card"><p class="hint">خطأ: ${esc(error.message)}</p></div>`; return; }
+  if(!types || !types.length){ main.innerHTML = `<div class="card"><h3>شهاداتي</h3><p class="hint">لا توجد شهادات متاحة لفئة المحكّمين بعد</p></div>`; return; }
+
+  const { data: myCerts } = await sb.from("certificates").select("cert_type_id, verification_code, issued_at").eq("user_id", currentUser.id);
+  const issuedMap = {};
+  (myCerts||[]).forEach(c => issuedMap[c.cert_type_id] = c);
+
+  main.innerHTML = `<div class="card"><h3 style="margin:0 0 14px">شهاداتي</h3>
+    ${types.map(t => {
+      const issued = issuedMap[t.id];
+      return `<div class="member-row">
+        <span>${esc(t.name_ar)}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          ${issued
+            ? `<span class="badge badge-green">صادرة</span><button class="btn-link" style="font-size:12px" onclick='previewJudgeCert(${JSON.stringify({typeName: t.name_ar, text: t.certificate_text, code: issued.verification_code, date: issued.issued_at})})'>معاينة</button>`
+            : `<button class="btn btn-outline btn-sm" style="width:auto" onclick="issueJudgeCertificate('${t.key}')">إصدار الشهادة</button>`}
+        </span>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+async function issueJudgeCertificate(certKey){
+  const { data, error } = await sb.rpc("issue_certificate", { p_cert_type_key: certKey });
+  if(error){ alert("خطأ: " + error.message); return; }
+  if(!data.success){ alert("لم تكتمل الشروط بعد لإصدار هذه الشهادة"); return; }
+  renderJudgeCertsTab();
+}
+async function previewJudgeCert({typeName, text, code, date}){
+  const { data: p } = await sb.from("profiles").select("full_name").eq("id", currentUser.id).single();
+  const name = p?.full_name || "";
+  const bodyText = (text || "نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ.")
+    .replace(/\{\{name\}\}/g, name).replace(/\{\{type\}\}/g, typeName)
+    .replace(/\{\{date\}\}/g, date ? new Date(date).toLocaleDateString('ar-SA') : "")
+    .replace(/\{\{code\}\}/g, code || "");
+  const overlay = document.getElementById("modal-overlay");
+  const box = document.getElementById("modal-box");
+  box.innerHTML = `
+    <div style="border:3px double var(--gold); border-radius:12px; padding:30px 24px; text-align:center; background:linear-gradient(180deg,#fdfdfb,#f7f5ef)">
+      <div style="font-size:11px; letter-spacing:.1em; color:var(--gold); font-weight:700; margin-bottom:10px">شهادة ${esc(typeName)}</div>
+      <h2 style="margin:0 0 4px">${esc(name)}</h2>
+      <div style="width:60px; height:2px; background:var(--gold); margin:14px auto"></div>
+      <p style="font-size:14px; line-height:1.9; margin:16px 0">${esc(bodyText)}</p>
+      <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:24px; border-top:1px solid var(--border); padding-top:12px">
+        <span>رمز التحقق: ${esc(code||"—")}</span><span>${date ? new Date(date).toLocaleDateString('ar-SA') : ""}</span>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" onclick="document.getElementById('modal-overlay').classList.remove('active')">إغلاق</button></div>
+  `;
+  overlay.classList.add("active");
+}
 async function loadAssignments(){
   const main = document.getElementById("main-content");
 
@@ -276,6 +355,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r40</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r43</div>
 </body>
 </html>

@@ -83,6 +83,7 @@
       <div class="tab" data-t="add">إضافة موعد جديد</div>
       <div class="tab" data-t="bulk">إضافة مواعيد بالجملة</div>
       <div class="tab" data-t="profile">ملفي الشخصي</div>
+      <div class="tab" data-t="certs">شهاداتي</div>
     </div>
     <div id="main-content">جاري التحميل...</div>
   </main>
@@ -172,7 +173,62 @@ function renderTab(){
   if(currentTab === "slots") renderSlots();
   else if(currentTab === "add") renderAddSlot();
   else if(currentTab === "bulk") renderBulkAddSlots();
+  else if(currentTab === "certs") renderMentorCertsTab();
   else renderMyProfile();
+}
+
+/* ---------------- شهاداتي ---------------- */
+async function renderMentorCertsTab(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="card">جاري التحميل...</div>`;
+
+  const { data: types, error } = await sb.from("certificate_types").select("*").eq("is_active", true).or("role_key.eq.mentor,role_key.is.null");
+  if(error){ main.innerHTML = `<div class="card"><p class="hint">خطأ: ${esc(error.message)}</p></div>`; return; }
+  if(!types || !types.length){ main.innerHTML = `<div class="card"><h3>شهاداتي</h3><p class="hint">لا توجد شهادات متاحة لفئة المرشدين بعد</p></div>`; return; }
+
+  const { data: myCerts } = await sb.from("certificates").select("cert_type_id, verification_code, issued_at").eq("user_id", currentUser.id);
+  const issuedMap = {};
+  (myCerts||[]).forEach(c => issuedMap[c.cert_type_id] = c);
+
+  main.innerHTML = `<div class="card"><h3 style="margin:0 0 14px">شهاداتي</h3>
+    ${types.map(t => {
+      const issued = issuedMap[t.id];
+      return `<div class="member-row">
+        <span>${esc(t.name_ar)}</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          ${issued
+            ? `<span class="badge badge-green">صادرة</span><button class="btn-link" style="font-size:12px" onclick='previewMentorCert(${JSON.stringify({name: "", typeName: t.name_ar, text: t.certificate_text, code: issued.verification_code, date: issued.issued_at})})'>معاينة</button>`
+            : `<button class="btn btn-outline btn-sm" style="width:auto" onclick="issueMentorCertificate('${t.key}')">إصدار الشهادة</button>`}
+        </span>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+async function issueMentorCertificate(certKey){
+  const { data, error } = await sb.rpc("issue_certificate", { p_cert_type_key: certKey });
+  if(error){ alert("خطأ: " + error.message); return; }
+  if(!data.success){ alert("لم تكتمل الشروط بعد لإصدار هذه الشهادة"); return; }
+  renderMentorCertsTab();
+}
+async function previewMentorCert({typeName, text, code, date}){
+  const { data: p } = await sb.from("profiles").select("full_name").eq("id", currentUser.id).single();
+  const name = p?.full_name || "";
+  const bodyText = (text || "نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ.")
+    .replace(/\{\{name\}\}/g, name).replace(/\{\{type\}\}/g, typeName)
+    .replace(/\{\{date\}\}/g, date ? new Date(date).toLocaleDateString('ar-SA') : "")
+    .replace(/\{\{code\}\}/g, code || "");
+  openModal(`
+    <div style="border:3px double var(--gold); border-radius:12px; padding:30px 24px; text-align:center; background:linear-gradient(180deg,#fdfdfb,#f7f5ef)">
+      <div style="font-size:11px; letter-spacing:.1em; color:var(--gold); font-weight:700; margin-bottom:10px">شهادة ${esc(typeName)}</div>
+      <h2 style="margin:0 0 4px">${esc(name)}</h2>
+      <div style="width:60px; height:2px; background:var(--gold); margin:14px auto"></div>
+      <p style="font-size:14px; line-height:1.9; margin:16px 0">${esc(bodyText)}</p>
+      <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); margin-top:24px; border-top:1px solid var(--border); padding-top:12px">
+        <span>رمز التحقق: ${esc(code||"—")}</span><span>${date ? new Date(date).toLocaleDateString('ar-SA') : ""}</span>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
+  `);
 }
 
 /* ---------------- ملفي الشخصي ---------------- */
@@ -543,6 +599,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r41</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r43</div>
 </body>
 </html>

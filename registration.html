@@ -1024,7 +1024,7 @@ async function renderCertsTab(){
   const body = document.getElementById("dash-tab-body");
   body.innerHTML = `<div class="card">جاري التحميل...</div>`;
 
-  const { data: types, error } = await sb.from("certificate_types").select("*").eq("is_active", true);
+  const { data: types, error } = await sb.from("certificate_types").select("*").eq("is_active", true).or("role_key.eq.participant,role_key.is.null");
   if(error){ body.innerHTML = `<div class="card"><div class="hint">خطأ: ${esc(error.message)}</div></div>`; return; }
 
   const { data: myCerts } = await sb.from("certificates").select("cert_type_id, verification_code, issued_at").eq("user_id", currentUser.id);
@@ -1351,6 +1351,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r41</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r43</div>
 </body>
 </html>
