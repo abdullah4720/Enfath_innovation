@@ -2577,7 +2577,7 @@ async function renderParticipants(){
     <div class="card"><div id="participants-table">جاري التحميل...</div></div>`;
 
   const { data: profiles, error } = await sb.from("profiles")
-    .select("id, full_name, email, phone, organization, created_at, user_roles!user_roles_user_id_fkey(roles(name_ar)), team_members(is_leader, teams(team_name, team_code, tracks(name_ar)))")
+    .select("id, full_name, email, phone, organization, category, city, age_range, gender, project_role, created_at, user_roles!user_roles_user_id_fkey(roles(name_ar)), team_members(is_leader, teams(team_name, team_code, tracks(name_ar)))")
     .order("created_at", {ascending:false});
 
   const box = document.getElementById("participants-table");
@@ -2649,14 +2649,16 @@ function renderParticipantsTable(data){
   if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج</div>`; return; }
 
   box.innerHTML = `<table><thead><tr>
-    <th>الاسم</th><th>البريد / الجوال</th><th>الجهة</th><th>الأدوار</th><th>الفريق</th><th>تاريخ التسجيل</th>
+    <th>الاسم</th><th>البريد / الجوال</th><th>الفئة / الجهة</th><th>الديموغرافيا</th><th>دور المشروع</th><th>الأدوار</th><th>الفريق</th><th>تاريخ التسجيل</th>
     </tr></thead><tbody>
     ${data.map(p => {
       const membership = (p.team_members||[])[0];
       return `<tr>
         <td>${esc(p.full_name)} ${p._imported ? '<span class="badge badge-gray">مستورد — لم يسجّل بعد</span>' : ''}</td>
         <td>${esc(p.email||"—")}<br><span style="color:var(--muted);font-size:12px">${esc(p.phone||"")}</span></td>
-        <td>${esc(p.organization||"—")}</td>
+        <td>${esc(p.category||"—")}<br><span style="color:var(--muted);font-size:12px">${esc(p.organization||"")}</span></td>
+        <td style="font-size:12px;color:var(--muted)">${esc(p.city||"—")}${p.age_range ? " · " + esc(p.age_range) : ""}${p.gender ? " · " + esc(p.gender) : ""}</td>
+        <td>${esc(p.project_role||"—")}</td>
         <td>${(p.user_roles||[]).map(r=>`<span class="badge badge-green" style="margin-left:4px">${esc(r.roles?.name_ar||"")}</span>`).join("") || "—"}</td>
         <td>${membership ? `${esc(membership.teams?.team_name||"")} <code style="font-size:10px;color:var(--gold)">${esc(membership.teams?.team_code||"")}</code> ${membership.is_leader ? '<span class="badge badge-gold">قائد</span>' : ""}<br><span style="color:var(--muted);font-size:12px">${esc(membership.teams?.tracks?.name_ar||"")}</span>` : (p._track ? `<span style="color:var(--muted)">مسار متوقّع: ${esc(p._track)}</span>` : '<span style="color:var(--muted)">بدون فريق</span>')}</td>
         <td>${fmtDate(p.created_at)}</td>
@@ -2673,7 +2675,9 @@ function exportParticipantsExcel(){
     const membership = (p.team_members||[])[0];
     return {
       "الاسم": p.full_name, "البريد": p.email, "الجوال": p.phone || "",
-      "الجهة": p.organization || "", "الأدوار": (p.user_roles||[]).map(r=>r.roles?.name_ar).join("، "),
+      "الفئة": p.category || "", "الجهة": p.organization || "", "المدينة": p.city || "",
+      "الفئة العمرية": p.age_range || "", "الجنس": p.gender || "", "دور المشروع": p.project_role || "",
+      "الأدوار": (p.user_roles||[]).map(r=>r.roles?.name_ar).join("، "),
       "الفريق": membership?.teams?.team_name || "", "رمز الفريق": membership?.teams?.team_code || "", "المسار": membership?.teams?.tracks?.name_ar || "",
       "قائد فريق": membership?.is_leader ? "نعم" : "لا", "تاريخ التسجيل": fmtDate(p.created_at)
     };
@@ -2713,6 +2717,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r36</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r38</div>
 </body>
 </html>

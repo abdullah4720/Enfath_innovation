@@ -47,7 +47,7 @@
     font-family:inherit; font-size:14px; background:#fafbfc; transition:.15s;
   }
   .field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--teal); background:#fff;}
-  .field input.field-invalid{border-color:var(--danger); background:#fdf5f4;}
+  .field input.field-invalid, .field select.field-invalid{border-color:var(--danger); background:#fdf5f4;}
   .hint{font-size:11.5px; color:var(--muted); margin-top:5px;}
 
   .btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; border:none; border-radius:10px;
@@ -147,12 +147,83 @@
     <!-- تسجيل جديد -->
     <div id="signup-form">
       <h2>إنشاء حساب مشارك</h2>
-      <p class="sub">خطوة واحدة، ثم تختار مسارك وتنشئ فريقك أو تنضم لفريق</p>
-      <div class="field"><label>الاسم الكامل</label><input id="su-name" placeholder="الاسم الثلاثي"></div>
+      <p class="sub">عبّي بياناتك، ثم تختار مسارك وتنشئ فريقك أو تنضم لفريق</p>
+
+      <h4 style="font-size:12.5px;color:var(--muted);margin:16px 0 10px">البيانات الأساسية</h4>
+      <div class="field"><label>الاسم الثلاثي</label><input id="su-name" placeholder="مثال: عبدالله محمد العييدي"></div>
       <div class="field"><label>البريد الإلكتروني</label><input type="email" id="su-email"></div>
       <div class="field"><label>رقم الجوال</label><input id="su-phone" placeholder="05xxxxxxxx"></div>
-      <div class="field"><label>الجهة (جامعة / شركة / جهة حكومية)</label><input id="su-org"></div>
       <div class="field"><label>كلمة المرور</label><input type="password" id="su-password"></div>
+
+      <h4 style="font-size:12.5px;color:var(--muted);margin:20px 0 10px">بيانات إضافية</h4>
+      <div class="form-row-2">
+        <div class="field"><label>الفئة</label>
+          <select id="su-category">
+            <option value="">اختر الفئة</option>
+            <option value="طالب">طالب</option>
+            <option value="خريج">خريج</option>
+            <option value="عضو هيئة تدريس">عضو هيئة تدريس</option>
+            <option value="أخرى">أخرى</option>
+          </select>
+        </div>
+        <div class="field"><label>المدينة</label><input id="su-city" placeholder="مثال: بريدة"></div>
+      </div>
+
+      <div class="field">
+        <label>الجهة</label>
+        <input id="su-org" list="org-suggestions" placeholder="اكتب أو اختر من القائمة">
+        <datalist id="org-suggestions">
+          <option value="جامعة القصيم">
+          <option value="جامعة الملك سعود">
+          <option value="جامعة الملك عبدالعزيز">
+          <option value="جامعة الملك فهد للبترول والمعادن">
+          <option value="جامعة الإمام محمد بن سعود الإسلامية">
+          <option value="جامعة الأميرة نورة بنت عبدالرحمن">
+          <option value="جامعة الملك خالد">
+          <option value="جامعة أم القرى">
+          <option value="جامعة طيبة">
+          <option value="وزارة العدل">
+          <option value="وزارة الداخلية">
+          <option value="ديوان المظالم">
+          <option value="هيئة الخبراء بمجلس الوزراء">
+          <option value="وزارة الاتصالات وتقنية المعلومات">
+          <option value="أخرى">
+        </datalist>
+      </div>
+
+      <div class="form-row-2">
+        <div class="field"><label>الفئة العمرية</label>
+          <select id="su-age">
+            <option value="">اختر</option>
+            <option value="أقل من 18">أقل من 18</option>
+            <option value="18–24">18–24</option>
+            <option value="25–34">25–34</option>
+            <option value="35–44">35–44</option>
+            <option value="45 فأكثر">45 فأكثر</option>
+          </select>
+        </div>
+        <div class="field"><label>الجنس</label>
+          <select id="su-gender">
+            <option value="">اختر</option>
+            <option value="ذكر">ذكر</option>
+            <option value="أنثى">أنثى</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field"><label>دورك المتوقع بالمشروع</label>
+        <select id="su-project-role" onchange="document.getElementById('su-role-other-box').style.display = this.value==='أخرى' ? 'block' : 'none'">
+          <option value="">اختر الدور</option>
+          <option value="تقني">تقني (برمجة/تطوير)</option>
+          <option value="إداري">إداري</option>
+          <option value="مالي">مالي</option>
+          <option value="قانوني">قانوني</option>
+          <option value="تسويقي">تسويقي</option>
+          <option value="أخرى">أخرى</option>
+        </select>
+      </div>
+      <div class="field" id="su-role-other-box" style="display:none"><label>حدّد الدور</label><input id="su-role-other" placeholder="اكتب دورك بالمشروع"></div>
+
       <button class="btn btn-primary" id="su-btn" onclick="handleSignup()">إنشاء الحساب والمتابعة</button>
     </div>
 
@@ -278,13 +349,18 @@ sb.auth.onAuthStateChange((event) => {
 /* ---------------- إنشاء حساب ---------------- */
 function validateSignupFields(){
   const fields = {
-    "su-name": v => v.trim().length >= 4 ? null : "الاسم الكامل مطلوب (4 أحرف على الأقل)",
+    "su-name": v => v.trim().split(/\s+/).filter(Boolean).length >= 3 ? null : "أدخل الاسم الثلاثي كاملًا (3 أجزاء على الأقل)",
     "su-email": v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) ? null : "صيغة البريد الإلكتروني غير صحيحة",
     "su-phone": v => /^(05|5)\d{8}$/.test(v.trim().replace(/\s|-/g,"")) ? null : "رقم الجوال يجب أن يكون بصيغة سعودية صحيحة (05xxxxxxxx)",
-    "su-org": v => v.trim().length >= 2 ? null : "الجهة مطلوبة",
     "su-password": v => v.length >= 6 ? null : "كلمة المرور يجب ألا تقل عن 6 أحرف",
+    "su-category": v => v ? null : "اختر الفئة",
+    "su-city": v => v.trim().length >= 2 ? null : "المدينة مطلوبة",
+    "su-org": v => v.trim().length >= 2 ? null : "الجهة مطلوبة",
+    "su-age": v => v ? null : "اختر الفئة العمرية",
+    "su-gender": v => v ? null : "اختر الجنس",
+    "su-project-role": v => v ? null : "اختر دورك المتوقع بالمشروع",
   };
-  document.querySelectorAll("#signup-form input").forEach(el => el.classList.remove("field-invalid"));
+  document.querySelectorAll("#signup-form input, #signup-form select").forEach(el => el.classList.remove("field-invalid"));
 
   for(const [id, check] of Object.entries(fields)){
     const el = document.getElementById(id);
@@ -294,6 +370,11 @@ function validateSignupFields(){
       el.focus();
       return err;
     }
+  }
+  if(document.getElementById("su-project-role").value === "أخرى" && !document.getElementById("su-role-other").value.trim()){
+    document.getElementById("su-role-other").classList.add("field-invalid");
+    document.getElementById("su-role-other").focus();
+    return "حدّد دورك بالمشروع";
   }
   return null;
 }
@@ -309,6 +390,12 @@ async function handleSignup(){
   if(phone.startsWith("5")) phone = "0" + phone;
   const organization = document.getElementById("su-org").value.trim();
   const password = document.getElementById("su-password").value;
+  const category = document.getElementById("su-category").value;
+  const city = document.getElementById("su-city").value.trim();
+  const age_range = document.getElementById("su-age").value;
+  const gender = document.getElementById("su-gender").value;
+  const roleSelect = document.getElementById("su-project-role").value;
+  const project_role = roleSelect === "أخرى" ? document.getElementById("su-role-other").value.trim() : roleSelect;
 
   const btn = document.getElementById("su-btn");
   btn.disabled = true; btn.innerHTML = '<span class="loader"></span>';
@@ -324,7 +411,7 @@ async function handleSignup(){
   }
 
   // ملاحظة: الملف الشخصي والدور يُنشآن تلقائيًا عبر trigger بقاعدة البيانات
-  // (راجع 06_auth_trigger.sql) — لا حاجة لإدخال يدوي هنا
+  // (راجع 06_auth_trigger.sql) — نكمّل هنا بالحقول الإضافية بعد إنشاء الجلسة
 
   if(!data.session){
     btn.disabled = false; btn.textContent = "إنشاء الحساب والمتابعة";
@@ -333,6 +420,7 @@ async function handleSignup(){
   }
 
   currentUser = data.user;
+  await sb.from("profiles").update({ category, city, age_range, gender, project_role }).eq("id", currentUser.id);
   await loadProfile();
   showSignupSuccessThenDashboard();
 }
@@ -1224,6 +1312,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r37</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r38</div>
 </body>
 </html>
