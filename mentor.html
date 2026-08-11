@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
   :root{
     --navy:#1A2E5A; --navy-dark:#0D1B3E; --navy-light:#2A3D6B; --purple:#5B3E96; --teal:#1F9E8E;
@@ -79,11 +80,11 @@
   </header>
   <main>
     <div class="tabs" id="tabs-bar">
-      <div class="tab active" data-t="slots">مواعيدي</div>
-      <div class="tab" data-t="add">إضافة موعد جديد</div>
-      <div class="tab" data-t="bulk">إضافة مواعيد بالجملة</div>
-      <div class="tab" data-t="profile">ملفي الشخصي</div>
-      <div class="tab" data-t="certs">شهاداتي</div>
+      <div class="tab active" data-t="slots"><i data-lucide="calendar-clock" style="width:14px;height:14px;vertical-align:-2px"></i> مواعيدي</div>
+      <div class="tab" data-t="add"><i data-lucide="calendar-plus" style="width:14px;height:14px;vertical-align:-2px"></i> إضافة موعد جديد</div>
+      <div class="tab" data-t="bulk"><i data-lucide="calendar-range" style="width:14px;height:14px;vertical-align:-2px"></i> إضافة مواعيد بالجملة</div>
+      <div class="tab" data-t="profile"><i data-lucide="user-round" style="width:14px;height:14px;vertical-align:-2px"></i> ملفي الشخصي</div>
+      <div class="tab" data-t="certs"><i data-lucide="award" style="width:14px;height:14px;vertical-align:-2px"></i> شهاداتي</div>
     </div>
     <div id="main-content">جاري التحميل...</div>
   </main>
@@ -158,6 +159,14 @@ restoreSession();
 async function showContent(){
   document.getElementById("auth-gate-screen").style.display = "none";
   document.getElementById("content-screen").style.display = "block";
+  if(window.lucide){
+    lucide.createIcons();
+    const observer = new MutationObserver(() => {
+      clearTimeout(window._lucideDebounce);
+      window._lucideDebounce = setTimeout(() => lucide.createIcons(), 60);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
   document.getElementById("tabs-bar").addEventListener("click", e => {
     const tab = e.target.closest(".tab");
     if(!tab) return;
@@ -313,7 +322,7 @@ async function renderSlots(){
             ${booking.requested_topic ? `<br>الموضوع المطلوب: ${esc(booking.requested_topic)}` : ""}
             ${submission ? `
               <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
-                📁 المشروع: <strong>${esc(submission.title)}</strong>
+                <i data-lucide="folder" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> المشروع: <strong>${esc(submission.title)}</strong>
                 ${submission.file_url ? `<br><a href="${esc(submission.file_url)}" target="_blank" style="color:var(--teal);font-weight:600">فتح ملف المشروع ↗</a>` : '<br><span style="color:var(--muted)">لا يوجد ملف مرفق</span>'}
               </div>
             ` : `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);color:var(--muted)">لم يقدّم الفريق مشروعه بعد</div>`}
@@ -398,7 +407,7 @@ async function renderAddSlot(){
   const win = await getMentorshipWindow();
   main.innerHTML = `<div class="card">
     <h3 style="margin:0 0 16px">إضافة موعد إرشاد جديد</h3>
-    ${(win.start || win.end) ? `<p class="hint" style="margin:-10px 0 16px;padding:8px 12px;background:#f8f9fb;border-radius:8px">📅 الفترة المسموحة: ${win.start ? fmtDate(win.start) : "بلا حد أدنى"} → ${win.end ? fmtDate(win.end) : "بلا حد أقصى"}</p>` : ""}
+    ${(win.start || win.end) ? `<p class="hint" style="margin:-10px 0 16px;padding:8px 12px;background:#f8f9fb;border-radius:8px"><i data-lucide="calendar" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> الفترة المسموحة: ${win.start ? fmtDate(win.start) : "بلا حد أدنى"} → ${win.end ? fmtDate(win.end) : "بلا حد أقصى"}</p>` : ""}
     <div class="field"><label>التاريخ</label><input type="date" id="slot-date"></div>
     <div class="form-row-2">
       <div class="field"><label>وقت البداية</label>
@@ -465,7 +474,7 @@ async function renderBulkAddSlots(){
   main.innerHTML = `<div class="card">
     <h3 style="margin:0 0 6px">إضافة مواعيد بالجملة</h3>
     <p class="hint" style="margin:0 0 10px">حدّد يوم ونطاق وقت، والنظام يولّد لك مواعيد متتالية تلقائيًا</p>
-    ${(win.start || win.end) ? `<p class="hint" style="margin:0 0 16px;padding:8px 12px;background:#f8f9fb;border-radius:8px">📅 الفترة المسموحة: ${win.start ? fmtDate(win.start) : "بلا حد أدنى"} → ${win.end ? fmtDate(win.end) : "بلا حد أقصى"}</p>` : ""}
+    ${(win.start || win.end) ? `<p class="hint" style="margin:0 0 16px;padding:8px 12px;background:#f8f9fb;border-radius:8px"><i data-lucide="calendar" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> الفترة المسموحة: ${win.start ? fmtDate(win.start) : "بلا حد أدنى"} → ${win.end ? fmtDate(win.end) : "بلا حد أقصى"}</p>` : ""}
     <div class="field"><label>التاريخ</label><input type="date" id="bulk-date"></div>
     <div class="form-row-2">
       <div class="field"><label>من الساعة</label><select id="bulk-start-time">${generateTimeOptions()}</select></div>
@@ -599,6 +608,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r45</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r46</div>
 </body>
 </html>

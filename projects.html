@@ -146,7 +146,7 @@ async function showContent(){
 
 async function loadProjects(){
   const { data, error } = await sb.from("submissions")
-    .select("id, title, description, file_url, version, submitted_at, teams(team_name, tracks(name_ar))")
+    .select("id, title, description, file_url, version, submitted_at, teams(team_name, team_code, tracks(name_ar))")
     .order("submitted_at", {ascending:false});
   if(error){
     document.getElementById("projects-grid").innerHTML = `<div class="empty-state">تعذّر تحميل المشاريع: ${esc(error.message)}</div>`;
@@ -180,7 +180,7 @@ function renderProjectsList(highlightId){
           <h3>${esc(p.title)}</h3>
           <span class="badge">إصدار ${p.version}</span>
         </div>
-        <div class="meta">${esc(p.teams?.team_name||"")} · ${esc(p.teams?.tracks?.name_ar||"")}</div>
+        <div class="meta">${esc(p.teams?.team_name||"")} <code style="font-size:10.5px;color:var(--gold)">${esc(p.teams?.team_code||"")}</code> · ${esc(p.teams?.tracks?.name_ar||"")}</div>
         <p class="desc">${esc(p.description||"لا يوجد وصف بعد")}</p>
         ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" class="file-link">📎 فتح الملف المرفق</a>` : ""}
         <div class="updated">آخر تحديث: ${fmtDate(p.submitted_at)}</div>

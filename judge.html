@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
   :root{
     --navy:#1A2E5A; --navy-dark:#0D1B3E; --navy-light:#2A3D6B; --purple:#5B3E96; --teal:#1F9E8E;
@@ -84,8 +85,8 @@
   </header>
   <main>
     <div class="tabs" style="display:flex;gap:8px;margin-bottom:16px">
-      <div class="tab active" id="judge-tab-teams" onclick="switchJudgeTab('teams')" style="cursor:pointer;padding:9px 18px;border-radius:20px;background:var(--navy);color:#fff;font-size:13px">الفرق والتقييم</div>
-      <div class="tab" id="judge-tab-certs" onclick="switchJudgeTab('certs')" style="cursor:pointer;padding:9px 18px;border-radius:20px;background:#f0f1f5;color:var(--ink);font-size:13px">شهاداتي</div>
+      <div class="tab active" id="judge-tab-teams" onclick="switchJudgeTab('teams')" style="cursor:pointer;padding:9px 18px;border-radius:20px;background:var(--navy);color:#fff;font-size:13px"><i data-lucide="scale" style="width:14px;height:14px;vertical-align:-2px"></i> الفرق والتقييم</div>
+      <div class="tab" id="judge-tab-certs" onclick="switchJudgeTab('certs')" style="cursor:pointer;padding:9px 18px;border-radius:20px;background:#f0f1f5;color:var(--ink);font-size:13px"><i data-lucide="award" style="width:14px;height:14px;vertical-align:-2px"></i> شهاداتي</div>
     </div>
     <div id="main-content">جاري التحميل...</div>
   </main>
@@ -157,6 +158,14 @@ restoreSession();
 async function showContent(){
   document.getElementById("auth-gate-screen").style.display = "none";
   document.getElementById("content-screen").style.display = "block";
+  if(window.lucide){
+    lucide.createIcons();
+    const observer = new MutationObserver(() => {
+      clearTimeout(window._lucideDebounce);
+      window._lucideDebounce = setTimeout(() => lucide.createIcons(), 60);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
   const { data: profile } = await sb.from("profiles").select("full_name").eq("id", currentUser.id).maybeSingle();
   document.getElementById("judge-welcome").textContent = "مرحبًا، " + (profile?.full_name || currentUser.email);
   await loadAssignments();
@@ -282,12 +291,12 @@ async function loadAssignments(){
           `).join("")}
         </div>
       </details>
-      ${isLocked ? `<div class="alert" style="display:block;background:#fef3e2;color:#92600a">🔒 تم نشر النتائج — التعديل مقفل</div>` : ""}
+      ${isLocked ? `<div class="alert" style="display:block;background:#fef3e2;color:#92600a"><i data-lucide="lock" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> تم نشر النتائج — التعديل مقفل</div>` : ""}
       ${submission ? `
         <div class="project-box">
           <h4>${esc(submission.title)}</h4>
           <p>${esc(submission.description||"")}</p>
-          ${submission.file_url ? `<a href="${esc(submission.file_url)}" target="_blank" style="color:var(--teal);font-size:12.5px;font-weight:600">📎 فتح الملف المرفق</a>` : ""}
+          ${submission.file_url ? `<a href="${esc(submission.file_url)}" target="_blank" style="color:var(--teal);font-size:12.5px;font-weight:600"><i data-lucide="paperclip" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فتح الملف المرفق</a>` : ""}
         </div>
       ` : `<div class="project-box"><p>لم يقدّم الفريق فكرته بعد</p></div>`}
 
@@ -355,6 +364,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r45</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r46</div>
 </body>
 </html>
