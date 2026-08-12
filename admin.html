@@ -898,7 +898,10 @@ async function renderTeams(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
       <div><h1>الفرق</h1><p>متابعة حالة الفرق المسجلة عبر جميع المسارات، وأعضائها</p></div>
-      <button class="btn btn-outline" onclick="exportTeamsExcel()"><i data-lucide="download" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> تصدير Excel</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="openAddTeamModal()">+ إنشاء فريق</button>
+        <button class="btn btn-outline" onclick="exportTeamsExcel()"><i data-lucide="download" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> تصدير Excel</button>
+      </div>
     </div>
     <div class="card" style="margin-bottom:16px">
       <div class="form-row-2" style="grid-template-columns:2fr 1fr 1fr">
@@ -984,6 +987,7 @@ function renderTeamsTable(data){
             <option value="disqualified">استبعاد</option>
             <option value="withdrawn">انسحاب</option>
           </select>
+          <button class="btn btn-danger btn-sm" onclick='confirmDeleteTeam("${t.id}", ${JSON.stringify(t.team_name)})'>حذف</button>
         </div>
       </div>
       <table style="margin-top:12px"><tbody>
@@ -1045,6 +1049,50 @@ async function updateTeamStatus(id, status){
 }
 
 /* ---------------- إضافة عضو لفريق (من لوحة التحكم) ---------------- */
+async function openAddTeamModal(){
+  const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  openModal(`
+    <h3>إنشاء فريق جديد</h3>
+    <div class="field"><label>اسم الفريق</label><input id="f-team-name"></div>
+    <div class="field"><label>المسار</label>
+      <select id="f-team-track">
+        ${(tracks||[]).map(t=>`<option value="${t.id}">${esc(t.name_ar)}</option>`).join("")}
+      </select>
+    </div>
+    <p class="hint">يُنشأ الفريق مباشرة بحالة "مؤكد" وبدون أعضاء — أضف الأعضاء بعدها من زر "+ عضو"</p>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveAddTeam()">إنشاء</button>
+    </div>
+  `);
+}
+async function saveAddTeam(){
+  const team_name = document.getElementById("f-team-name").value.trim();
+  const track_id = document.getElementById("f-team-track").value;
+  if(!team_name){ showToast("اسم الفريق مطلوب", true); return; }
+  if(!track_id){ showToast("اختر المسار", true); return; }
+
+  const { data, error } = await sb.rpc("admin_create_team", { p_track_id: track_id, p_team_name: team_name });
+  if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  logActivity("إنشاء فريق يدويًا", "team", data.team_id, {name: team_name});
+  showToast("تم إنشاء الفريق");
+  closeModal();
+  renderTeams();
+}
+async function confirmDeleteTeam(teamId, teamName){
+  if(!confirm(`متأكد تبي تحذف فريق "${teamName}"؟ راح يُحذف كل أعضائه ومشاريعه وحجوزات إرشاده ودرجاته المرتبطة به. لا يمكن التراجع.`)) return;
+  await sb.from("scores").delete().eq("team_id", teamId);
+  await sb.from("judge_assignments").delete().eq("team_id", teamId);
+  await sb.from("mentor_bookings").delete().eq("team_id", teamId);
+  await sb.from("submissions").delete().eq("team_id", teamId);
+  await sb.from("team_messages").delete().eq("team_id", teamId);
+  await sb.from("team_members").delete().eq("team_id", teamId);
+  const { error } = await sb.from("teams").delete().eq("id", teamId);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("حذف فريق", "team", teamId, {name: teamName});
+  showToast("تم حذف الفريق وكل بياناته المرتبطة");
+  renderTeams();
+}
 function openAddMemberModal(teamId, teamName, currentCount, maxSize){
   openModal(`
     <h3>إضافة عضو لفريق ${esc(teamName)}</h3>
@@ -3049,7 +3097,10 @@ async function renderProjects(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
       <div><h1>المشاريع</h1><p>الأفكار المقدَّمة من الفرق — نفس ما يشاهده المرشدون والمحكّمون</p></div>
-      <a href="./projects.html" target="_blank"><button class="btn btn-outline">↗ فتح صفحة العرض المشتركة</button></a>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="openAddProjectModal()">+ إضافة مشروع</button>
+        <a href="./projects.html" target="_blank"><button class="btn btn-outline">↗ فتح صفحة العرض المشتركة</button></a>
+      </div>
     </div>
     <div class="card" id="missing-submissions-card" style="margin-bottom:16px"></div>
     <div class="card" style="margin-bottom:16px">
@@ -3105,9 +3156,55 @@ function filterProjectsView(){
         <p style="font-size:13.5px;color:var(--ink);line-height:1.6">${esc((p.description||"").substring(0,160))}${(p.description||"").length>160?"…":""}</p>
         ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600"><i data-lucide="paperclip" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فتح الملف المرفق</a>` : ""}
         <p class="hint" style="margin-top:10px">آخر تحديث: ${fmtDate(p.submitted_at)}</p>
+        <div class="row-actions" style="margin-top:8px">
+          <button class="btn btn-outline btn-sm" onclick='openAddProjectModal(${JSON.stringify(p)})'>تعديل</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteRow('submissions','${p.id}', renderProjects)">حذف</button>
+        </div>
       </div>
     `).join("")}
   </div>`;
+}
+async function openAddProjectModal(existing=null){
+  const { data: teams } = await sb.from("teams").select("id, team_name, team_code").eq("status","confirmed").order("team_name");
+  const isEdit = !!existing;
+  openModal(`
+    <h3>${isEdit ? "تعديل مشروع" : "إضافة مشروع يدويًا"}</h3>
+    ${!isEdit ? `<div class="field"><label>الفريق</label>
+      <select id="f-proj-team">
+        ${(teams||[]).map(t=>`<option value="${t.id}">${esc(t.team_name)} (${esc(t.team_code||"")})</option>`).join("")}
+      </select>
+    </div>` : ""}
+    <div class="field"><label>عنوان الفكرة</label><input id="f-proj-title" value="${isEdit?esc(existing.title):""}"></div>
+    <div class="field"><label>الوصف</label><textarea id="f-proj-desc" rows="4">${isEdit?esc(existing.description||""):""}</textarea></div>
+    <div class="field"><label>رابط الملف (اختياري)</label><input id="f-proj-file" value="${isEdit?esc(existing.file_url||""):""}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveAddProject(${isEdit?`'${existing.id}'`:'null'})">${isEdit?"حفظ":"إضافة"}</button>
+    </div>
+  `);
+}
+async function saveAddProject(existingId){
+  const title = document.getElementById("f-proj-title").value.trim();
+  const description = document.getElementById("f-proj-desc").value.trim();
+  const file_url = document.getElementById("f-proj-file").value.trim();
+  if(!title){ showToast("عنوان الفكرة مطلوب", true); return; }
+
+  if(existingId){
+    const { error } = await sb.from("submissions").update({ title, description, file_url }).eq("id", existingId);
+    if(error){ showToast("خطأ: " + error.message, true); return; }
+    logActivity("تعديل مشروع", "submission", existingId);
+    showToast("تم التحديث");
+  } else {
+    const team_id = document.getElementById("f-proj-team").value;
+    if(!team_id){ showToast("اختر الفريق", true); return; }
+    const { count } = await sb.from("submissions").select("id", {count:"exact", head:true}).eq("team_id", team_id);
+    const { error } = await sb.from("submissions").insert({ team_id, title, description, file_url, version: (count||0)+1 });
+    if(error){ showToast("خطأ: " + error.message, true); return; }
+    logActivity("إضافة مشروع يدويًا", "submission", null, {title});
+    showToast("تمت الإضافة");
+  }
+  closeModal();
+  renderProjects();
 }
 
 let chartInstances = [];
@@ -3192,6 +3289,7 @@ async function renderParticipants(){
   main.innerHTML = `<div class="page-header">
       <div><h1>المشاركون</h1><p>دليل كامل بكل المسجّلين وأدوارهم وفرقهم، بالإضافة للأسماء المستوردة</p></div>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="openAddParticipantModal()">+ إضافة مشارك</button>
         <label class="btn btn-outline" style="cursor:pointer;margin:0">
           <i data-lucide="upload" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> استيراد من Excel
           <input type="file" id="roster-import-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleRosterImport(event)">
@@ -3278,7 +3376,7 @@ function renderParticipantsTable(data){
   if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج</div>`; return; }
 
   box.innerHTML = `<table><thead><tr>
-    <th>الاسم</th><th>البريد / الجوال</th><th>الفئة / الجهة</th><th>الديموغرافيا</th><th>دور المشروع</th><th>الأدوار</th><th>الفريق</th><th>تاريخ التسجيل</th>
+    <th>الاسم</th><th>البريد / الجوال</th><th>الفئة / الجهة</th><th>الديموغرافيا</th><th>دور المشروع</th><th>الأدوار</th><th>الفريق</th><th>تاريخ التسجيل</th><th></th>
     </tr></thead><tbody>
     ${data.map(p => {
       const membership = (p.team_members||[])[0];
@@ -3291,10 +3389,115 @@ function renderParticipantsTable(data){
         <td>${(p.user_roles||[]).map(r=>`<span class="badge badge-green" style="margin-left:4px">${esc(r.roles?.name_ar||"")}</span>`).join("") || "—"}</td>
         <td>${membership ? `${esc(membership.teams?.team_name||"")} <code style="font-size:10px;color:var(--gold)">${esc(membership.teams?.team_code||"")}</code> ${membership.is_leader ? '<span class="badge badge-gold">قائد</span>' : ""}<br><span style="color:var(--muted);font-size:12px">${esc(membership.teams?.tracks?.name_ar||"")}</span>` : (p._track ? `<span style="color:var(--muted)">مسار متوقّع: ${esc(p._track)}</span>` : '<span style="color:var(--muted)">بدون فريق</span>')}</td>
         <td>${fmtDate(p.created_at)}</td>
+        <td class="row-actions">
+          ${p._imported
+            ? `<button class="btn btn-danger btn-sm" onclick="deleteRow('participant_roster','${p.id}', renderParticipants)">حذف</button>`
+            : `<button class="btn btn-outline btn-sm" onclick='openEditRoleModal("${p.id}", ${JSON.stringify(p.full_name)})'>الأدوار</button>
+               <button class="btn btn-danger btn-sm" onclick='openDeleteParticipantModal("${p.id}", ${JSON.stringify(p.full_name)})'>حذف</button>`
+          }
+        </td>
       </tr>`;
     }).join("")}
     </tbody></table>`;
 }
+/* ---------------- إضافة مشارك يدويًا (قائمة مسبقة) ---------------- */
+async function openAddParticipantModal(){
+  const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  openModal(`
+    <h3>إضافة مشارك</h3>
+    <p class="hint" style="margin:-8px 0 16px">يُضاف كقائمة مسبقة — يظهر بالتقرير والتصدير فورًا، ويرتبط تلقائيًا بحسابه الحقيقي إذا سجّل بنفس البريد لاحقًا</p>
+    <div class="field"><label>الاسم الكامل</label><input id="f-add-name"></div>
+    <div class="field"><label>البريد الإلكتروني</label><input type="email" id="f-add-email"></div>
+    <div class="field"><label>الجوال</label><input id="f-add-phone" placeholder="05xxxxxxxx"></div>
+    <div class="field"><label>الجهة</label><input id="f-add-org"></div>
+    <div class="field"><label>المسار المتوقّع (اختياري)</label>
+      <select id="f-add-track"><option value="">بدون تحديد</option>
+        ${(tracks||[]).map(t=>`<option value="${esc(t.name_ar)}">${esc(t.name_ar)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveAddParticipant()">إضافة</button>
+    </div>
+  `);
+}
+async function saveAddParticipant(){
+  const full_name = document.getElementById("f-add-name").value.trim();
+  const email = document.getElementById("f-add-email").value.trim();
+  const phone = document.getElementById("f-add-phone").value.trim();
+  const organization = document.getElementById("f-add-org").value.trim();
+  const track_name = document.getElementById("f-add-track").value;
+  if(!full_name || !email){ showToast("الاسم والبريد مطلوبان", true); return; }
+
+  const { error } = await sb.from("participant_roster").insert({ full_name, email, phone, organization, track_name });
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("إضافة مشارك يدويًا", "participant_roster", null, {name: full_name});
+  showToast("تمت الإضافة");
+  closeModal();
+  renderParticipants();
+}
+
+/* ---------------- تعديل الأدوار ---------------- */
+async function openEditRoleModal(userId, userName){
+  const { data: allRoles } = await sb.from("roles").select("id,key,name_ar");
+  const { data: myRoles } = await sb.from("user_roles").select("id, role_id").eq("user_id", userId);
+  const myRoleIds = new Set((myRoles||[]).map(r => r.role_id));
+
+  openModal(`
+    <h3>أدوار ${esc(userName)}</h3>
+    <p class="hint" style="margin:-8px 0 16px">فعّل أو ألغِ أي دور — التغيير فوري</p>
+    <div id="role-checkboxes">
+      ${(allRoles||[]).map(r => `
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:14px">
+          <input type="checkbox" data-role-id="${r.id}" data-role-key="${r.key}" ${myRoleIds.has(r.id)?"checked":""} onchange="toggleUserRole('${userId}','${r.id}', this.checked)">
+          ${esc(r.name_ar)}
+        </label>
+      `).join("")}
+    </div>
+    <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
+  `);
+}
+async function toggleUserRole(userId, roleId, isChecked){
+  if(isChecked){
+    const { error } = await sb.from("user_roles").insert({ user_id: userId, role_id: roleId });
+    if(error){ showToast("خطأ: " + error.message, true); return; }
+    showToast("تمت إضافة الدور");
+  } else {
+    const { error } = await sb.from("user_roles").delete().eq("user_id", userId).eq("role_id", roleId);
+    if(error){ showToast("خطأ: " + error.message, true); return; }
+    showToast("تمت إزالة الدور");
+  }
+  logActivity("تعديل أدوار مستخدم", "user", userId);
+  renderParticipants();
+}
+
+/* ---------------- حذف مشارك ---------------- */
+function openDeleteParticipantModal(userId, userName){
+  openModal(`
+    <h3>حذف ${esc(userName)}</h3>
+    <p class="hint" style="margin:-8px 0 16px">حذف حساب مستخدم فعلي عملية حسّاسة — اختر المستوى المناسب</p>
+    <div style="background:#fef3e2;border-radius:10px;padding:14px;margin-bottom:12px">
+      <strong style="font-size:13.5px">🟡 إزالة آمنة (فورية)</strong>
+      <p class="hint" style="margin:6px 0 10px">يخرجه من فريقه الحالي ويلغي كل أدواره (مرشد/محكّم/إداري) — حسابه وبياناته التاريخية تبقى محفوظة، فقط يفقد الوصول</p>
+      <button class="btn btn-outline btn-sm" onclick='safeRemoveParticipant("${userId}", ${JSON.stringify(userName)})'>إزالة آمنة</button>
+    </div>
+    <div style="background:#fdf5f4;border-radius:10px;padding:14px">
+      <strong style="font-size:13.5px;color:var(--danger)">🔴 حذف الحساب نهائيًا</strong>
+      <p class="hint" style="margin:6px 0 10px">حذف حقيقي للحساب من نظام المصادقة — يحتاج صلاحية خاصة غير متاحة من المتصفح مباشرة لأسباب أمنية. راجع دليل <code>DELETE_USER_GUIDE.md</code> المرفق بالحزمة (دالة جاهزة تنشرها مرة وحدة).</p>
+    </div>
+    <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
+  `);
+}
+async function safeRemoveParticipant(userId, userName){
+  if(!confirm(`متأكد تبي تزيل ${userName} من فريقه وتلغي كل أدواره؟`)) return;
+  await sb.from("team_members").delete().eq("user_id", userId);
+  await sb.from("user_roles").delete().eq("user_id", userId);
+  logActivity("إزالة آمنة لمشارك", "user", userId, {name: userName});
+  showToast("تمت الإزالة — الحساب موجود لكن بدون فريق أو أدوار");
+  closeModal();
+  renderParticipants();
+}
+
 function exportParticipantsExcel(){
   const term = (document.getElementById("participants-search")?.value || "").trim().toLowerCase();
   const filtered = allParticipantsCache.filter(p =>
@@ -3346,6 +3549,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r46</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r53</div>
 </body>
 </html>
