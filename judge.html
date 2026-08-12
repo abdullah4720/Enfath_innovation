@@ -37,7 +37,7 @@
   .alert.error{background:#fdeceb; color:var(--danger); display:block;}
   .alert.success{background:#e6f7f3; color:var(--teal); display:block;}
 
-  .auth-gate{max-width:400px; margin:80px auto; text-align:center; background:var(--card); border-radius:var(--radius); padding:36px 28px; border:1px solid var(--border);}
+  .auth-gate{max-width:400px; margin:20px auto 80px; text-align:center; background:var(--card); border-radius:var(--radius); padding:36px 28px; border:1px solid var(--border);}
   .auth-gate h2{margin-bottom:6px; color:var(--navy);}
   .auth-gate p{color:var(--muted); font-size:13.5px; margin-bottom:20px;}
 
@@ -64,6 +64,11 @@
 </head>
 <body>
 
+<div style="text-align:center; padding-top:40px;">
+  <img src="data:image/png;base64,QASSIM_LOGO_B64" alt="جامعة القصيم" style="height:28px; display:inline-block; vertical-align:middle;">
+  <span style="display:inline-block; width:1px; height:22px; background:var(--border); margin:0 12px; vertical-align:middle;"></span>
+  <img src="data:image/png;base64,INFATH_LOGO_B64" alt="إنفاذ" style="height:28px; display:inline-block; vertical-align:middle;">
+</div>
 <div id="auth-gate-screen" class="auth-gate">
   <h2>لوحة التحكيم</h2>
   <p>سجّل دخولك بحساب المحكّم الخاص بك</p>
@@ -364,6 +369,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r46</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r52</div>
 </body>
 </html>
