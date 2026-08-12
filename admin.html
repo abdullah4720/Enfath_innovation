@@ -136,6 +136,10 @@
   .stat-card.accent .num{color:var(--gold);}
 
   .card{background:var(--card); border-radius:16px; border:1px solid var(--border-light); padding:24px; margin-bottom:20px; box-shadow:0 1px 3px rgba(13,27,62,.04);}
+  details.card summary::-webkit-details-marker{display:none;}
+  details.card summary::after{content:"˅"; font-size:15px; color:var(--muted); flex-shrink:0; transition:.2s;}
+  details.card[open] summary::after{transform:rotate(180deg);}
+  details.card summary:hover{background:var(--border-light);}
   .card h3{margin:0 0 16px; font-size:15px; color:var(--navy); font-weight:700;}
 
   table{width:100%; border-collapse:collapse; font-size:13.5px;}
@@ -3145,22 +3149,26 @@ function filterProjectsView(){
   const box = document.getElementById("projects-list");
   if(!filtered.length){ box.innerHTML = `<div class="card"><div class="empty-state">لا توجد مشاريع مقدَّمة بعد</div></div>`; return; }
 
-  box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+  box.innerHTML = `<div style="display:flex; flex-direction:column; gap:10px">
     ${filtered.map(p => `
-      <div class="card" style="margin:0">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-          <h3 style="margin:0 0 4px">${esc(p.title)}</h3>
-          <span class="badge badge-gray">إصدار ${p.version}</span>
+      <details class="card" style="margin:0; padding:0; overflow:hidden;">
+        <summary style="cursor:pointer; padding:16px 20px; list-style:none; display:flex; justify-content:space-between; align-items:center; gap:12px;">
+          <div style="flex:1; min-width:0;">
+            <strong style="font-size:14.5px">${esc(p.title)}</strong>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(p.teams?.team_name||"")} <code style="font-size:10px;color:var(--gold)">${esc(p.teams?.team_code||"")}</code> · ${esc(p.teams?.tracks?.name_ar||"")}</div>
+          </div>
+          <span class="badge badge-gray" style="flex-shrink:0">إصدار ${p.version}</span>
+        </summary>
+        <div style="padding:0 20px 18px">
+          <p style="font-size:13.5px;color:var(--ink);line-height:1.6">${esc(p.description||"لا يوجد وصف بعد")}</p>
+          ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600"><i data-lucide="paperclip" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فتح الملف المرفق</a>` : ""}
+          <p class="hint" style="margin-top:10px">آخر تحديث: ${fmtDate(p.submitted_at)}</p>
+          <div class="row-actions" style="margin-top:8px">
+            <button class="btn btn-outline btn-sm" onclick='openAddProjectModal(${JSON.stringify(p)})'>تعديل</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRow('submissions','${p.id}', renderProjects)">حذف</button>
+          </div>
         </div>
-        <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px">${esc(p.teams?.team_name||"")} <code style="font-size:10px;color:var(--gold)">${esc(p.teams?.team_code||"")}</code> · ${esc(p.teams?.tracks?.name_ar||"")}</p>
-        <p style="font-size:13.5px;color:var(--ink);line-height:1.6">${esc((p.description||"").substring(0,160))}${(p.description||"").length>160?"…":""}</p>
-        ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600"><i data-lucide="paperclip" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فتح الملف المرفق</a>` : ""}
-        <p class="hint" style="margin-top:10px">آخر تحديث: ${fmtDate(p.submitted_at)}</p>
-        <div class="row-actions" style="margin-top:8px">
-          <button class="btn btn-outline btn-sm" onclick='openAddProjectModal(${JSON.stringify(p)})'>تعديل</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteRow('submissions','${p.id}', renderProjects)">حذف</button>
-        </div>
-      </div>
+      </details>
     `).join("")}
   </div>`;
 }
@@ -3549,6 +3557,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r53</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r54</div>
 </body>
 </html>
