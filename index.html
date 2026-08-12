@@ -3,283 +3,283 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>هاكاثون إنفاذ 2026 | جامعة القصيم</title>
-<meta name="description" content="هاكاثون إنفاذ — حلول ذكاء اصطناعي لخدمة قطاع التنفيذ القضائي. تنظيم مركز الابتكار والملكية الفكرية، جامعة القصيم.">
+<title>هاكاثون إنفاذ | حلول ذكاء اصطناعي لمنظومة المزادات والتنفيذ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <style>
   :root{
-    --ink:#1A2E5A; --ink-dark:#0D1B3E; --ink-light:#2A3D6B; --paper:#F7F5EF; --paper-dim:#EFEBE0;
-    --purple:#5B3E96; --teal:#1F9E8E; --gold:#C9922A; --charcoal:#1A1A2E; --muted:#6B7A99;
-    --border:rgba(13,27,62,.12);
-    --font-display:'IBM Plex Sans Arabic', sans-serif;
-    --font-mono:'IBM Plex Mono', monospace;
+    --paper:#FDFCFA; --paper-soft:#F6F5F1;
+    --navy:#1A2E5A; --navy-deep:#0D1B3E; --navy-mid:#2A3D6B;
+    --gold:#C9922A; --teal:#1F9E8E; --violet:#7C6FE0;
+    --ink:#1A1A2E; --muted:#6B7A99; --line:rgba(26,46,90,.09);
+    --font:'IBM Plex Sans Arabic', sans-serif; --mono:'IBM Plex Mono', monospace;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
   html{scroll-behavior:smooth;}
-  body{font-family:var(--font-display); color:var(--charcoal); background:var(--paper); line-height:1.6; overflow-x:hidden;}
+  body{font-family:var(--font); color:var(--ink); background:var(--paper); line-height:1.65; overflow-x:hidden;}
   a{color:inherit; text-decoration:none;}
-  img,svg{display:block; max-width:100%;}
-
-  .ref-bar{
-    background:var(--ink); color:#9db3d6; font-family:var(--font-mono); font-size:11.5px;
-    letter-spacing:.06em; padding:8px 24px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
-  }
-  .ref-bar span{opacity:.85;}
-
-  .site-header{background:var(--ink); color:#fff; padding:16px 24px 0; position:sticky; top:0; z-index:50;}
-  .nav-row{max-width:1180px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; padding-bottom:16px;}
-  .brand{display:flex; align-items:center; gap:10px; font-weight:700; font-size:15px;}
-  .brand-mark{width:34px; height:34px; border-radius:50%; border:1.5px solid var(--gold); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:12px; color:var(--gold);}
-  .nav-links{display:flex; gap:28px; font-size:13.5px; color:#c8d3e8;}
-  .nav-links a:hover{color:#fff;}
-  .cta-small{background:var(--teal); color:#fff !important; padding:9px 20px; border-radius:8px; font-weight:600; font-size:13px;}
-
-  .hero{
-    background:radial-gradient(circle at 15% 10%, rgba(91,62,150,.5), transparent 42%),
-               linear-gradient(150deg, var(--ink) 0%, var(--ink-light) 55%, #0e2745 100%);
-    color:#fff; padding:80px 24px 110px; position:relative; overflow:hidden;
-  }
-  .hero::before{
-    content:""; position:absolute; inset:0; opacity:.07; pointer-events:none;
-    background-image:linear-gradient(rgba(255,255,255,.7) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,.7) 1px, transparent 1px);
-    background-size:46px 46px;
-  }
-  .hero-inner{max-width:1180px; margin:0 auto; position:relative; z-index:1; display:grid; grid-template-columns:1.3fr .7fr; gap:40px; align-items:center;}
-  .eyebrow{display:inline-flex; align-items:center; gap:8px; background:rgba(31,158,142,.16); border:1px solid rgba(31,158,142,.4);
-    padding:6px 15px; border-radius:20px; font-size:12px; font-weight:600; color:#5fe4cf; margin-bottom:22px; font-family:var(--font-mono); letter-spacing:.03em;}
-  .hero h1{font-size:clamp(32px,4.6vw,52px); font-weight:800; line-height:1.15; margin-bottom:16px; opacity:0; animation:riseIn .7s .1s forwards;}
-  .hero h1 span{color:var(--gold);}
-  .hero .lede{font-size:16.5px; color:#c8d3e8; max-width:520px; margin-bottom:32px; opacity:0; animation:riseIn .7s .25s forwards;}
-  .hero-ctas{display:flex; gap:14px; flex-wrap:wrap; opacity:0; animation:riseIn .7s .4s forwards;}
-  .btn-primary{background:var(--teal); color:#fff; padding:14px 28px; border-radius:10px; font-weight:700; font-size:14.5px; display:inline-block; transition:.2s;}
-  .btn-primary:hover{background:#188878; transform:translateY(-1px);}
-  .btn-ghost{border:1.5px solid rgba(255,255,255,.35); color:#fff; padding:13px 26px; border-radius:10px; font-weight:600; font-size:14.5px; display:inline-block; transition:.2s;}
-  .btn-ghost:hover{border-color:#fff; background:rgba(255,255,255,.06);}
-
-  @keyframes riseIn{from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);}}
-
-  .seal-wrap{display:flex; justify-content:center; align-items:center;}
-  .seal{
-    width:220px; height:220px; position:relative; opacity:0; transform:scale(.7) rotate(-14deg);
-    animation:sealIn .8s .5s cubic-bezier(.34,1.56,.64,1) forwards;
-  }
-  @keyframes sealIn{to{opacity:1; transform:scale(1) rotate(0deg);}}
-  .seal svg{width:100%; height:100%;}
+  img,svg{display:block;}
+  ::selection{background:rgba(201,146,42,.25);}
 
   @media (prefers-reduced-motion: reduce){
-    .hero h1, .hero .lede, .hero-ctas, .seal{animation:none; opacity:1; transform:none;}
+    *{animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important;}
   }
 
-  .facts-bar{background:var(--paper-dim); border-bottom:1px solid var(--border);}
-  .facts-inner{max-width:1180px; margin:0 auto; padding:26px 24px; display:grid; grid-template-columns:repeat(4,1fr); gap:20px; text-align:center;}
-  .fact-num{font-family:var(--font-mono); font-size:26px; font-weight:600; color:var(--ink);}
-  .fact-label{font-size:12.5px; color:var(--muted); margin-top:4px;}
-
-  section{padding:76px 24px;}
-  .section-inner{max-width:1180px; margin:0 auto;}
-  .section-tag{font-family:var(--font-mono); font-size:12px; color:var(--teal); letter-spacing:.08em; margin-bottom:10px; display:block;}
-  .section-title{font-size:clamp(24px,3vw,32px); font-weight:800; color:var(--ink); margin-bottom:14px;}
-  .section-sub{color:var(--muted); font-size:15px; max-width:600px; margin-bottom:44px;}
-
-  .tracks-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:18px;}
-  .track-card{background:#fff; border:1px solid var(--border); border-radius:14px; padding:26px 22px; position:relative; transition:.2s;}
-  .track-card:hover{transform:translateY(-3px); box-shadow:0 14px 32px rgba(11,31,58,.09); border-color:var(--teal);}
-  .track-ref{font-family:var(--font-mono); font-size:11px; color:var(--gold); letter-spacing:.05em; margin-bottom:14px; display:block;}
-  .track-card h3{font-size:16.5px; margin-bottom:8px; color:var(--ink);}
-  .track-card p{font-size:13.5px; color:var(--muted); line-height:1.7;}
-
-  .timeline{position:relative; padding-right:4px;}
-  .timeline::before{content:""; position:absolute; top:8px; bottom:8px; right:23px; width:2px; background:var(--border);}
-  .tl-item{position:relative; padding-right:64px; padding-bottom:36px;}
-  .tl-item:last-child{padding-bottom:0;}
-  .tl-marker{
-    position:absolute; right:0; top:0; width:48px; height:48px; border-radius:50%; background:var(--ink); color:#fff;
-    display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:14px; font-weight:600; z-index:1;
+  /* ---------- عناصر مشتركة ---------- */
+  .wrap{max-width:1180px; margin:0 auto; padding:0 24px;}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px; font-family:var(--mono); font-size:11.5px;
+    letter-spacing:.12em; color:var(--gold); text-transform:uppercase; margin-bottom:14px;
   }
-  .tl-item.done .tl-marker{background:var(--teal);}
-  .tl-title{font-size:15.5px; font-weight:700; color:var(--ink); margin-bottom:4px;}
-  .tl-desc{font-size:13.5px; color:var(--muted);}
-
-  .duality{background:var(--ink); color:#fff; text-align:center;}
-  .duality .section-inner{max-width:820px;}
-  .duality h2{font-size:clamp(22px,3vw,30px); font-weight:700; margin-bottom:18px; line-height:1.5;}
-  .duality h2 .hl{color:var(--gold);}
-  .duality p{color:#a9b8d4; font-size:14.5px;}
-
-  .final-cta{text-align:center; position:relative;}
-  .final-cta .seal-mini{width:70px; height:70px; margin:0 auto 20px; opacity:.9;}
-  .final-cta h2{font-size:clamp(24px,3.4vw,34px); color:var(--ink); font-weight:800; margin-bottom:12px;}
-  .final-cta p{color:var(--muted); margin-bottom:28px; max-width:480px; margin-left:auto; margin-right:auto;}
-
-  footer{background:var(--ink); color:#8fa1c4; padding:36px 24px; font-size:12.5px;}
-  .footer-inner{max-width:1180px; margin:0 auto; display:flex; justify-content:space-between; flex-wrap:wrap; gap:14px;}
-
-  @media(max-width:820px){
-    .hero-inner{grid-template-columns:1fr;}
-    .seal-wrap{order:-1;}
-    .seal{width:140px; height:140px; margin:0 auto;}
-    .facts-inner{grid-template-columns:repeat(2,1fr);}
-    .nav-links{display:none;}
+  .eyebrow::before{content:""; width:16px; height:1px; background:var(--gold);}
+  h1,h2,h3{font-weight:700; color:var(--navy); letter-spacing:-.01em;}
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; padding:14px 28px; border-radius:100px;
+    font-size:14.5px; font-weight:600; cursor:pointer; border:none; transition:.25s cubic-bezier(.2,.8,.2,1);
+    font-family:var(--font);
   }
+  .btn-primary{background:var(--navy); color:#fff; box-shadow:0 8px 24px rgba(26,46,90,.28);}
+  .btn-primary:hover{background:var(--navy-deep); transform:translateY(-2px); box-shadow:0 12px 32px rgba(26,46,90,.36);}
+  .btn-ghost{background:#fff; color:var(--navy); border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--navy); transform:translateY(-2px);}
+
+  /* ---------- توهّج الأيقونات (العنصر المميّز) ---------- */
+  .glow-icon{
+    position:relative; width:60px; height:60px; border-radius:18px;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    background:#fff; border:1px solid var(--line);
+  }
+  .glow-icon::before{
+    content:""; position:absolute; inset:-14px; border-radius:50%;
+    background:radial-gradient(circle, var(--glow, var(--gold)) 0%, transparent 68%);
+    filter:blur(14px); opacity:.45; z-index:0; animation:pulse-glow 4.5s ease-in-out infinite;
+  }
+  .glow-icon i{position:relative; z-index:1; width:26px; height:26px; color:var(--glow, var(--gold));}
+  @keyframes pulse-glow{0%,100%{opacity:.35; transform:scale(1);} 50%{opacity:.6; transform:scale(1.12);}}
+
+  /* ---------- الشريط العلوي ---------- */
+  header.nav{position:sticky; top:0; z-index:50; background:rgba(253,252,250,.82); backdrop-filter:blur(14px); border-bottom:1px solid var(--line);}
+  .nav-inner{display:flex; align-items:center; justify-content:space-between; padding:16px 24px; max-width:1180px; margin:0 auto;}
+  .logo{font-size:19px; font-weight:800; color:var(--navy); display:flex; align-items:center; gap:8px;}
+  .logo span{width:7px; height:7px; border-radius:50%; background:var(--gold); display:inline-block;}
+  .nav-links{display:flex; align-items:center; gap:28px; font-size:13.5px; color:var(--muted); font-weight:500;}
+  .nav-links a:hover{color:var(--navy);}
+  @media (max-width:760px){ .nav-links{display:none;} }
+
+  /* ---------- الخلفية المتحركة (Aurora) ---------- */
+  .aurora{position:absolute; inset:0; overflow:hidden; z-index:0; pointer-events:none;}
+  .blob{position:absolute; border-radius:50%; filter:blur(70px); opacity:.35; animation:drift 22s ease-in-out infinite;}
+  .blob1{width:420px; height:420px; background:var(--gold); top:-120px; left:-80px; animation-delay:0s;}
+  .blob2{width:380px; height:380px; background:var(--teal); top:60px; right:-100px; animation-delay:-7s;}
+  .blob3{width:320px; height:320px; background:var(--violet); bottom:-140px; left:35%; animation-delay:-14s;}
+  @keyframes drift{
+    0%,100%{transform:translate(0,0) scale(1);}
+    33%{transform:translate(30px,-40px) scale(1.08);}
+    66%{transform:translate(-25px,25px) scale(.95);}
+  }
+
+  /* ---------- الهيرو ---------- */
+  .hero{position:relative; padding:96px 24px 70px; text-align:center;}
+  .hero-inner{position:relative; z-index:2; max-width:820px; margin:0 auto;}
+  .badge-pill{
+    display:inline-flex; align-items:center; gap:8px; background:#fff; border:1px solid var(--line);
+    padding:8px 18px; border-radius:100px; font-size:12.5px; color:var(--navy); font-weight:600;
+    box-shadow:0 4px 16px rgba(26,46,90,.06); margin-bottom:28px;
+  }
+  .badge-pill .dot{width:7px; height:7px; border-radius:50%; background:var(--teal); animation:blink 2s infinite;}
+  @keyframes blink{0%,100%{opacity:1;} 50%{opacity:.3;}}
+  .hero h1{font-size:clamp(32px,5.5vw,58px); line-height:1.18; margin-bottom:20px;}
+  .hero h1 em{font-style:normal; color:var(--gold); position:relative;}
+  .hero p.lede{font-size:16.5px; color:var(--muted); max-width:600px; margin:0 auto 36px; font-weight:400;}
+  .hero-ctas{display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin-bottom:44px;}
+
+  .countdown-row{
+    display:inline-flex; gap:10px; background:#fff; border:1px solid var(--line); padding:14px 22px;
+    border-radius:18px; box-shadow:0 10px 32px rgba(26,46,90,.08); flex-wrap:wrap; justify-content:center;
+  }
+  .countdown-row .cd-item{text-align:center; padding:0 12px; position:relative;}
+  .countdown-row .cd-item:not(:last-child)::after{content:""; position:absolute; left:-6px; top:4px; bottom:4px; width:1px; background:var(--line);}
+  .countdown-row .cd-num{font-family:var(--mono); font-size:22px; font-weight:600; color:var(--navy);}
+  .countdown-row .cd-label{font-size:10.5px; color:var(--muted); margin-top:2px;}
+
+  /* ---------- شريط الإحصاءات ---------- */
+  .facts{position:relative; z-index:2; display:flex; justify-content:center; gap:48px; flex-wrap:wrap; padding:0 24px 90px;}
+  .fact{text-align:center;}
+  .fact .num{font-size:30px; font-weight:800; color:var(--navy); font-family:var(--mono);}
+  .fact .lbl{font-size:12.5px; color:var(--muted); margin-top:4px;}
+
+  /* ---------- قسم عام ---------- */
+  section{padding:90px 0;}
+  .section-head{text-align:center; max-width:640px; margin:0 auto 56px;}
+  .section-head h2{font-size:clamp(26px,3.5vw,38px);}
+  .section-head p{color:var(--muted); font-size:15px; margin-top:12px;}
+
+  /* ---------- المسارات ---------- */
+  #tracks{background:var(--paper-soft);}
+  .tracks-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:22px;}
+  .track-card{
+    background:#fff; border-radius:22px; padding:32px 28px; border:1px solid var(--line);
+    transition:.3s cubic-bezier(.2,.8,.2,1); opacity:0; transform:translateY(24px);
+  }
+  .track-card.visible{opacity:1; transform:translateY(0);}
+  .track-card:hover{transform:translateY(-6px); box-shadow:0 20px 48px rgba(26,46,90,.1); border-color:transparent;}
+  .track-card h3{font-size:17.5px; margin:20px 0 10px;}
+  .track-card p{font-size:13.5px; color:var(--muted); line-height:1.75;}
+
+  /* ---------- الرحلة الزمنية ---------- */
+  .journey{position:relative; max-width:900px; margin:0 auto;}
+  .journey::before{content:""; position:absolute; top:26px; right:26px; left:26px; height:1px; background:var(--line);}
+  .journey-track{display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;}
+  .j-step{flex:1; min-width:130px; text-align:center; position:relative; opacity:0; transform:translateY(16px); transition:.5s;}
+  .j-step.visible{opacity:1; transform:translateY(0);}
+  .j-dot{
+    width:52px; height:52px; border-radius:50%; background:#fff; border:2px solid var(--line);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 16px; position:relative; z-index:1;
+    font-family:var(--mono); font-weight:600; color:var(--navy); font-size:14px; transition:.3s;
+  }
+  .j-step.visible .j-dot{border-color:var(--gold); color:var(--gold);}
+  .j-step h4{font-size:13.5px; margin-bottom:4px;}
+  .j-step span{font-size:11.5px; color:var(--muted);}
+
+  /* ---------- الدعوة الختامية ---------- */
+  .cta-panel{
+    position:relative; overflow:hidden; background:var(--navy-deep); border-radius:32px; padding:70px 40px;
+    text-align:center; margin:0 24px;
+  }
+  .cta-panel .aurora .blob{opacity:.25;}
+  .cta-panel h2{color:#fff; font-size:clamp(26px,3.5vw,36px); position:relative; z-index:2;}
+  .cta-panel p{color:#9db3d6; margin:14px 0 32px; position:relative; z-index:2; font-size:15px;}
+  .cta-panel .btn-primary{position:relative; z-index:2; background:var(--gold); box-shadow:0 8px 28px rgba(201,146,42,.35);}
+  .cta-panel .btn-primary:hover{background:#dba53a;}
+
+  /* ---------- تذييل ---------- */
+  footer{padding:56px 24px 32px;}
+  .footer-inner{max-width:1180px; margin:0 auto; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; padding-top:28px; border-top:1px solid var(--line);}
+  .footer-links{display:flex; gap:22px; flex-wrap:wrap; font-size:13px; color:var(--muted);}
+  .footer-links a:hover{color:var(--navy);}
+  .footer-brand{font-size:13px; color:var(--muted);}
+
+  [data-reveal]{opacity:0; transform:translateY(24px); transition:opacity .6s ease, transform .6s cubic-bezier(.2,.8,.2,1);}
+  [data-reveal].visible{opacity:1; transform:translateY(0);}
 </style>
 </head>
 <body>
 
-<div class="ref-bar">
-  <span>REF / إنفاذ-2026 / جامعة القصيم</span>
-  <span>مركز الابتكار والملكية الفكرية · Innexia</span>
-</div>
-
-<header class="site-header">
-  <div class="nav-row">
-    <div class="brand">
-      <span class="brand-mark">إ</span>
-      هاكاثون إنفاذ
-    </div>
+<header class="nav">
+  <div class="nav-inner">
+    <div class="logo"><span></span> إنفاذ</div>
     <nav class="nav-links">
       <a href="#tracks">المسارات</a>
-      <a href="#timeline">الجدول الزمني</a>
-      <a href="#about">عن البرنامج</a>
+      <a href="#journey">الرحلة</a>
+      <a href="./portal.html">بوابة الوصول</a>
     </nav>
-    <a href="./registration.html" class="cta-small">سجّل فريقك</a>
+    <a href="./registration.html" class="btn btn-primary" style="padding:10px 22px; font-size:13px;">سجّل فريقك</a>
   </div>
 </header>
 
 <section class="hero">
+  <div class="aurora"><div class="blob blob1"></div><div class="blob blob2"></div><div class="blob blob3"></div></div>
   <div class="hero-inner">
-    <div>
-      <span class="eyebrow">● التسجيل مفتوح الآن</span>
-      <h1>حين تلتقي العدالة<br>بـ<span>الذكاء الاصطناعي</span></h1>
-      <p class="lede">هاكاثون إنفاذ يجمع المطورين والمصممين وخبراء القانون لبناء حلول ذكاء اصطناعي تخدم قطاع التنفيذ القضائي — بتنظيم مركز الابتكار والملكية الفكرية بجامعة القصيم.</p>
-      <div class="hero-ctas">
-        <a href="./registration.html" class="btn-primary">سجّل فريقك الآن</a>
-        <a href="#tracks" class="btn-ghost">استعرض المسارات</a>
-      </div>
-      <div id="countdown-box" style="display:none; margin-top:26px; font-family:var(--font-mono); font-size:13px; color:#5fe4cf; letter-spacing:.03em;">
-        ⏳ ينطلق الهاكاثون خلال: <span id="countdown-value" style="font-weight:700"></span>
-      </div>
+    <span class="badge-pill"><span class="dot"></span> التسجيل مفتوح الآن</span>
+    <h1>حلول ذكاء اصطناعي <em>تُنفَّذ</em> فعليًا،<br>لا مجرد نماذج أولية</h1>
+    <p class="lede">هاكاثون إنفاذ يجمع المطورين والمصممين والمبتكرين لبناء حلول ذكاء اصطناعي تخدم منظومة المزادات والتسويق والتنفيذ.</p>
+    <div class="hero-ctas">
+      <a href="./registration.html" class="btn btn-primary"><i data-lucide="arrow-left" style="width:16px;height:16px"></i> سجّل فريقك الآن</a>
+      <a href="#tracks" class="btn btn-ghost">استعرض المسارات</a>
     </div>
-    <div class="seal-wrap">
-      <div class="seal">
-        <svg viewBox="0 0 200 200">
-          <defs>
-            <path id="sealRing" d="M 100,100 m -78,0 a 78,78 0 1,1 156,0 a 78,78 0 1,1 -156,0" fill="none"/>
-          </defs>
-          <circle cx="100" cy="100" r="95" fill="none" stroke="#C89B3C" stroke-width="1.2" opacity=".55"/>
-          <circle cx="100" cy="100" r="78" fill="none" stroke="#C89B3C" stroke-width="1.8"/>
-          <circle cx="100" cy="100" r="60" fill="none" stroke="#1F9E8E" stroke-width="1" opacity=".5"/>
-          <text font-family="IBM Plex Mono, monospace" font-size="10.5" fill="#C89B3C" letter-spacing="3">
-            <textPath href="#sealRing" startOffset="0%">هاكاثون إنفاذ ★ جامعة القصيم ★ 2026 ★</textPath>
-          </text>
-          <text x="100" y="93" text-anchor="middle" font-family="IBM Plex Sans Arabic" font-size="30" font-weight="800" fill="#fff">إنفاذ</text>
-          <text x="100" y="116" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9.5" fill="#5fe4cf" letter-spacing="2">AI × JUSTICE</text>
-        </svg>
-      </div>
+    <div class="countdown-row" id="countdown-box" style="display:none">
+      <div class="cd-item"><div class="cd-num" id="cd-days">--</div><div class="cd-label">يوم</div></div>
+      <div class="cd-item"><div class="cd-num" id="cd-hours">--</div><div class="cd-label">ساعة</div></div>
+      <div class="cd-item"><div class="cd-num" id="cd-mins">--</div><div class="cd-label">دقيقة</div></div>
     </div>
   </div>
 </section>
 
-<div class="facts-bar">
-  <div class="facts-inner">
-    <div><div class="fact-num">04</div><div class="fact-label">مسارات تقنية</div></div>
-    <div><div class="fact-num">2–5</div><div class="fact-label">أعضاء لكل فريق</div></div>
-    <div><div class="fact-num">QU</div><div class="fact-label">جامعة القصيم</div></div>
-    <div><div class="fact-num">AI</div><div class="fact-label">حلول ذكاء اصطناعي</div></div>
-  </div>
+<div class="facts" id="facts-bar">
+  <div class="fact"><div class="num" id="fact-tracks">—</div><div class="lbl">مسارات</div></div>
+  <div class="fact"><div class="num">2–5</div><div class="lbl">أعضاء الفريق</div></div>
+  <div class="fact"><div class="num" id="fact-participants">—</div><div class="lbl">مشارك مسجَّل</div></div>
 </div>
 
 <section id="tracks">
-  <div class="section-inner">
-    <span class="section-tag">/ 01 — المسارات</span>
-    <h2 class="section-title">اختر ملف قضيتك</h2>
-    <p class="section-sub" id="tracks-sub">مسارات تقنية، كل واحد يعالج تحديًا حقيقيًا بمنظومة التنفيذ القضائي.</p>
+  <div class="wrap">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow" style="justify-content:center">المسارات</span>
+      <h2>ثلاثة تحديات، أثر واحد</h2>
+      <p>كل مسار يعالج تحديًا حقيقيًا بمنظومة المزادات والتسويق والتنفيذ.</p>
+    </div>
     <div class="tracks-grid" id="tracks-grid">
-      <p class="hint">جاري تحميل المسارات...</p>
+      <p class="hint" style="text-align:center; color:var(--muted); grid-column:1/-1">جاري تحميل المسارات...</p>
     </div>
   </div>
 </section>
 
-<section id="timeline" style="background:var(--paper-dim)">
-  <div class="section-inner">
-    <span class="section-tag">/ 02 — سير البرنامج</span>
-    <h2 class="section-title">من التسجيل إلى الإعلان</h2>
-    <p class="section-sub">ست مراحل متتابعة، كل مرحلة تبني على ما قبلها.</p>
-    <div class="timeline">
-      <div class="tl-item done">
-        <div class="tl-marker">01</div>
-        <div class="tl-title">التسجيل وتكوين الفريق</div>
-        <div class="tl-desc">إنشاء الحساب، اختيار المسار، وتكوين الفريق أو الانضمام لفريق قائم عبر رمز الدعوة.</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-marker">02</div>
-        <div class="tl-title">التحضير والتدريب</div>
-        <div class="tl-desc">ورش تدريبية تقنية وقانونية تؤهّل الفرق لبناء حلولها.</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-marker">03</div>
-        <div class="tl-title">الإرشاد الفردي</div>
-        <div class="tl-desc">جلسات إرشاد مباشرة مع خبراء بالمجال التقني والقانوني لصقل الفكرة.</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-marker">04</div>
-        <div class="tl-title">أيام الهاكاثون</div>
-        <div class="tl-desc">بناء الحل الفعلي وتجهيز العرض التقديمي النهائي.</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-marker">05</div>
-        <div class="tl-title">التحكيم</div>
-        <div class="tl-desc">عرض الفرق أمام لجنة تحكيم متخصصة وفق معايير معلنة.</div>
-      </div>
-      <div class="tl-item">
-        <div class="tl-marker">06</div>
-        <div class="tl-title">إعلان النتائج والشهادات</div>
-        <div class="tl-desc">تكريم الفائزين، وإصدار شهادات المشاركة لجميع المستوفين للشروط.</div>
+<section id="journey">
+  <div class="wrap">
+    <div class="section-head" data-reveal>
+      <span class="eyebrow" style="justify-content:center">الجدول الزمني</span>
+      <h2>رحلة البرنامج</h2>
+    </div>
+    <div class="journey">
+      <div class="journey-track" id="journey-track">
+        <div class="j-step"><div class="j-dot">01</div><h4>التسجيل</h4><span>تكوين الفريق</span></div>
+        <div class="j-step"><div class="j-dot">02</div><h4>التحضير</h4><span>ورش تأهيلية</span></div>
+        <div class="j-step"><div class="j-dot">03</div><h4>الإرشاد</h4><span>دعم متخصص</span></div>
+        <div class="j-step"><div class="j-dot">04</div><h4>التقديم</h4><span>عرض الحلول</span></div>
+        <div class="j-step"><div class="j-dot">05</div><h4>التحكيم</h4><span>إعلان النتائج</span></div>
       </div>
     </div>
   </div>
 </section>
 
-<section class="duality" id="about">
-  <div class="section-inner">
-    <span class="section-tag" style="color:#5fe4cf">/ 03 — لماذا "إنفاذ"</span>
-    <h2>الاسم نفسه هو الفكرة: <span class="hl">تنفيذ الأحكام</span>، و<span class="hl">تنفيذ الكود</span>.</h2>
-    <p>البرنامج يقف على تقاطع مباشر بين منظومة التنفيذ القضائي في المملكة وأدوات الذكاء الاصطناعي الحديثة — فرصة لبناء حلول تُنفَّذ فعليًا، لا مجرد نماذج أولية.</p>
-  </div>
-</section>
-
-<section class="final-cta">
-  <div class="section-inner">
-    <div class="seal-mini">
-      <svg viewBox="0 0 200 200">
-        <circle cx="100" cy="100" r="78" fill="none" stroke="#C89B3C" stroke-width="2.5"/>
-        <circle cx="100" cy="100" r="58" fill="none" stroke="#1F9E8E" stroke-width="1.2" opacity=".6"/>
-        <text x="100" y="112" text-anchor="middle" font-family="IBM Plex Sans Arabic" font-size="28" font-weight="800" fill="#0B1F3A">إنفاذ</text>
-      </svg>
+<section>
+  <div class="wrap">
+    <div class="cta-panel" data-reveal>
+      <div class="aurora"><div class="blob blob1"></div><div class="blob blob2"></div></div>
+      <h2>جاهز تبني حل يُنفَّذ فعليًا؟</h2>
+      <p>سجّل فريقك الآن واختر المسار الأنسب لفكرتك.</p>
+      <a href="./registration.html" class="btn btn-primary">ابدأ التسجيل</a>
     </div>
-    <h2>جاهز تبني حل يُنفَّذ فعليًا؟</h2>
-    <p>سجّل فريقك الآن — الأماكن محدودة بكل مسار.</p>
-    <a href="./registration.html" class="btn-primary">سجّل فريقك الآن</a>
   </div>
 </section>
 
 <footer>
   <div class="footer-inner">
-    <span>مركز الابتكار والملكية الفكرية (ICIP) — جامعة القصيم</span>
-    <span style="display:flex;gap:16px">
-      <a href="./portal.html" style="color:#C89B3C;font-weight:600">بوابة الوصول لكل الصفحات</a>
-      <a href="./mentor-apply.html" style="color:#5fe4cf">انضم كمرشد</a>
-      <a href="./judge-apply.html" style="color:#5fe4cf">انضم كمحكّم</a>
-      <a href="./mentor.html" style="color:#8fa1c4">دخول المرشدين</a>
-      <a href="./judge.html" style="color:#8fa1c4">دخول المحكّمين</a>
+    <span class="footer-brand">© 2026 هاكاثون إنفاذ</span>
+    <span class="footer-links">
+      <a href="./portal.html" style="color:var(--gold); font-weight:600">بوابة الوصول لكل الصفحات</a>
+      <a href="./mentor-apply.html">انضم كمرشد</a>
+      <a href="./judge-apply.html">انضم كمحكّم</a>
+      <a href="./mentor.html">دخول المرشدين</a>
+      <a href="./judge.html">دخول المحكّمين</a>
     </span>
-    <span>REF / إنفاذ-2026 / QU-ICIP</span>
   </div>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
+// ---- الحركة الأساسية تعمل فورًا، بغض النظر عن نجاح أي مكتبة خارجية ----
+function initReveal(scope){
+  const els = (scope || document).querySelectorAll("[data-reveal], .track-card, .j-step");
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if(entry.isIntersecting){ entry.target.classList.add("visible"); observer.unobserve(entry.target); }
+    });
+  }, { threshold:.15 });
+  els.forEach(el => {
+    observer.observe(el);
+    // شبكة أمان: تظهر تلقائيًا لو المراقب لأي سبب ما اشتغل
+    setTimeout(() => el.classList.add("visible"), 2500);
+  });
+}
+document.querySelectorAll(".j-step").forEach((el,i) => { el.style.transitionDelay = (i*0.08)+"s"; });
+initReveal();
+if(window.lucide) lucide.createIcons();
+
+// ---- ميزات مرتبطة بـ Supabase — معزولة، فشلها لا يكسر باقي الصفحة ----
+if(window.supabase){
+try{
 const sb = supabase.createClient(
   "https://tuyomqhvdjpsayecystf.supabase.co",
   "sb_publishable_J2o8HsyqGXPFoQbHn3EfFQ_LqK1qpYA"
@@ -289,46 +289,59 @@ function esc(str){
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
+const TRACK_ICONS = ["gavel","trending-up","file-check-2","shield-check","target","zap"];
+const TRACK_GLOWS = ["var(--gold)","var(--teal)","var(--violet)"];
+
 (async function loadTracks(){
   const grid = document.getElementById("tracks-grid");
-  const sub = document.getElementById("tracks-sub");
   const { data, error } = await sb.from("tracks").select("*").eq("is_active", true).order("display_order");
 
   if(error || !data || !data.length){
-    grid.innerHTML = `<p class="hint">لا توجد مسارات معلَنة حاليًا — تابعونا قريبًا</p>`;
+    grid.innerHTML = `<p class="hint" style="text-align:center; color:var(--muted); grid-column:1/-1">لا توجد مسارات معلَنة حاليًا — تابعونا قريبًا</p>`;
     return;
   }
 
-  sub.textContent = `${data.length} مسارات تقنية، كل واحد يعالج تحديًا حقيقيًا بمنظومة التنفيذ القضائي.`;
+  document.getElementById("fact-tracks").textContent = data.length;
+
   grid.innerHTML = data.map((t, i) => `
-    <div class="track-card">
-      <span class="track-ref">TRACK / ${String(i+1).padStart(2,"0")}</span>
+    <div class="track-card" data-reveal>
+      <div class="glow-icon" style="--glow:${TRACK_GLOWS[i % TRACK_GLOWS.length]}">
+        <i data-lucide="${TRACK_ICONS[i % TRACK_ICONS.length]}"></i>
+      </div>
       <h3>${esc(t.name_ar)}</h3>
       <p>${esc(t.description || "")}</p>
     </div>
   `).join("");
+  if(window.lucide) lucide.createIcons();
+  initReveal(grid);
 })();
 
-(async function(){
+(async function loadParticipantCount(){
+  const { count } = await sb.from("profiles").select("id", {count:"exact", head:true});
+  document.getElementById("fact-participants").textContent = count ? (count + "+") : "—";
+})();
+
+(async function initCountdown(){
   const { data } = await sb.from("platform_settings").select("value").eq("key","hackathon_start_date").maybeSingle();
   if(!data?.value) return;
   const target = new Date(data.value).getTime();
   const box = document.getElementById("countdown-box");
-  const valueEl = document.getElementById("countdown-value");
 
   function tick(){
     const diff = target - Date.now();
-    if(diff <= 0){ valueEl.textContent = "بدأ الآن! 🎉"; return; }
-    const d = Math.floor(diff / 86400000);
-    const h = Math.floor((diff % 86400000) / 3600000);
-    const m = Math.floor((diff % 3600000) / 60000);
-    valueEl.textContent = `${d} يوم ${h} ساعة ${m} دقيقة`;
+    if(diff <= 0){ box.innerHTML = '<div class="cd-item"><div class="cd-num">🎉</div><div class="cd-label">بدأ الآن</div></div>'; return; }
+    document.getElementById("cd-days").textContent = Math.floor(diff / 86400000);
+    document.getElementById("cd-hours").textContent = Math.floor((diff % 86400000) / 3600000);
+    document.getElementById("cd-mins").textContent = Math.floor((diff % 3600000) / 60000);
   }
-  box.style.display = "block";
+  box.style.display = "inline-flex";
   tick();
   setInterval(tick, 60000);
 })();
+
+}catch(err){ console.error("تعذّر تحميل بيانات Supabase:", err); }
+}
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r34</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r48</div>
 </body>
 </html>
