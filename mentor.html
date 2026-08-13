@@ -48,16 +48,25 @@
   .auth-gate h2{margin-bottom:6px; color:var(--navy);}
   .auth-gate p{color:var(--muted); font-size:13.5px; margin-bottom:20px;}
 
-  .slot-row{display:flex; justify-content:space-between; align-items:flex-start; padding:14px 0; border-bottom:1px solid var(--border); gap:10px; flex-wrap:wrap;}
-  .slot-row:last-child{border-bottom:none;}
-  .slot-time{font-size:13.5px; font-weight:600;}
-  .slot-meta{font-size:12px; color:var(--muted); margin-top:2px;}
+  .slot-row{
+    display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap;
+    padding:18px 20px; margin-bottom:12px; background:#fff; border:1px solid var(--border); border-radius:14px;
+    transition:.2s; box-shadow:0 1px 2px rgba(13,27,62,.03);
+  }
+  .slot-row:hover{box-shadow:0 6px 18px rgba(13,27,62,.08); border-color:rgba(26,46,90,.18);}
+  .slot-row.is-booked{border-right:3px solid var(--gold);}
+  .slot-time{font-size:14.5px; font-weight:700; color:var(--navy); display:flex; align-items:center; gap:6px;}
+  .slot-time i{width:15px; height:15px; color:var(--gold);}
+  .slot-meta{font-size:12px; color:var(--muted); margin-top:3px;}
   .badge{display:inline-block; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600;}
   .badge-gray{background:#f0f1f5; color:var(--muted);}
   .badge-green{background:#e6f7f3; color:var(--teal);}
   .badge-gold{background:#fbf3e2; color:var(--gold);}
 
-  .project-box{background:#f8f9fb; border-radius:10px; padding:12px 14px; margin-top:8px; font-size:12.5px; color:var(--muted);}
+  .project-box{background:var(--border-light); border-radius:10px; padding:14px 16px; margin-top:10px; font-size:12.5px; color:var(--muted);}
+  .stat-card{background:var(--border-light); border-radius:12px; padding:16px 18px; text-align:center;}
+  .stat-card .num{font-size:24px; font-weight:700; color:var(--navy);}
+  .stat-card .label{font-size:11.5px; color:var(--muted); margin-top:4px;}
 </style>
 </head>
 <body>
@@ -289,7 +298,8 @@ async function saveMyProfile(){
 /* ---------------- مواعيدي ---------------- */
 async function renderSlots(){
   const main = document.getElementById("main-content");
-  main.innerHTML = `<div class="card"><div id="slots-list">جاري التحميل...</div></div>`;
+  main.innerHTML = `<div id="slots-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px"></div>
+    <div class="card"><div id="slots-list">جاري التحميل...</div></div>`;
 
   const { data, error } = await sb.from("mentor_slots")
     .select("id, start_time, end_time, is_online, location, is_booked, mentor_bookings(id, team_id, status, requested_topic, teams(team_name, team_code, tracks(name_ar)))")
@@ -298,9 +308,19 @@ async function renderSlots(){
 
   const box = document.getElementById("slots-list");
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
+
+  // إحصائيات سريعة — البند 4: عدد الجلسات المغلقة
+  const allBookings = data.flatMap(s => s.mentor_bookings || []);
+  const closedCount = allBookings.filter(b => b.status === "completed").length;
+  const upcomingCount = allBookings.filter(b => b.status === "confirmed" && data.find(s => (s.mentor_bookings||[])[0]?.id === b.id && new Date(s.end_time) > new Date())).length;
+  document.getElementById("slots-stats").innerHTML = `
+    <div class="stat-card"><div class="num">${data.length}</div><div class="label">إجمالي المواعيد</div></div>
+    <div class="stat-card"><div class="num">${allBookings.filter(b=>b.status==="confirmed"||b.status==="pending").length}</div><div class="label">قادمة / بانتظار التأكيد</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--teal)">${closedCount}</div><div class="label">جلسات مغلقة</div></div>
+  `;
+
   if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد مواعيد مضافة بعد — أضف موعدك الأول من التبويب الثاني</div>`; return; }
 
-  // جلب آخر مشروع مقدَّم لكل فريق له حجز
   const teamIds = [...new Set(data.map(s => (s.mentor_bookings||[])[0]?.team_id).filter(Boolean))];
   let submissionsByTeam = {};
   if(teamIds.length){
@@ -309,7 +329,7 @@ async function renderSlots(){
       .in("team_id", teamIds)
       .order("version", {ascending:false});
     (submissions||[]).forEach(s => {
-      if(!submissionsByTeam[s.team_id]) submissionsByTeam[s.team_id] = s; // أعلى إصدار يظهر أول لأننا رتّبنا تنازليًا
+      if(!submissionsByTeam[s.team_id]) submissionsByTeam[s.team_id] = s;
     });
   }
 
@@ -317,9 +337,9 @@ async function renderSlots(){
     const booking = (s.mentor_bookings||[])[0];
     const submission = booking ? submissionsByTeam[booking.team_id] : null;
     return `
-    <div class="slot-row">
+    <div class="slot-row ${booking ? 'is-booked' : ''}">
       <div style="flex:1">
-        <div class="slot-time">${fmtDate(s.start_time)}</div>
+        <div class="slot-time"><i data-lucide="calendar-clock"></i> ${fmtDate(s.start_time)}</div>
         <div class="slot-meta">${esc(s.location || (s.is_online ? "عبر الإنترنت" : ""))}</div>
         ${booking ? `
           <div class="project-box">
@@ -328,6 +348,7 @@ async function renderSlots(){
             ${submission ? `
               <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border)">
                 <i data-lucide="folder" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> المشروع: <strong>${esc(submission.title)}</strong>
+                ${submission.description ? `<p style="margin:6px 0 0;color:var(--ink);line-height:1.6">${esc(submission.description)}</p>` : ""}
                 ${submission.file_url ? `<br><a href="${esc(submission.file_url)}" target="_blank" style="color:var(--teal);font-weight:600">فتح ملف المشروع ↗</a>` : '<br><span style="color:var(--muted)">لا يوجد ملف مرفق</span>'}
               </div>
             ` : `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--border);color:var(--muted)">لم يقدّم الفريق مشروعه بعد</div>`}
@@ -336,17 +357,69 @@ async function renderSlots(){
       </div>
       <div style="text-align:left">
         ${!booking ? '<span class="badge badge-gray">غير محجوز</span>' :
-          booking.status === "completed" ? '<span class="badge badge-green">تم تسجيل الملاحظات</span>' :
+          booking.status === "completed" ? '<span class="badge badge-green">✓ جلسة مغلقة</span>' :
           booking.status === "no_show_team" ? '<span class="badge badge-red">لم يحضر الفريق</span>' :
           booking.status === "no_show_mentor" ? '<span class="badge badge-red">لم تحضر (مسجَّل من الفريق)</span>' :
           booking.status === "confirmed" ? '<span class="badge badge-gold">مؤكد</span>' :
           '<span class="badge badge-gray">قيد الانتظار — بانتظار تأكيدك</span>'}
         ${booking && booking.status === "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
-        ${booking && booking.status === "confirmed" && new Date(s.end_time) > new Date() ? `<div style="margin-top:8px"><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
-        ${booking && booking.status === "confirmed" && new Date(s.end_time) <= new Date() ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name})})'>تسجيل ملاحظة (إغلاق)</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="markNoShow('${booking.id}','no_show_team')">لم يحضر الفريق</button></div>` : ""}
+        ${booking && booking.status === "confirmed" ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name})})'>✓ إنهاء الجلسة + ملاحظات</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="markNoShow('${booking.id}','no_show_team')">لم يحضر الفريق</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء الحجز</button>
+          </div>` : ""}
+        ${!booking ? `<div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn btn-outline btn-sm" onclick='openEditSlotModal(${JSON.stringify({id:s.id, start_time:s.start_time, end_time:s.end_time, is_online:s.is_online, location:s.location})})'>تعديل</button>
+            <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="deleteSlot('${s.id}')">حذف الموعد</button>
+          </div>` : ""}
       </div>
     </div>`;
   }).join("");
+  if(window.lucide) lucide.createIcons();
+}
+async function deleteSlot(slotId){
+  if(!confirm("متأكد تبي تحذف هذا الموعد؟ ما يمكن حذفه إلا لو غير محجوز.")) return;
+  const { error } = await sb.from("mentor_slots").delete().eq("id", slotId);
+  if(error){ alert("خطأ: " + error.message); return; }
+  renderSlots();
+}
+function openEditSlotModal(slot){
+  const start = new Date(slot.start_time);
+  const dateStr = start.toISOString().slice(0,10);
+  const timeStr = start.toTimeString().slice(0,5);
+  const durationMin = Math.round((new Date(slot.end_time) - start) / 60000);
+  openModal(`
+    <h3>تعديل الموعد</h3>
+    <div class="field"><label>التاريخ</label><input type="date" id="f-edit-date" value="${dateStr}"></div>
+    <div class="field"><label>وقت البداية</label><input type="time" id="f-edit-time" value="${timeStr}"></div>
+    <div class="field"><label>المدة (دقيقة)</label>
+      <select id="f-edit-duration">
+        ${[15,30,45,60].map(d=>`<option value="${d}" ${d===durationMin?"selected":""}>${d} دقيقة</option>`).join("")}
+      </select>
+    </div>
+    <div class="field"><label>الموقع / رابط اللقاء</label><input id="f-edit-location" value="${esc(slot.location||"")}"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveEditSlot('${slot.id}')">حفظ</button>
+    </div>
+  `);
+}
+async function saveEditSlot(slotId){
+  const date = document.getElementById("f-edit-date").value;
+  const time = document.getElementById("f-edit-time").value;
+  const duration = parseInt(document.getElementById("f-edit-duration").value);
+  const location = document.getElementById("f-edit-location").value.trim();
+  if(!date || !time){ alert("أدخل التاريخ والوقت"); return; }
+
+  const start_time = new Date(`${date}T${time}`);
+  const end_time = new Date(start_time.getTime() + duration*60000);
+
+  const { error } = await sb.from("mentor_slots").update({
+    start_time: start_time.toISOString(), end_time: end_time.toISOString(), location
+  }).eq("id", slotId);
+  if(error){ alert("خطأ: " + error.message); return; }
+  closeModal();
+  renderSlots();
 }
 async function markNoShow(bookingId, statusValue){
   if(!confirm("متأكد؟ هذا الإجراء يسجّل عدم حضور بشكل نهائي بسجل هذا الموعد.")) return;
@@ -613,6 +686,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r55</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r56</div>
 </body>
 </html>

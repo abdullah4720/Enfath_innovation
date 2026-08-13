@@ -156,7 +156,7 @@ async function showContent(){
 
 async function loadProjects(){
   const { data, error } = await sb.from("submissions")
-    .select("id, title, description, file_url, version, submitted_at, teams(team_name, team_code, tracks(name_ar))")
+    .select("id, title, description, file_url, version, submitted_at, teams(team_name, team_code, tracks(name_ar), team_members(is_leader, profiles(full_name)))")
     .order("submitted_at", {ascending:false});
   if(error){
     document.getElementById("projects-grid").innerHTML = `<div class="empty-state">تعذّر تحميل المشاريع: ${esc(error.message)}</div>`;
@@ -195,6 +195,18 @@ function renderProjectsList(highlightId){
         </summary>
         <div style="padding:0 22px 20px">
           <p class="desc">${esc(p.description||"لا يوجد وصف بعد")}</p>
+          ${p.teams?.team_members?.length ? `
+            <div style="margin:12px 0; padding-top:12px; border-top:1px solid var(--border)">
+              <div style="font-size:11.5px; color:var(--muted); margin-bottom:6px">أعضاء الفريق (${p.teams.team_members.length})</div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px">
+                ${p.teams.team_members.map(m => `
+                  <span style="background:var(--bg); border:1px solid var(--border); border-radius:20px; padding:4px 12px; font-size:12px;">
+                    ${esc(m.profiles?.full_name||"")}${m.is_leader ? ' <span style="color:var(--gold)">★</span>' : ""}
+                  </span>
+                `).join("")}
+              </div>
+            </div>
+          ` : ""}
           ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" class="file-link">📎 فتح الملف المرفق</a>` : ""}
           <div class="updated">آخر تحديث: ${fmtDate(p.submitted_at)}</div>
         </div>

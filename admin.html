@@ -119,6 +119,11 @@
   nav a:hover{background:rgba(255,255,255,.06); color:#fff;}
   nav a.active{background:var(--gold); color:var(--navy-dark);}
   nav a i{width:16px; height:16px; flex-shrink:0;}
+  .nav-badge{
+    margin-right:auto; background:var(--danger); color:#fff; font-size:10.5px; font-weight:700;
+    min-width:18px; height:18px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center;
+    padding:0 5px;
+  }
   .nav-icon{width:16px; text-align:center; font-size:14px;}
   .logout-box{margin-top:24px; padding-top:16px; border-top:1px solid rgba(255,255,255,.12);}
   .logout-box .user-email{font-size:11.5px; color:#9db3d6; margin-bottom:10px; word-break:break-all;}
@@ -250,8 +255,8 @@
       <div class="nav-group-label">الإعدادات والإدارة</div>
       <a data-page="tracks"><i data-lucide="signpost"></i> المسارات</a>
       <a data-page="users"><i data-lucide="shield-check"></i> المستخدمون والأدوار</a>
-      <a data-page="mentorApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمرشد</a>
-      <a data-page="judgeApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمحكّم</a>
+      <a data-page="mentorApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمرشد <span id="badge-mentorApps" class="nav-badge" style="display:none"></span></a>
+      <a data-page="judgeApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمحكّم <span id="badge-judgeApps" class="nav-badge" style="display:none"></span></a>
       <a data-page="systemCheck"><i data-lucide="stethoscope"></i> فحص النظام</a>
       <a data-page="finalReport"><i data-lucide="file-bar-chart"></i> التقرير النهائي</a>
       <a data-page="activity"><i data-lucide="history"></i> سجل النشاط</a>
@@ -445,6 +450,22 @@ async function handleLogin(){
   navigateTo("overview");
   if(window.lucide) lucide.createIcons();
   initLucideAutoRender();
+  refreshNavBadges();
+  setInterval(refreshNavBadges, 60000);
+}
+async function refreshNavBadges(){
+  const [mentorApps, judgeApps] = await Promise.all([
+    sb.from("mentor_applications").select("id", {count:"exact", head:true}).eq("status","pending"),
+    sb.from("judge_applications").select("id", {count:"exact", head:true}).eq("status","pending"),
+  ]);
+  const setBadge = (id, count) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(count > 0){ el.textContent = count; el.style.display = "inline-flex"; }
+    else{ el.style.display = "none"; }
+  };
+  setBadge("badge-mentorApps", mentorApps.count || 0);
+  setBadge("badge-judgeApps", judgeApps.count || 0);
 }
 let lucideObserverStarted = false;
 function initLucideAutoRender(){
@@ -480,6 +501,8 @@ async function restoreSession(){
       navigateTo("overview");
       if(window.lucide) lucide.createIcons();
       initLucideAutoRender();
+      refreshNavBadges();
+      setInterval(refreshNavBadges, 60000);
     }
   }
 }
@@ -1234,22 +1257,25 @@ async function renderMentorshipMentorsList(){
     .eq("roles.key", "mentor");
 
   const { data: slots } = await sb.from("mentor_slots").select("id, mentor_user_id, is_booked, start_time");
+  const { data: bookings } = await sb.from("mentor_bookings").select("id, status, slot_id, mentor_slots(mentor_user_id)");
 
   const box = document.getElementById("mentors-mgmt-table");
   if(!mentorRoles || !mentorRoles.length){ box.innerHTML = `<div class="empty-state">لا يوجد مرشدون مسجّلون بعد — أضف أول مرشد بالزر أعلاه</div>`; return; }
 
   box.innerHTML = `<table><thead><tr>
-    <th>المرشد</th><th>التخصص / المسمى الوظيفي</th><th>إجمالي المواعيد</th><th>المحجوزة</th><th></th>
+    <th>المرشد</th><th>التخصص / المسمى الوظيفي</th><th>إجمالي المواعيد</th><th>المحجوزة</th><th>الجلسات المغلقة</th><th></th>
     </tr></thead><tbody>
     ${mentorRoles.map(m => {
       const mySlots = (slots||[]).filter(s => s.mentor_user_id === m.user_id);
       const myBooked = mySlots.filter(s => s.is_booked).length;
+      const myClosed = (bookings||[]).filter(b => b.mentor_slots?.mentor_user_id === m.user_id && b.status === "completed").length;
       const hasFutureSlots = mySlots.some(s => new Date(s.start_time) > new Date() && s.is_booked);
       return `<tr>
         <td><strong>${esc(m.profiles?.full_name||"—")}</strong><br><span style="color:var(--muted);font-size:12px">${esc(m.profiles?.email||"")}</span></td>
         <td>${esc(m.profiles?.specialization||"—")}<br><span style="color:var(--muted);font-size:12px">${esc(m.profiles?.current_position||"")}</span></td>
         <td>${mySlots.length}</td>
         <td>${myBooked}</td>
+        <td><span class="badge badge-green">${myClosed}</span></td>
         <td class="row-actions">
           ${hasFutureSlots ? `<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick='markMentorUnavailable("${m.user_id}", ${JSON.stringify(m.profiles?.full_name||"")})'>⏸ تعطيل مؤقت</button>` : ""}
           <button class="btn btn-danger btn-sm" onclick='removeMentorRole("${m.id}", ${JSON.stringify(m.profiles?.full_name||"")})'>حذف من المرشدين</button>
@@ -2502,6 +2528,7 @@ async function bulkApproveMentorApps(){
   logActivity("اعتماد جماعي لطلبات مرشدين", "mentor_application", null, {count: successCount});
   showToast(`تم اعتماد ${successCount} من ${ids.length} طلب`);
   renderMentorApplications();
+  refreshNavBadges();
 }
 async function approveMentorApp(id){
   const { data, error } = await sb.rpc("approve_mentor_application", { p_application_id: id });
@@ -2513,12 +2540,14 @@ async function approveMentorApp(id){
   logActivity("اعتماد طلب مرشد", "mentor_application", id);
   showToast("تم اعتماد الطلب — صار عنده دور مرشد الآن");
   renderMentorApplications();
+  refreshNavBadges();
 }
 async function rejectMentorApp(id){
   const { data, error } = await sb.rpc("reject_mentor_application", { p_application_id: id });
   if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
   showToast("تم رفض الطلب");
   renderMentorApplications();
+  refreshNavBadges();
 }
 
 /* ============================================================
@@ -2583,6 +2612,7 @@ async function bulkApproveJudgeApps(){
   logActivity("اعتماد جماعي لطلبات محكّمين", "judge_application", null, {count: successCount});
   showToast(`تم اعتماد ${successCount} من ${ids.length} طلب`);
   renderJudgeApplications();
+  refreshNavBadges();
 }
 async function approveJudgeApp(id){
   const { data, error } = await sb.rpc("approve_judge_application", { p_application_id: id });
@@ -2594,12 +2624,14 @@ async function approveJudgeApp(id){
   logActivity("اعتماد طلب محكّم", "judge_application", id);
   showToast("تم اعتماد الطلب — صار عنده دور محكّم الآن");
   renderJudgeApplications();
+  refreshNavBadges();
 }
 async function rejectJudgeApp(id){
   const { data, error } = await sb.rpc("reject_judge_application", { p_application_id: id });
   if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
   showToast("تم رفض الطلب");
   renderJudgeApplications();
+  refreshNavBadges();
 }
 
 /* ============================================================
@@ -3113,7 +3145,7 @@ async function renderProjects(){
     <div id="projects-list">جاري التحميل...</div>`;
 
   const { data, error } = await sb.from("submissions")
-    .select("id, title, description, file_url, version, submitted_at, teams(team_name, team_code, tracks(name_ar))")
+    .select("id, title, description, file_url, version, submitted_at, teams(team_name, team_code, tracks(name_ar), team_members(is_leader, profiles(full_name)))")
     .order("submitted_at", {ascending:false});
 
   const box = document.getElementById("projects-list");
@@ -3161,6 +3193,15 @@ function filterProjectsView(){
         </summary>
         <div style="padding:0 20px 18px">
           <p style="font-size:13.5px;color:var(--ink);line-height:1.6">${esc(p.description||"لا يوجد وصف بعد")}</p>
+          ${p.teams?.team_members?.length ? `
+            <div style="margin:10px 0; display:flex; flex-wrap:wrap; gap:6px">
+              ${p.teams.team_members.map(m => `
+                <span style="background:var(--border-light); border-radius:20px; padding:3px 10px; font-size:11.5px;">
+                  ${esc(m.profiles?.full_name||"")}${m.is_leader ? ' <span style="color:var(--gold)">★</span>' : ""}
+                </span>
+              `).join("")}
+            </div>
+          ` : ""}
           ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600"><i data-lucide="paperclip" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فتح الملف المرفق</a>` : ""}
           <p class="hint" style="margin-top:10px">آخر تحديث: ${fmtDate(p.submitted_at)}</p>
           <div class="row-actions" style="margin-top:8px">
@@ -3557,6 +3598,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r54</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r56</div>
 </body>
 </html>
