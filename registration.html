@@ -580,6 +580,7 @@ async function renderDashboard(){
       <button class="dash-tab ${dashTab==='certs'?'active':''}" data-t="certs"><i data-lucide="award"></i> الشهادات</button>
       <button class="dash-tab ${dashTab==='updates'?'active':''}" data-t="updates"><i data-lucide="megaphone"></i> التحديثات والملفات</button>
       <button class="dash-tab ${dashTab==='profile'?'active':''}" data-t="profile"><i data-lucide="user-round"></i> ملفي الشخصي</button>
+      <button class="dash-tab ${dashTab==='surveys'?'active':''}" data-t="surveys"><i data-lucide="clipboard-list"></i> الاستبيانات</button>
     </div>
     <div id="dash-tab-body"><div class="card">جاري التحميل...</div></div>
   `;
@@ -606,7 +607,96 @@ async function renderDashboard(){
   else if(dashTab === "judging") renderJudgingCriteriaTab(membership);
   else if(dashTab === "certs") renderCertsTab();
   else if(dashTab === "updates") renderUpdatesTab(membership);
+  else if(dashTab === "surveys") renderSurveysTab();
   else renderMyProfileTab();
+}
+
+/* ---------------- تبويب: الاستبيانات ---------------- */
+async function renderSurveysTab(){
+  const body = document.getElementById("dash-tab-body");
+  body.innerHTML = `<div class="card">جاري التحميل...</div>`;
+
+  const { data: surveys, error } = await sb.from("surveys").select("*").eq("is_active", true);
+  if(error){ body.innerHTML = `<div class="card"><p class="hint">خطأ: ${esc(error.message)}</p></div>`; return; }
+
+  const { data: myResponses } = await sb.from("survey_responses").select("survey_id").eq("user_id", currentUser.id);
+  const answeredIds = new Set((myResponses||[]).map(r => r.survey_id));
+
+  if(!surveys || !surveys.length){
+    body.innerHTML = `<div class="card"><h2>الاستبيانات</h2><p class="hint">لا توجد استبيانات متاحة حاليًا</p></div>`;
+    return;
+  }
+
+  body.innerHTML = `<div class="card"><h2 style="margin-bottom:14px">الاستبيانات المتاحة</h2>
+    ${surveys.map(s => `
+      <div class="member-row">
+        <span>${esc(s.title)}</span>
+        ${answeredIds.has(s.id)
+          ? '<span class="badge-gold" style="font-size:11px;padding:3px 10px;border-radius:12px;background:#e6f7f3;color:var(--teal)">✓ تم الإرسال</span>'
+          : `<button class="btn btn-primary btn-sm" style="width:auto" onclick='openSurveyForm(${JSON.stringify(s)})'>عبّئه الآن</button>`}
+      </div>
+    `).join("")}
+  </div>`;
+}
+function openSurveyForm(survey){
+  const questions = survey.questions_json || [];
+  const body = document.getElementById("dash-tab-body");
+  body.innerHTML = `<div class="card">
+    <h2>${esc(survey.title)}</h2>
+    <p class="sub" style="margin-bottom:20px">إجاباتك تساعدنا نحسّن البرنامج — تُرسَل مرة وحدة فقط</p>
+    <div id="survey-form-fields">
+      ${questions.map((q, i) => {
+        if(q.type === "nps"){
+          return `<div class="field"><label>${esc(q.label)}</label>
+            <div style="display:flex;gap:4px;flex-wrap:wrap">
+              ${Array.from({length:11},(_,n)=>`
+                <label style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+                  <input type="radio" name="q_${q.id}" value="${n}" data-qtype="nps" data-qid="${q.id}">
+                  <span style="font-size:11px">${n}</span>
+                </label>
+              `).join("")}
+            </div>
+          </div>`;
+        }
+        if(q.type === "choice"){
+          return `<div class="field"><label>${esc(q.label)}</label>
+            ${(q.options||[]).map(o => `
+              <label style="display:block;padding:6px 0;font-size:13.5px">
+                <input type="radio" name="q_${q.id}" value="${esc(o)}" data-qtype="choice" data-qid="${q.id}"> ${esc(o)}
+              </label>
+            `).join("")}
+          </div>`;
+        }
+        return `<div class="field"><label>${esc(q.label)}</label><textarea rows="3" data-qtype="text" data-qid="${q.id}"></textarea></div>`;
+      }).join("")}
+    </div>
+    <div id="survey-alert" class="alert"></div>
+    <button class="btn btn-primary" onclick='submitSurveyResponse(${JSON.stringify(survey.id)})'>إرسال الإجابات</button>
+    <button class="btn-link" style="margin-top:10px;display:block" onclick="renderSurveysTab()">رجوع</button>
+  </div>`;
+}
+async function submitSurveyResponse(surveyId){
+  const alertBox = document.getElementById("survey-alert");
+  alertBox.className = "alert";
+  const answers = {};
+  let npsScore = null;
+
+  document.querySelectorAll("[data-qid]").forEach(el => {
+    const qid = el.dataset.qid;
+    const type = el.dataset.qtype;
+    if(type === "text"){
+      answers[qid] = el.value.trim();
+    } else if((el.type === "radio") && el.checked){
+      answers[qid] = el.value;
+      if(type === "nps") npsScore = parseInt(el.value);
+    }
+  });
+
+  const { error } = await sb.from("survey_responses").insert({
+    survey_id: surveyId, user_id: currentUser.id, answers_json: answers, nps_score: npsScore
+  });
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  renderSurveysTab();
 }
 
 /* ---------------- تبويب: ملفي الشخصي ---------------- */
@@ -1512,6 +1602,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r58</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r59</div>
 </body>
 </html>
