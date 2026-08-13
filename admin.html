@@ -172,9 +172,22 @@
   .form-row-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
 
   .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;}
-  .tabs{display:flex; gap:6px; margin-bottom:18px; border-bottom:1px solid var(--border);}
-  .tab{padding:9px 4px; margin-left:18px; font-size:13.5px; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; font-weight:500;}
-  .tab.active{color:var(--teal); border-color:var(--teal);}
+  .tabs{display:flex; gap:4px; margin-bottom:20px; background:var(--border-light); padding:5px; border-radius:12px; width:fit-content; flex-wrap:wrap;}
+  .tab{padding:8px 18px; font-size:13px; color:var(--muted); cursor:pointer; border-radius:8px; font-weight:600; transition:.15s;}
+  .tab:hover{color:var(--navy);}
+  .tab.active{background:#fff; color:var(--navy); box-shadow:0 1px 4px rgba(13,27,62,.1);}
+
+  .avatar-circle{
+    width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; color:#fff; flex-shrink:0;
+  }
+  .progress-track{background:var(--border-light); border-radius:20px; height:6px; overflow:hidden; width:100%;}
+  .progress-fill{background:var(--teal); height:100%; border-radius:20px; transition:.3s;}
+  .entity-row{
+    display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:12px; transition:.15s;
+    border:1px solid var(--border-light);
+  }
+  .entity-row:hover{background:var(--border-light); border-color:var(--border);}
 
   .toast{
     position:fixed; bottom:24px; left:24px; background:var(--navy); color:#fff; padding:13px 20px;
@@ -312,6 +325,17 @@ document.getElementById("modal-overlay").addEventListener("click", (e)=>{
 function esc(str){
   if(str === null || str === undefined) return "";
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+const AVATAR_COLORS = ["#1A2E5A","#C9922A","#1F9E8E","#7C6FE0","#2A3D6B","#B0752E"];
+function initials(name){
+  if(!name) return "؟";
+  const parts = name.trim().split(/\s+/);
+  return parts[0]?.[0] || "؟";
+}
+function avatarColor(seed){
+  let hash = 0;
+  for(let i=0;i<(seed||"").length;i++) hash = seed.charCodeAt(i) + ((hash<<5)-hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 function fmtDate(d){
   if(!d) return "—";
@@ -1481,11 +1505,20 @@ async function markMentorUnavailable(mentorId, mentorName){
 /* ---------------- الفرق ---------------- */
 async function renderMentorshipTeamsList(){
   const body = document.getElementById("mentorship-body");
-  body.innerHTML = `<div id="mentorship-teams-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px"></div>
-    <div class="card" style="margin-bottom:12px">
-      <div class="field" style="margin:0"><label>بحث باسم الفريق أو المرشد</label><input id="mentorship-teams-search" placeholder="اكتب للبحث..." oninput="filterMentorshipTeams()"></div>
+  body.innerHTML = `<div id="mentorship-teams-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px"></div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div class="field" style="margin:0;flex:1;min-width:220px"><label>بحث باسم الفريق أو المرشد</label><input id="mentorship-teams-search" placeholder="اكتب للبحث..." oninput="filterMentorshipTeams()"></div>
+        <div class="field" style="margin:0;min-width:180px"><label>الحالة</label>
+          <select id="mentorship-teams-status-filter" onchange="filterMentorshipTeams()">
+            <option value="">الكل</option>
+            <option value="has">لها مواعيد</option>
+            <option value="none">بدون مواعيد</option>
+          </select>
+        </div>
+      </div>
     </div>
-    <div id="teams-mentorship-table">جاري التحميل...</div>`;
+    <div id="teams-mentorship-table"></div>`;
 
   const { data: teams } = await sb.from("teams")
     .select("id, team_name, team_code, status, tracks(name_ar)")
@@ -1500,10 +1533,14 @@ async function renderMentorshipTeamsList(){
   cachedMentorshipBookings = bookings || [];
 
   const withBookings = cachedMentorshipTeams.filter(t => cachedMentorshipBookings.some(b => b.team_id === t.id)).length;
+  const fillPct = cachedMentorshipTeams.length ? Math.round((withBookings / cachedMentorshipTeams.length) * 100) : 0;
   document.getElementById("mentorship-teams-stats").innerHTML = `
     <div class="stat-card"><div class="num">${cachedMentorshipTeams.length}</div><div class="label">فرق مؤكدة</div></div>
     <div class="stat-card"><div class="num" style="color:var(--teal)">${withBookings}</div><div class="label">فرق لها مواعيد إرشاد</div></div>
-    <div class="stat-card accent"><div class="num">${cachedMentorshipTeams.length - withBookings}</div><div class="label">فرق بدون أي موعد</div></div>
+    <div class="stat-card accent">
+      <div class="num">${fillPct}%</div><div class="label">نسبة التغطية</div>
+      <div class="progress-track" style="margin-top:8px"><div class="progress-fill" style="width:${fillPct}%"></div></div>
+    </div>
   `;
 
   filterMentorshipTeams();
@@ -1511,10 +1548,13 @@ async function renderMentorshipTeamsList(){
 let cachedMentorshipTeams = [], cachedMentorshipBookings = [];
 function filterMentorshipTeams(){
   const term = (document.getElementById("mentorship-teams-search")?.value || "").trim().toLowerCase();
-  const filtered = !term ? cachedMentorshipTeams : cachedMentorshipTeams.filter(t => {
-    const teamMatch = t.team_name.toLowerCase().includes(term);
-    const mentorMatch = cachedMentorshipBookings.some(b => b.team_id === t.id && (b.mentor_slots?.profiles?.full_name||"").toLowerCase().includes(term));
-    return teamMatch || mentorMatch;
+  const statusFilter = document.getElementById("mentorship-teams-status-filter")?.value || "";
+  const filtered = cachedMentorshipTeams.filter(t => {
+    const teamMatch = !term || t.team_name.toLowerCase().includes(term);
+    const mentorMatch = !term || cachedMentorshipBookings.some(b => b.team_id === t.id && (b.mentor_slots?.profiles?.full_name||"").toLowerCase().includes(term));
+    const hasBookings = cachedMentorshipBookings.some(b => b.team_id === t.id);
+    const statusMatch = !statusFilter || (statusFilter === "has" ? hasBookings : !hasBookings);
+    return (teamMatch || mentorMatch) && statusMatch;
   });
   renderMentorshipTeamsTable(filtered);
 }
@@ -1522,35 +1562,55 @@ function renderMentorshipTeamsTable(teams){
   const box = document.getElementById("teams-mentorship-table");
   if(!teams.length){ box.innerHTML = `<div class="card"><div class="empty-state">لا توجد نتائج مطابقة</div></div>`; return; }
 
-  const statusBadge = {pending:'<span class="badge badge-gray">قيد الانتظار</span>', confirmed:'<span class="badge badge-gold">مؤكد</span>', completed:'<span class="badge badge-green">مكتمل</span>'};
+  const statusMeta = {
+    pending:{label:"قيد الانتظار", color:"var(--muted)", bg:"var(--border-light)"},
+    confirmed:{label:"مؤكد", color:"var(--gold)", bg:"#fbf3e2"},
+    completed:{label:"مكتمل", color:"var(--teal)", bg:"#e6f7f3"},
+  };
 
-  box.innerHTML = teams.map(t => {
-    const teamBookings = cachedMentorshipBookings.filter(b => b.team_id === t.id);
-    return `
-    <details class="card" style="margin-bottom:10px; padding:0; overflow:hidden;">
-      <summary style="cursor:pointer; padding:16px 20px; list-style:none; display:flex; justify-content:space-between; align-items:center; gap:12px;">
-        <div>
-          <strong>${esc(t.team_name)}</strong> <code style="font-size:10.5px;color:var(--gold);background:#fbf3e2;padding:1px 7px;border-radius:6px">${esc(t.team_code||"")}</code>
-          <span style="color:var(--muted);font-size:12.5px"> · ${esc(t.tracks?.name_ar||"")}</span>
-        </div>
-        <span class="badge ${teamBookings.length ? 'badge-green' : 'badge-gray'}">${teamBookings.length} موعد</span>
-      </summary>
-      <div style="padding:0 20px 16px">
-        <div style="text-align:left;margin-bottom:10px">
-          <button class="btn btn-outline btn-sm" onclick='openManualAssignModal("${t.id}", ${JSON.stringify(t.team_name)})'>+ تعيين مرشد إضافي</button>
-        </div>
-        ${!teamBookings.length ? '<p class="hint">بدون مواعيد إرشاد بعد</p>' : teamBookings.map(b => `
-          <div class="member-row">
-            <span>${esc(b.mentor_slots?.profiles?.full_name||"—")} · ${fmtDate(b.mentor_slots?.start_time)}</span>
-            <span style="display:flex;align-items:center;gap:8px">
-              ${statusBadge[b.status]||b.status}
-              <button class="btn btn-danger btn-sm" onclick="cancelMentorBooking('${b.id}')">إلغاء</button>
-            </span>
+  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px">
+    ${teams.map(t => {
+      const teamBookings = cachedMentorshipBookings.filter(b => b.team_id === t.id);
+      const color = avatarColor(t.team_name);
+      return `
+      <details class="card" style="margin:0; padding:0; overflow:hidden;">
+        <summary style="cursor:pointer; padding:16px 20px; list-style:none; display:flex; align-items:center; gap:14px;">
+          <div class="avatar-circle" style="background:${color}">${esc(initials(t.team_name))}</div>
+          <div style="flex:1; min-width:0">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+              <strong style="font-size:14.5px">${esc(t.team_name)}</strong>
+              <code style="font-size:10px;color:var(--gold);background:#fbf3e2;padding:1px 7px;border-radius:6px">${esc(t.team_code||"")}</code>
+            </div>
+            <div style="color:var(--muted);font-size:12px;margin-top:2px">${esc(t.tracks?.name_ar||"")}</div>
           </div>
-        `).join("")}
-      </div>
-    </details>`;
-  }).join("");
+          <span class="badge ${teamBookings.length ? 'badge-green' : 'badge-gray'}" style="flex-shrink:0">${teamBookings.length} موعد</span>
+        </summary>
+        <div style="padding:0 20px 18px 76px">
+          <div style="margin-bottom:12px">
+            <button class="btn btn-outline btn-sm" onclick='openManualAssignModal("${t.id}", ${JSON.stringify(t.team_name)})'>+ تعيين مرشد إضافي</button>
+          </div>
+          ${!teamBookings.length ? '<p class="hint">بدون مواعيد إرشاد بعد</p>' : `
+            <div style="display:flex;flex-direction:column;gap:8px">
+            ${teamBookings.map(b => {
+              const mColor = avatarColor(b.mentor_slots?.profiles?.full_name || "?");
+              const sm = statusMeta[b.status] || {label:b.status, color:"var(--muted)", bg:"var(--border-light)"};
+              return `
+              <div class="entity-row">
+                <div class="avatar-circle" style="width:32px;height:32px;font-size:12px;background:${mColor}">${esc(initials(b.mentor_slots?.profiles?.full_name))}</div>
+                <div style="flex:1">
+                  <div style="font-size:13px;font-weight:600">${esc(b.mentor_slots?.profiles?.full_name||"—")}</div>
+                  <div style="font-size:11.5px;color:var(--muted)">${fmtDate(b.mentor_slots?.start_time)}</div>
+                </div>
+                <span style="font-size:11px;font-weight:600;color:${sm.color};background:${sm.bg};padding:3px 10px;border-radius:12px">${sm.label}</span>
+                <button class="btn btn-danger btn-sm" onclick="cancelMentorBooking('${b.id}')">إلغاء</button>
+              </div>`;
+            }).join("")}
+            </div>
+          `}
+        </div>
+      </details>`;
+    }).join("")}
+  </div>`;
 }
 async function openManualAssignModal(teamId, teamName){
   const { data: slots } = await sb.from("mentor_slots")
@@ -2202,25 +2262,52 @@ function renderAssignmentsList(teams, assignments){
   const box = document.getElementById("assignments-list");
   if(!teams.length){ box.innerHTML = `<div class="card"><div class="empty-state">لا توجد نتائج مطابقة</div></div>`; return; }
 
-  box.innerHTML = teams.map(t => {
-    const teamAssignments = (assignments||[]).filter(a => a.team_id === t.id);
-    return `
-    <div class="card" style="margin-bottom:14px">
-      <div class="toolbar" style="margin-bottom:10px">
-        <div>
-          <strong>${esc(t.team_name)}</strong> <code style="font-size:10.5px;color:var(--gold);background:#fbf3e2;padding:1px 7px;border-radius:6px">${esc(t.team_code||"")}</code>
-          <span style="color:var(--muted);font-size:12.5px"> · ${esc(t.tracks?.name_ar||"")}</span>
-        </div>
-        <button class="btn btn-outline btn-sm" onclick='openAssignJudgeModal("${t.id}", ${JSON.stringify(t.team_name)})'>+ تعيين محكّم</button>
+  // تجميع الفرق حسب المسار — يسهّل التعيين لما تكون الفرق كثيرة
+  const groups = {};
+  teams.forEach(t => {
+    const key = t.tracks?.name_ar || "بدون مسار";
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  box.innerHTML = Object.entries(groups).map(([trackName, groupTeams]) => `
+    <div style="margin-bottom:22px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-right:2px">
+        <i data-lucide="signpost" style="width:15px;height:15px;color:var(--gold)"></i>
+        <h4 style="font-size:13px;color:var(--navy);margin:0">${esc(trackName)}</h4>
+        <span style="font-size:11px;color:var(--muted)">(${groupTeams.length} فريق)</span>
       </div>
-      ${!teamAssignments.length ? '<p class="hint">لا يوجد محكّمون معيّنون بعد لهذا الفريق</p>' : teamAssignments.map(a => `
-        <div class="member-row">
-          <span>${esc(a.profiles?.full_name||"—")} ${a.has_conflict ? `<span class="badge badge-red">تعارض مصالح: ${esc(a.conflict_reason||"")}</span>` : ""}</span>
-          <button class="btn btn-danger btn-sm" onclick="deleteRow('judge_assignments','${a.id}', loadJudgingAssignmentsList)">إزالة</button>
-        </div>
-      `).join("")}
-    </div>`;
-  }).join("");
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${groupTeams.map(t => {
+          const teamAssignments = (assignments||[]).filter(a => a.team_id === t.id);
+          const color = avatarColor(t.team_name);
+          return `
+          <div class="card" style="margin:0">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+              <div class="avatar-circle" style="width:36px;height:36px;font-size:13px;background:${color}">${esc(initials(t.team_name))}</div>
+              <div style="flex:1">
+                <strong style="font-size:13.5px">${esc(t.team_name)}</strong> <code style="font-size:10px;color:var(--gold);background:#fbf3e2;padding:1px 7px;border-radius:6px">${esc(t.team_code||"")}</code>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick='openAssignJudgeModal("${t.id}", ${JSON.stringify(t.team_name)})'>+ تعيين محكّم</button>
+            </div>
+            ${!teamAssignments.length ? '<p class="hint" style="margin-right:48px">لا يوجد محكّمون معيّنون بعد</p>' : `
+              <div style="display:flex;flex-direction:column;gap:6px;margin-right:48px">
+              ${teamAssignments.map(a => `
+                <div class="entity-row" style="padding:8px 12px">
+                  <div class="avatar-circle" style="width:26px;height:26px;font-size:10.5px;background:${avatarColor(a.profiles?.full_name||"?")}">${esc(initials(a.profiles?.full_name))}</div>
+                  <span style="flex:1;font-size:12.5px">${esc(a.profiles?.full_name||"—")}</span>
+                  ${a.has_conflict ? `<span class="badge badge-red">تعارض: ${esc(a.conflict_reason||"")}</span>` : ""}
+                  <button class="btn btn-danger btn-sm" onclick="deleteRow('judge_assignments','${a.id}', loadJudgingAssignmentsList)">إزالة</button>
+                </div>
+              `).join("")}
+              </div>
+            `}
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+  `).join("");
+  if(window.lucide) lucide.createIcons();
 }
 async function openAssignJudgeModal(teamId, teamName){
   const { data: judges } = await sb.from("user_roles")
@@ -2652,12 +2739,27 @@ function openCertTypeModal(c=null){
     <div class="field"><label>نص الشهادة</label>
       <textarea id="f-cert-text" rows="4" placeholder="نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ بتاريخ {{date}}">${esc(c.certificate_text||"")}</textarea>
       <p class="hint" style="margin-top:4px">استخدم {{name}} للاسم، {{type}} لنوع الشهادة، {{date}} للتاريخ، {{code}} لرمز التحقق</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <button type="button" class="btn-link" style="font-size:11.5px" onclick="applyCertTextSuggestion('participant')">صيغة مقترحة: مشارك</button>
+        <button type="button" class="btn-link" style="font-size:11.5px" onclick="applyCertTextSuggestion('mentor')">صيغة مقترحة: مرشد</button>
+        <button type="button" class="btn-link" style="font-size:11.5px" onclick="applyCertTextSuggestion('judge')">صيغة مقترحة: محكّم</button>
+        <button type="button" class="btn-link" style="font-size:11.5px" onclick="applyCertTextSuggestion('winner')">صيغة مقترحة: فائز</button>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
       <button class="btn btn-primary" onclick="saveCertType('${c.id||""}')">حفظ</button>
     </div>
   `);
+}
+function applyCertTextSuggestion(kind){
+  const suggestions = {
+    participant: "نشهد بأن {{name}} قد شارك بفعالية بهاكاثون إنفاذ وأتمّ متطلبات المشاركة بنجاح، بتاريخ {{date}}، تقديرًا لجهده والتزامه طوال فعاليات البرنامج.",
+    mentor: "نتقدّم بالشكر والتقدير لـ{{name}} على جهوده القيّمة كمرشد بهاكاثون إنفاذ، وما قدّمه من دعم واستشارات ساهمت برفع جودة أفكار الفرق المشاركة، بتاريخ {{date}}.",
+    judge: "نتقدّم بالشكر والتقدير لـ{{name}} على مشاركته كمحكّم بهاكاثون إنفاذ، وحرصه على تقييم مشاريع الفرق بمهنية ونزاهة عالية أسهمت بنجاح البرنامج، بتاريخ {{date}}.",
+    winner: "نشهد بفوز {{name}} ضمن هاكاثون إنفاذ تقديرًا للتميّز والإبداع بالفكرة المقدَّمة، بتاريخ {{date}}.",
+  };
+  document.getElementById("f-cert-text").value = suggestions[kind] || "";
 }
 async function saveCertType(id){
   const key = document.getElementById("f-cert-key").value.trim();
@@ -2967,10 +3069,54 @@ async function renderFinalReportPage(){
   main.innerHTML = `<div class="page-header"><div><h1>التقرير النهائي</h1><p>تقرير بوربوينت شامل بهوية إنفاذ الرسمية، يُولَّد مباشرة من البيانات الحية</p></div></div>
     <div class="card">
       <h3 style="margin:0 0 10px">محتويات التقرير</h3>
-      <p class="hint" style="margin-bottom:16px">الغلاف · نبذة عن البرنامج · مسارات الهاكاثون الثلاثة · نظرة عامة · توزيع المسارات · حالة الفرق · الإرشاد والتحكيم · الشهادات الصادرة · الرضا والتقييم · الختام</p>
+      <p class="hint" style="margin-bottom:16px">الغلاف · نبذة عن البرنامج · مسارات الهاكاثون الثلاثة · نظرة عامة · توزيع المسارات · حالة الفرق · الإرشاد والتحكيم · الشهادات الصادرة · الرضا والتقييم · لقطات من الفعالية · الختام</p>
       <button class="btn btn-primary" id="gen-report-btn" onclick="generateFinalReport()"><i data-lucide="inbox" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> توليد وتحميل التقرير</button>
       <div id="report-progress" class="hint" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <div class="toolbar" style="margin-bottom:14px">
+        <div><h3 style="margin:0">صور التقرير (لقطات من الفعالية)</h3><p class="hint" style="margin:2px 0 0">حتى 6 صور — تُدرج تلقائيًا بشريحة مخصّصة بالتقرير</p></div>
+        <label class="btn btn-primary" style="cursor:pointer;margin:0">
+          + رفع صورة
+          <input type="file" id="report-image-upload" accept="image/*" multiple style="display:none" onchange="handleReportImageUpload(event)">
+        </label>
+      </div>
+      <div id="report-images-grid">جاري التحميل...</div>
     </div>`;
+  await loadReportImages();
+}
+async function loadReportImages(){
+  const box = document.getElementById("report-images-grid");
+  const { data, error } = await sb.storage.from("report-images").list("", { sortBy: { column: "created_at", order: "desc" } });
+  if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
+  if(!data || !data.length){ box.innerHTML = `<div class="empty-state">لا توجد صور مرفوعة بعد</div>`; return; }
+
+  box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
+    ${data.map(f => {
+      const { data: urlData } = sb.storage.from("report-images").getPublicUrl(f.name);
+      return `<div style="position:relative">
+        <img src="${urlData.publicUrl}" style="width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">
+        <button class="btn btn-danger btn-sm" style="position:absolute;top:6px;left:6px;padding:2px 8px" onclick="deleteReportImage('${f.name}')">حذف</button>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+async function handleReportImageUpload(event){
+  const files = event.target.files;
+  if(!files.length) return;
+  for(const file of files){
+    const path = `${Date.now()}_${file.name}`;
+    const { error } = await sb.storage.from("report-images").upload(path, file);
+    if(error){ showToast("خطأ برفع " + file.name + ": " + error.message, true); }
+  }
+  showToast("تم رفع الصور");
+  loadReportImages();
+}
+async function deleteReportImage(path){
+  if(!confirm("حذف هذه الصورة؟")) return;
+  const { error } = await sb.storage.from("report-images").remove([path]);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  loadReportImages();
 }
 async function generateFinalReport(){
   const btn = document.getElementById("gen-report-btn");
@@ -3258,6 +3404,30 @@ async function generateFinalReport(){
       ])
     ];
     s.addTable(rows, { x:0.5, y:1.5, w:12.3, fontSize:12, color:INK, fontFace:FONT, align:"center", border:{color:BG_LIGHT, pt:1}, autoPage:false });
+    addFooter(s, pageNum++);
+  }
+
+  // ============================================================
+  // شريحة لقطات من الفعالية (صور مرفوعة من لوحة التحكم)
+  // ============================================================
+  const { data: reportImagesList } = await sb.storage.from("report-images").list("", { sortBy: { column: "created_at", order: "desc" } });
+  if(reportImagesList && reportImagesList.length){
+    s = pptx.addSlide();
+    s.background = { color: WHITE };
+    addEyebrow(s, "توثيق بصري");
+    addTitle(s, "لقطات من الفعالية");
+    const imgs = reportImagesList.slice(0, 6);
+    const cols = imgs.length <= 2 ? imgs.length : 3;
+    const rows_ = Math.ceil(imgs.length / cols);
+    const cellW = 11.8 / cols, cellH = 4.9 / rows_;
+    imgs.forEach((f, i) => {
+      const { data: urlData } = sb.storage.from("report-images").getPublicUrl(f.name);
+      const col = i % cols, row = Math.floor(i / cols);
+      const x = 0.75 + col * (cellW + 0.15), y = 1.6 + row * (cellH + 0.15);
+      try{
+        s.addImage({ path: urlData.publicUrl, x, y, w: cellW - 0.15, h: cellH - 0.15, sizing: { type: "cover", w: cellW - 0.15, h: cellH - 0.15 } });
+      }catch(imgErr){ console.error("تعذّر إدراج صورة بالتقرير:", imgErr); }
+    });
     addFooter(s, pageNum++);
   }
 
@@ -3964,6 +4134,6 @@ async function renderActivityLog(){
     </tbody></table>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r59</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r61</div>
 </body>
 </html>

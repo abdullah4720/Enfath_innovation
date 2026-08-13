@@ -648,14 +648,15 @@ function openSurveyForm(survey){
       ${questions.map((q, i) => {
         if(q.type === "nps"){
           return `<div class="field"><label>${esc(q.label)}</label>
-            <div style="display:flex;gap:4px;flex-wrap:wrap">
-              ${Array.from({length:11},(_,n)=>`
-                <label style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
-                  <input type="radio" name="q_${q.id}" value="${n}" data-qtype="nps" data-qid="${q.id}">
-                  <span style="font-size:11px">${n}</span>
-                </label>
+            <div class="star-rating" data-qid="${q.id}" style="display:flex;gap:6px;justify-content:center;margin-top:8px" onmouseleave="resetStarsPreview('${q.id}')">
+              ${Array.from({length:5},(_,i)=>`
+                <i data-lucide="star" data-star-value="${(i+1)*2}" data-qid="${q.id}"
+                   style="width:32px;height:32px;color:#d8dbe4;cursor:pointer;transition:.15s"
+                   onmouseenter="previewStars('${q.id}', ${i+1})"
+                   onclick="selectStars('${q.id}', ${i+1})"></i>
               `).join("")}
             </div>
+            <input type="hidden" id="star-value-${q.id}" data-qtype="nps" data-qid="${q.id}">
           </div>`;
         }
         if(q.type === "choice"){
@@ -674,6 +675,26 @@ function openSurveyForm(survey){
     <button class="btn btn-primary" onclick='submitSurveyResponse(${JSON.stringify(survey.id)})'>إرسال الإجابات</button>
     <button class="btn-link" style="margin-top:10px;display:block" onclick="renderSurveysTab()">رجوع</button>
   </div>`;
+  if(window.lucide) lucide.createIcons();
+}
+function resetStarsPreview(qid){
+  const savedVal = parseInt(document.getElementById(`star-value-${qid}`)?.value) || 0;
+  previewStars(qid, savedVal / 2);
+}
+function previewStars(qid, count){
+  document.querySelectorAll(`i[data-qid="${qid}"]`).forEach(star => {
+    const val = parseInt(star.dataset.starValue) / 2;
+    star.style.color = val <= count ? "var(--gold)" : "#d8dbe4";
+  });
+}
+function selectStars(qid, count){
+  const input = document.getElementById(`star-value-${qid}`);
+  input.value = count * 2;
+  document.querySelectorAll(`i[data-qid="${qid}"]`).forEach(star => {
+    const val = parseInt(star.dataset.starValue) / 2;
+    star.style.color = val <= count ? "var(--gold)" : "#d8dbe4";
+    star.dataset.locked = val <= count ? "1" : "0";
+  });
 }
 async function submitSurveyResponse(surveyId){
   const alertBox = document.getElementById("survey-alert");
@@ -686,9 +707,10 @@ async function submitSurveyResponse(surveyId){
     const type = el.dataset.qtype;
     if(type === "text"){
       answers[qid] = el.value.trim();
+    } else if(type === "nps" && el.tagName === "INPUT" && el.type === "hidden"){
+      if(el.value){ answers[qid] = el.value; npsScore = parseInt(el.value); }
     } else if((el.type === "radio") && el.checked){
       answers[qid] = el.value;
-      if(type === "nps") npsScore = parseInt(el.value);
     }
   });
 
@@ -962,10 +984,20 @@ async function renderPrepTab(membership){
   renderMyQr();
 }
 function qrCardHtml(){
-  return `<div class="card" style="text-align:center">
-    <h2 style="margin-bottom:4px">رمز حضورك الشخصي</h2>
-    <p class="sub">أظهر هذا الرمز للمنسّق عند دخول أي جلسة أو فعالية لتسجيل حضورك تلقائيًا</p>
-    <div id="my-qr-code" style="display:flex; justify-content:center; margin:14px 0"></div>
+  return `<div class="card">
+    <div style="text-align:center">
+      <h2 style="margin-bottom:4px">رمز حضورك الشخصي</h2>
+      <p class="sub" style="margin-bottom:16px">هذا الرمز يعرّفك أنت بالذات — يُستخدم لتسجيل حضورك الفعلي بسرعة، بدون توقيع ورقي</p>
+      <div id="my-qr-code" style="display:flex; justify-content:center; margin:14px 0"></div>
+    </div>
+    <div style="background:var(--bg); border-radius:12px; padding:14px 16px; margin-top:8px">
+      <div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px">كيف يشتغل؟</div>
+      <div style="display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:var(--muted)">
+        <div>1️⃣ لما توصل أي جلسة تحضير أو فعالية بالهاكاثون، تفتح هذا الرمز من جوالك</div>
+        <div>2️⃣ فريق التنسيق يمسحه بجهازهم عند الباب</div>
+        <div>3️⃣ حضورك يتسجّل فورًا بالنظام — تلقائيًا، بدون ما تكتب اسمك بورقة</div>
+      </div>
+    </div>
   </div>`;
 }
 function renderMyQr(){
@@ -1602,6 +1634,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r59</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r61</div>
 </body>
 </html>
