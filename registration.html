@@ -44,6 +44,8 @@
   .sub{color:var(--muted); font-size:13.5px; margin:0 0 24px;}
 
   .field{margin-bottom:16px;}
+  .form-row-2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media (max-width:520px){ .form-row-2{grid-template-columns:1fr;} }
   .field label{display:block; font-size:13px; margin-bottom:6px; font-weight:500;}
   .field input, .field select, .field textarea{
     width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:10px;
@@ -613,11 +615,65 @@ async function renderMyProfileTab(){
   const { data: profile } = await sb.from("profiles").select("*").eq("id", currentUser.id).single();
   body.innerHTML = `<div class="card">
     <h2>ملفي الشخصي</h2>
-    <p class="sub">عدّل بياناتك — الاسم والبريد ثابتان، الجوال والجهة قابلان للتعديل</p>
+    <p class="sub">عدّل بياناتك — الاسم والبريد ثابتان، باقي الحقول قابلة للتعديل بأي وقت</p>
     <div class="field"><label>الاسم الكامل</label><input value="${esc(profile.full_name||"")}" disabled style="opacity:.6"></div>
     <div class="field"><label>البريد الإلكتروني</label><input value="${esc(profile.email||"")}" disabled style="opacity:.6"></div>
     <div class="field"><label>رقم الجوال</label><input id="profile-phone" value="${esc(profile.phone||"")}" placeholder="05xxxxxxxx"></div>
-    <div class="field"><label>الجهة</label><input id="profile-org" value="${esc(profile.organization||"")}"></div>
+
+    <div class="form-row-2">
+      <div class="field"><label>الفئة</label>
+        <select id="profile-category">
+          <option value="">اختر</option>
+          <option value="طالب" ${profile.category==='طالب'?'selected':''}>طالب</option>
+          <option value="خريج" ${profile.category==='خريج'?'selected':''}>خريج</option>
+          <option value="عضو هيئة تدريس" ${profile.category==='عضو هيئة تدريس'?'selected':''}>عضو هيئة تدريس</option>
+          <option value="أخرى" ${profile.category==='أخرى'?'selected':''}>أخرى</option>
+        </select>
+      </div>
+      <div class="field"><label>المدينة</label><input id="profile-city" value="${esc(profile.city||"")}"></div>
+    </div>
+
+    <div class="field"><label>الجهة</label><input id="profile-org" list="org-suggestions-2" value="${esc(profile.organization||"")}"></div>
+    <datalist id="org-suggestions-2">
+      <option value="جامعة القصيم"><option value="جامعة الملك سعود"><option value="جامعة الملك عبدالعزيز">
+      <option value="وزارة العدل"><option value="وزارة الداخلية"><option value="ديوان المظالم"><option value="أخرى">
+    </datalist>
+
+    <div class="form-row-2">
+      <div class="field"><label>الفئة العمرية</label>
+        <select id="profile-age">
+          <option value="">اختر</option>
+          <option value="أقل من 18" ${profile.age_range==='أقل من 18'?'selected':''}>أقل من 18</option>
+          <option value="18–24" ${profile.age_range==='18–24'?'selected':''}>18–24</option>
+          <option value="25–34" ${profile.age_range==='25–34'?'selected':''}>25–34</option>
+          <option value="35–44" ${profile.age_range==='35–44'?'selected':''}>35–44</option>
+          <option value="45 فأكثر" ${profile.age_range==='45 فأكثر'?'selected':''}>45 فأكثر</option>
+        </select>
+      </div>
+      <div class="field"><label>الجنس</label>
+        <select id="profile-gender">
+          <option value="">اختر</option>
+          <option value="ذكر" ${profile.gender==='ذكر'?'selected':''}>ذكر</option>
+          <option value="أنثى" ${profile.gender==='أنثى'?'selected':''}>أنثى</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field"><label>دورك المتوقع بالمشروع</label>
+      <select id="profile-role" onchange="document.getElementById('profile-role-other-box').style.display = this.value==='أخرى' ? 'block' : 'none'">
+        <option value="">اختر</option>
+        <option value="تقني" ${profile.project_role==='تقني'?'selected':''}>تقني (برمجة/تطوير)</option>
+        <option value="إداري" ${profile.project_role==='إداري'?'selected':''}>إداري</option>
+        <option value="مالي" ${profile.project_role==='مالي'?'selected':''}>مالي</option>
+        <option value="قانوني" ${profile.project_role==='قانوني'?'selected':''}>قانوني</option>
+        <option value="تسويقي" ${profile.project_role==='تسويقي'?'selected':''}>تسويقي</option>
+        <option value="أخرى" ${profile.project_role && !['تقني','إداري','مالي','قانوني','تسويقي'].includes(profile.project_role)?'selected':''}>أخرى</option>
+      </select>
+    </div>
+    <div class="field" id="profile-role-other-box" style="display:${profile.project_role && !['تقني','إداري','مالي','قانوني','تسويقي',''].includes(profile.project_role)?'block':'none'}">
+      <label>حدّد الدور</label><input id="profile-role-other" value="${!['تقني','إداري','مالي','قانوني','تسويقي',''].includes(profile.project_role||'')?esc(profile.project_role||''):''}">
+    </div>
+
     <div id="my-profile-alert" class="alert"></div>
     <button class="btn btn-primary" onclick="saveMyProfileInfo()">حفظ التعديلات</button>
   </div>`;
@@ -627,10 +683,17 @@ async function saveMyProfileInfo(){
   alertBox.className = "alert";
   const phone = document.getElementById("profile-phone").value.trim();
   const organization = document.getElementById("profile-org").value.trim();
+  const category = document.getElementById("profile-category").value;
+  const city = document.getElementById("profile-city").value.trim();
+  const age_range = document.getElementById("profile-age").value;
+  const gender = document.getElementById("profile-gender").value;
+  const roleSelect = document.getElementById("profile-role").value;
+  const project_role = roleSelect === "أخرى" ? document.getElementById("profile-role-other").value.trim() : roleSelect;
+
   if(phone && !/^(05|5)\d{8}$/.test(phone.replace(/\s|-/g,""))){
     alertBox.textContent = "صيغة الجوال غير صحيحة (05xxxxxxxx)"; alertBox.className = "alert error"; return;
   }
-  const { error } = await sb.from("profiles").update({ phone, organization }).eq("id", currentUser.id);
+  const { error } = await sb.from("profiles").update({ phone, organization, category, city, age_range, gender, project_role }).eq("id", currentUser.id);
   if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
   alertBox.textContent = "تم الحفظ بنجاح"; alertBox.className = "alert success";
 }
@@ -1205,6 +1268,10 @@ async function renderTeamView(membership){
   const submission = allSubmissions?.[0] || null;
   const olderVersions = allSubmissions?.slice(1) || [];
 
+  const { data: fieldDefs } = await sb.from("submission_field_definitions").select("*").eq("is_active", true).order("display_order");
+  const customFieldDefs = fieldDefs || [];
+  const savedCustomFields = submission?.custom_fields || {};
+
   const { data: deadlineSetting } = await sb.from("platform_settings").select("value").eq("key","submission_deadline").maybeSingle();
   const deadlinePassed = deadlineSetting?.value && new Date(deadlineSetting.value) < new Date();
 
@@ -1270,7 +1337,12 @@ async function renderTeamView(membership){
       ${membership.is_leader && !deadlinePassed ? `
         <div class="field"><label>عنوان الفكرة</label><input id="sub-title" value="${esc(submission?.title||"")}"></div>
         <div class="field"><label>وصف الفكرة</label><textarea id="sub-desc" rows="4">${esc(submission?.description||"")}</textarea></div>
-        <div class="field"><label>رابط ملف/عرض تقديمي (اختياري)</label><input id="sub-file" value="${esc(submission?.file_url||"")}" placeholder="https://..."></div>
+        ${customFieldDefs.length ? `
+          <h3 style="font-size:14px;margin:24px 0 4px;color:var(--navy)">أسئلة الفرز الأولي</h3>
+          <p class="sub" style="margin-bottom:14px">معلومات إضافية تساعد لجنة الفرز على تقييم مشروعكم</p>
+          ${renderDynamicFieldsForm(customFieldDefs, savedCustomFields)}
+        ` : ""}
+        <div class="field" style="margin-top:20px"><label>رابط ملف/عرض تقديمي (اختياري)</label><input id="sub-file" value="${esc(submission?.file_url||"")}" placeholder="https://..."></div>
         <div class="field"><label>أو ارفع ملف مباشرة (PDF, PPTX, صورة...)</label><input type="file" id="sub-file-upload"></div>
         <div id="sub-upload-progress" class="hint" style="display:none">جاري الرفع...</div>
         <div id="sub-alert" class="alert"></div>
@@ -1334,6 +1406,47 @@ async function saveTeamName(teamId){
   if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
   renderDashboard();
 }
+function renderDynamicFieldsForm(defs, saved){
+  return defs.map(d => {
+    const val = saved[d.field_key];
+    const req = d.is_required ? ' <span style="color:var(--danger)">*</span>' : "";
+    if(d.field_type === "textarea"){
+      return `<div class="field"><label>${esc(d.label_ar)}${req}</label><textarea data-field-key="${d.field_key}" data-field-type="textarea" rows="3">${esc(val||"")}</textarea></div>`;
+    }
+    if(d.field_type === "number"){
+      return `<div class="field"><label>${esc(d.label_ar)}${req}</label><input type="number" data-field-key="${d.field_key}" data-field-type="number" value="${esc(val??"")}"></div>`;
+    }
+    if(d.field_type === "boolean"){
+      return `<div class="field"><label>${esc(d.label_ar)}${req}</label>
+        <select data-field-key="${d.field_key}" data-field-type="boolean">
+          <option value="">اختر</option>
+          <option value="true" ${val===true||val==="true"?"selected":""}>نعم</option>
+          <option value="false" ${val===false||val==="false"?"selected":""}>لا</option>
+        </select></div>`;
+    }
+    if(d.field_type === "select"){
+      return `<div class="field"><label>${esc(d.label_ar)}${req}</label>
+        <select data-field-key="${d.field_key}" data-field-type="select">
+          <option value="">اختر</option>
+          ${(d.options||[]).map(o=>`<option value="${esc(o)}" ${val===o?"selected":""}>${esc(o)}</option>`).join("")}
+        </select></div>`;
+    }
+    return `<div class="field"><label>${esc(d.label_ar)}${req}</label><input data-field-key="${d.field_key}" data-field-type="text" value="${esc(val||"")}"></div>`;
+  }).join("");
+}
+function collectDynamicFieldValues(){
+  const values = {};
+  let missingRequired = null;
+  document.querySelectorAll("[data-field-key]").forEach(el => {
+    const key = el.dataset.fieldKey;
+    const type = el.dataset.fieldType;
+    let val = el.value;
+    if(type === "boolean" && val !== "") val = (val === "true");
+    if(type === "number" && val !== "") val = Number(val);
+    values[key] = val === "" ? null : val;
+  });
+  return values;
+}
 async function saveSubmission(teamId, currentVersion){
   const alertBox = document.getElementById("sub-alert");
   alertBox.className = "alert";
@@ -1341,6 +1454,21 @@ async function saveSubmission(teamId, currentVersion){
   const description = document.getElementById("sub-desc").value.trim();
   let file_url = document.getElementById("sub-file").value.trim();
   if(!title){ alertBox.textContent = "عنوان الفكرة مطلوب"; alertBox.className = "alert error"; return; }
+
+  // التحقق من الحقول الديناميكية الإلزامية
+  let firstMissingLabel = null;
+  document.querySelectorAll("[data-field-key]").forEach(el => {
+    if(firstMissingLabel) return;
+    const label = el.closest(".field")?.querySelector("label")?.textContent || "";
+    const isRequired = label.includes("*");
+    if(isRequired && !el.value){ firstMissingLabel = label.replace(" *","").replace("*",""); }
+  });
+  if(firstMissingLabel){
+    alertBox.textContent = `الحقل "${firstMissingLabel}" إلزامي`;
+    alertBox.className = "alert error";
+    return;
+  }
+  const custom_fields = collectDynamicFieldValues();
 
   const fileInput = document.getElementById("sub-file-upload");
   const selectedFile = fileInput?.files?.[0];
@@ -1377,13 +1505,13 @@ async function saveSubmission(teamId, currentVersion){
   }
 
   const { error } = await sb.from("submissions").insert({
-    team_id: teamId, title, description, file_url, version: currentVersion + 1
+    team_id: teamId, title, description, file_url, custom_fields, version: currentVersion + 1
   });
   if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
   alertBox.textContent = "تم الحفظ بنجاح"; alertBox.className = "alert success";
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r56</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r58</div>
 </body>
 </html>
