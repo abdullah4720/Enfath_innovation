@@ -2528,28 +2528,64 @@ async function renderEvents(){
       <div><h1>الفعاليات والحضور</h1><p>الفعاليات الرئيسية وتتبع الحضور عبر QR</p></div>
       <button class="btn btn-primary" onclick="openEventModal()">+ إضافة فعالية</button>
     </div>
-    <div class="card"><div id="events-table">جاري التحميل...</div></div>`;
+    <div id="events-list">جاري التحميل...</div>`;
 
   const { data, error } = await sb.from("events").select("*, event_attendance(count)").order("event_date");
-  const box = document.getElementById("events-table");
-  if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
-  if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد فعاليات مضافة بعد</div>`;
+  const box = document.getElementById("events-list");
+  if(error) return box.innerHTML = `<div class="card"><div class="empty-state">خطأ: ${esc(error.message)}</div></div>`;
+  if(!data.length) return box.innerHTML = `<div class="card"><div class="empty-state">لا توجد فعاليات مضافة بعد</div></div>`;
 
-  box.innerHTML = `<table><thead><tr>
-    <th>الفعالية</th><th>الموعد</th><th>الموقع</th><th>عدد الحاضرين</th><th>رمز QR</th><th></th>
-    </tr></thead><tbody>
-    ${data.map(e => `<tr>
-      <td><strong>${esc(e.title)}</strong></td>
-      <td>${fmtDate(e.event_date)}</td>
-      <td>${esc(e.location||"—")}</td>
-      <td>${e.event_attendance?.[0]?.count ?? 0}</td>
-      <td><code style="font-size:11px;color:var(--muted)">${esc(e.qr_token)}</code></td>
-      <td class="row-actions">
-        <button class="btn btn-outline btn-sm" onclick='openEventModal(${JSON.stringify(e)})'>تعديل</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteRow('events','${e.id}', renderEvents)">حذف</button>
-      </td>
-    </tr>`).join("")}
-    </tbody></table>`;
+  const { count: totalParticipants } = await sb.from("profiles").select("id", {count:"exact", head:true});
+
+  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">
+    ${data.map(e => {
+      const attCount = e.event_attendance?.[0]?.count ?? 0;
+      const pct = totalParticipants ? Math.min(100, Math.round((attCount/totalParticipants)*100)) : 0;
+      const color = avatarColor(e.title);
+      return `
+      <details class="card" style="margin:0;padding:0;overflow:hidden">
+        <summary style="cursor:pointer;padding:16px 20px;list-style:none;display:flex;align-items:center;gap:14px">
+          <div class="avatar-circle" style="background:${color}"><i data-lucide="map-pin" style="width:18px;height:18px"></i></div>
+          <div style="flex:1;min-width:0">
+            <strong style="font-size:14.5px">${esc(e.title)}</strong>
+            <div style="color:var(--muted);font-size:12px;margin-top:2px">${fmtDate(e.event_date)} ${e.location ? "· "+esc(e.location) : ""}</div>
+            <div class="progress-track" style="margin-top:8px;max-width:280px"><div class="progress-fill" style="width:${pct}%"></div></div>
+          </div>
+          <span class="badge badge-green" style="flex-shrink:0">${attCount} حاضر</span>
+        </summary>
+        <div style="padding:0 20px 18px 76px">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button class="btn btn-outline btn-sm" onclick='openEventModal(${JSON.stringify(e)})'>تعديل</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRow('events','${e.id}', renderEvents)">حذف</button>
+          </div>
+          <div id="event-attendees-${e.id}">
+            <button class="btn-link" onclick="loadEventAttendees('${e.id}')">عرض قائمة الحاضرين ↓</button>
+          </div>
+        </div>
+      </details>`;
+    }).join("")}
+  </div>`;
+  if(window.lucide) lucide.createIcons();
+}
+async function loadEventAttendees(eventId){
+  const box = document.getElementById(`event-attendees-${eventId}`);
+  box.innerHTML = `<p class="hint">جاري التحميل...</p>`;
+  const { data, error } = await sb.from("event_attendance")
+    .select("scanned_at, profiles(full_name, email)")
+    .eq("event_id", eventId)
+    .order("scanned_at", {ascending:false});
+  if(error){ box.innerHTML = `<p class="hint">خطأ: ${esc(error.message)}</p>`; return; }
+  if(!data.length){ box.innerHTML = `<p class="hint">ما فيه حضور مسجَّل بعد</p>`; return; }
+
+  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto">
+    ${data.map(a => `
+      <div class="entity-row" style="padding:8px 12px">
+        <div class="avatar-circle" style="width:28px;height:28px;font-size:11px;background:${avatarColor(a.profiles?.full_name||"?")}">${esc(initials(a.profiles?.full_name))}</div>
+        <span style="flex:1;font-size:12.5px">${esc(a.profiles?.full_name||"—")}</span>
+        <span style="font-size:11px;color:var(--muted)">${fmtDate(a.scanned_at)}</span>
+      </div>
+    `).join("")}
+  </div>`;
 }
 function openEventModal(e=null){
   const isEdit = !!e;
@@ -3547,13 +3583,26 @@ async function renderUsers(){
   main.innerHTML = `<div class="page-header">
       <div><h1>المستخدمون والأدوار</h1><p>ابحث عن مستخدم وأدر أدواره (يمكن تعدد الأدوار لنفس الشخص)</p></div>
     </div>
+    <div id="users-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px"></div>
     <div class="card">
-      <div class="field"><label>البحث بالبريد الإلكتروني أو الاسم</label>
+      <div class="field"><label>البحث بالاسم أو البريد أو الدور (مثال: محكّم)</label>
         <input id="user-search" placeholder="اكتب للبحث..." oninput="debouncedUserSearch()">
       </div>
       <div id="users-table"></div>
     </div>`;
-  document.getElementById("users-table").innerHTML = `<div class="empty-state">ابدأ بالبحث عن مستخدم لعرض أدواره</div>`;
+
+  const { data: roleCounts } = await sb.from("user_roles").select("roles(key, name_ar)");
+  const counts = {};
+  (roleCounts||[]).forEach(r => {
+    const key = r.roles?.name_ar || "—";
+    counts[key] = (counts[key]||0) + 1;
+  });
+  const topRoles = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,4);
+  document.getElementById("users-stats").innerHTML = topRoles.map(([name, count]) => `
+    <div class="stat-card"><div class="num">${count}</div><div class="label">${esc(name)}</div></div>
+  `).join("") || `<div class="stat-card"><div class="num">0</div><div class="label">لا توجد أدوار موزّعة بعد</div></div>`;
+
+  document.getElementById("users-table").innerHTML = `<div class="empty-state">ابحث عن اسم، بريد، أو حتى اسم دور (مثال: "مرشد") لعرض المستخدمين</div>`;
 }
 let userSearchTimer;
 function debouncedUserSearch(){
@@ -3563,25 +3612,60 @@ function debouncedUserSearch(){
 async function searchUsers(){
   const term = document.getElementById("user-search").value.trim();
   const box = document.getElementById("users-table");
-  if(!term){ box.innerHTML = `<div class="empty-state">ابدأ بالبحث عن مستخدم لعرض أدواره</div>`; return; }
+  if(!term){ box.innerHTML = `<div class="empty-state">ابحث عن اسم، بريد، أو حتى اسم دور (مثال: "مرشد") لعرض المستخدمين</div>`; return; }
 
   const { data, error } = await sb.from("profiles")
     .select("id, full_name, email, organization, user_roles!user_roles_user_id_fkey(id, roles(key, name_ar), track_id)")
     .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`)
-    .limit(20);
+    .limit(30);
 
   if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
-  if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد نتائج</div>`;
 
-  box.innerHTML = `<table><thead><tr><th>الاسم</th><th>البريد</th><th>الجهة</th><th>الأدوار الحالية</th><th></th></tr></thead><tbody>
-    ${data.map(u => `<tr>
-      <td>${esc(u.full_name)}</td>
-      <td>${esc(u.email)}</td>
-      <td>${esc(u.organization||"—")}</td>
-      <td>${(u.user_roles||[]).map(r => `<span class="badge badge-green" style="margin-left:4px">${esc(r.roles?.name_ar||"")}</span>`).join("") || "—"}</td>
-      <td><button class="btn btn-outline btn-sm" onclick='openAssignRoleModal("${u.id}", ${JSON.stringify(u.full_name)})'>+ إضافة دور</button></td>
-    </tr>`).join("")}
-    </tbody></table>`;
+  // فلترة إضافية باسم الدور (بما إن Supabase ما يدعم OR عبر جدول مرتبط مباشرة بسهولة)
+  let results = data || [];
+  if(!results.length){
+    const { data: byRole } = await sb.from("user_roles")
+      .select("user_id, profiles!user_roles_user_id_fkey(id, full_name, email, organization), roles!inner(name_ar)")
+      .ilike("roles.name_ar", `%${term}%`);
+    const seen = new Set();
+    results = (byRole||[]).filter(r => {
+      if(seen.has(r.user_id)) return false;
+      seen.add(r.user_id); return true;
+    }).map(r => ({ id: r.user_id, full_name: r.profiles?.full_name, email: r.profiles?.email, organization: r.profiles?.organization, user_roles: [] }));
+  }
+
+  if(!results.length) return box.innerHTML = `<div class="empty-state">لا توجد نتائج</div>`;
+
+  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
+    ${results.map(u => {
+      const color = avatarColor(u.full_name || u.email || "?");
+      return `
+      <div class="entity-row">
+        <div class="avatar-circle" style="background:${color}">${esc(initials(u.full_name))}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13.5px">${esc(u.full_name||"—")}</div>
+          <div style="font-size:12px;color:var(--muted)">${esc(u.email)} ${u.organization ? "· "+esc(u.organization) : ""}</div>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+            ${(u.user_roles||[]).map(r => `
+              <span class="badge badge-green" style="display:inline-flex;align-items:center;gap:5px">
+                ${esc(r.roles?.name_ar||"")}
+                <span style="cursor:pointer;font-weight:700" onclick="removeUserRole('${r.id}', '${u.id}')" title="إزالة هذا الدور">×</span>
+              </span>
+            `).join("") || '<span style="font-size:11.5px;color:var(--muted)">بدون أدوار</span>'}
+          </div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick='openAssignRoleModal("${u.id}", ${JSON.stringify(u.full_name)})'>+ دور</button>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+async function removeUserRole(userRoleId, userId){
+  if(!confirm("إزالة هذا الدور من المستخدم؟")) return;
+  const { error } = await sb.from("user_roles").delete().eq("id", userRoleId);
+  if(error) return showToast("خطأ: " + error.message, true);
+  logActivity("إزالة دور من مستخدم", "user", userId);
+  showToast("تمت الإزالة");
+  searchUsers();
 }
 async function openAssignRoleModal(userId, userName){
   const { data: roles } = await sb.from("roles").select("*");
@@ -3835,7 +3919,7 @@ async function renderAnalytics(){
     teams.forEach(t => { const n = t.tracks?.name_ar || "غير محدد"; trackCounts[n] = (trackCounts[n]||0)+1; });
     chartInstances.push(new Chart(document.getElementById("chart-tracks"), {
       type: "bar",
-      data: { labels: Object.keys(trackCounts), datasets: [{ data: Object.values(trackCounts), backgroundColor: "#5B3E96" }] },
+      data: { labels: Object.keys(trackCounts), datasets: [{ data: Object.values(trackCounts), backgroundColor: "#7C6FE0" }] },
       options: { plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, ticks:{precision:0} } } }
     }));
 
@@ -3845,7 +3929,7 @@ async function renderAnalytics(){
     teams.forEach(t => { const n = statusLabelsMap[t.status]||t.status; statusCounts[n] = (statusCounts[n]||0)+1; });
     chartInstances.push(new Chart(document.getElementById("chart-status"), {
       type: "doughnut",
-      data: { labels: Object.keys(statusCounts), datasets: [{ data: Object.values(statusCounts), backgroundColor: ["#C89B3C","#1F9E8E","#C0392B","#9CA3AF"] } ] },
+      data: { labels: Object.keys(statusCounts), datasets: [{ data: Object.values(statusCounts), backgroundColor: ["#C9922A","#1F9E8E","#C0392B","#8FA0C4"] } ] },
       options: { plugins:{legend:{position:"bottom"}} }
     }));
   }
@@ -3856,7 +3940,7 @@ async function renderAnalytics(){
       type: "bar",
       data: {
         labels: satisfaction.map(s => s.survey_title),
-        datasets: [{ label: "متوسط NPS", data: satisfaction.map(s => s.avg_nps || 0), backgroundColor: "#0B1F3A" }]
+        datasets: [{ label: "متوسط NPS", data: satisfaction.map(s => s.avg_nps || 0), backgroundColor: "#1A2E5A" }]
       },
       options: { plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, max:10 } } }
     }));
@@ -4116,24 +4200,46 @@ async function renderActivityLog(){
   const { data, error } = await sb.from("activity_log")
     .select("*, profiles(full_name)")
     .order("created_at", {ascending:false})
-    .limit(100);
+    .limit(150);
 
   const box = document.getElementById("activity-table");
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
   if(!data.length){ box.innerHTML = `<div class="empty-state">لا يوجد نشاط مسجّل بعد</div>`; return; }
 
-  box.innerHTML = `<table><thead><tr>
-    <th>الإجراء</th><th>بواسطة</th><th>النوع</th><th>التوقيت</th>
-    </tr></thead><tbody>
-    ${data.map(a => `<tr>
-      <td>${esc(a.action)}</td>
-      <td>${esc(a.profiles?.full_name || "—")}</td>
-      <td><span class="badge badge-gray">${esc(a.entity_type||"—")}</span></td>
-      <td>${fmtDate(a.created_at)}</td>
-    </tr>`).join("")}
-    </tbody></table>`;
+  const iconMap = {
+    team:"users-round", user:"user-round", track:"signpost", submission:"lightbulb",
+    mentor_application:"user-plus", judge_application:"user-plus", certificate:"award",
+    judge_assignment:"scale", default:"activity",
+  };
+
+  // تجميع حسب اليوم
+  const groups = {};
+  data.forEach(a => {
+    const day = new Date(a.created_at).toLocaleDateString('ar-SA', {year:'numeric', month:'long', day:'numeric'});
+    if(!groups[day]) groups[day] = [];
+    groups[day].push(a);
+  });
+
+  box.innerHTML = Object.entries(groups).map(([day, items]) => `
+    <div style="margin-bottom:18px">
+      <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em">${esc(day)}</div>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        ${items.map(a => `
+          <div class="entity-row" style="padding:10px 12px; border:none; border-right:2px solid var(--border-light)">
+            <i data-lucide="${iconMap[a.entity_type] || iconMap.default}" style="width:16px;height:16px;color:var(--gold);flex-shrink:0"></i>
+            <div style="flex:1">
+              <span style="font-size:13px">${esc(a.action)}</span>
+              <span style="font-size:11.5px;color:var(--muted)"> — ${esc(a.profiles?.full_name||"النظام")}</span>
+            </div>
+            <span style="font-size:11px;color:var(--muted);flex-shrink:0">${new Date(a.created_at).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+  if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r61</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r62</div>
 </body>
 </html>
