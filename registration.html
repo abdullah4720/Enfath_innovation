@@ -31,6 +31,8 @@
   body.dark .top-bar{ background:rgba(21,31,48,.95) !important; }
   body.dark .dash-tabs{ background:#0f1826; }
   body.dark .dash-tab.active{ background:var(--card); }
+  body.dark .dash-group{ background:var(--card); border-color:var(--border); }
+  body.dark .dash-group.active{ background:var(--gold); color:var(--navy-dark); border-color:var(--gold); }
   body.dark #notif-panel{ background:var(--card) !important; border-color:var(--border) !important; }
   *{box-sizing:border-box;}
   body{margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--ink); transition:background .2s,color .2s;}
@@ -140,6 +142,15 @@
   .invite-code{font-size:22px; font-weight:800; letter-spacing:3px; color:var(--navy); margin:8px 0;}
 
   .card{background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:24px; margin-bottom:18px;}
+
+  .dash-groups{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
+  .dash-group{
+    display:inline-flex; align-items:center; gap:7px; padding:10px 18px; border-radius:11px; border:1px solid var(--border);
+    background:#fff; color:var(--muted); font-family:inherit; font-size:13.5px; font-weight:700; cursor:pointer; transition:.15s;
+  }
+  .dash-group i{width:15px; height:15px;}
+  .dash-group:hover{border-color:var(--navy);}
+  .dash-group.active{background:var(--navy); color:#fff; border-color:var(--navy); box-shadow:0 4px 12px rgba(26,46,90,.2);}
 
   .dash-tabs{display:flex; gap:4px; background:#eef0f6; padding:4px; border-radius:12px; margin-bottom:20px; overflow-x:auto;}
   .dash-tab{flex:1; white-space:nowrap; padding:10px 14px; border:none; border-radius:9px; background:none; font-family:inherit;
@@ -617,6 +628,53 @@ function fmtDate(d){
 
 /* ---------------- لوحة المشارك الرئيسية (بتبويبات) ---------------- */
 let dashTab = "team";
+
+const DASH_GROUPS = [
+  { key:"project", label:"المشروع", icon:"folder-kanban", tabs:[
+    { t:"team", label:"فريقي", icon:"users-round" },
+    { t:"chat", label:"دردشة الفريق", icon:"message-circle" },
+    { t:"updates", label:"التحديثات والملفات", icon:"megaphone" },
+  ]},
+  { key:"support", label:"الدعم والتقييم", icon:"sparkles", tabs:[
+    { t:"prep", label:"التحضير", icon:"graduation-cap" },
+    { t:"mentorship", label:"الإرشاد", icon:"compass" },
+    { t:"judging", label:"معايير التحكيم", icon:"scale" },
+    { t:"certs", label:"الشهادات", icon:"award" },
+  ]},
+  { key:"account", label:"حسابي", icon:"circle-user", tabs:[
+    { t:"profile", label:"ملفي الشخصي", icon:"user-round" },
+    { t:"surveys", label:"الاستبيانات", icon:"clipboard-list" },
+  ]},
+];
+function findDashGroup(tab){
+  return DASH_GROUPS.find(g => g.tabs.some(x => x.t === tab)) || DASH_GROUPS[0];
+}
+function renderDashNavigation(){
+  const activeGroup = findDashGroup(dashTab);
+  document.getElementById("dash-groups-bar").innerHTML = DASH_GROUPS.map(g => `
+    <button class="dash-group ${g.key===activeGroup.key?'active':''}" data-g="${g.key}">
+      <i data-lucide="${g.icon}"></i> ${g.label}
+    </button>
+  `).join("");
+  document.getElementById("dash-tabs-bar").innerHTML = activeGroup.tabs.map(x => `
+    <button class="dash-tab ${dashTab===x.t?'active':''}" data-t="${x.t}"><i data-lucide="${x.icon}"></i> ${x.label}</button>
+  `).join("");
+  if(window.lucide) lucide.createIcons();
+
+  document.getElementById("dash-groups-bar").onclick = (e) => {
+    const btn = e.target.closest(".dash-group");
+    if(!btn) return;
+    const group = DASH_GROUPS.find(g => g.key === btn.dataset.g);
+    dashTab = group.tabs[0].t;
+    renderDashboard();
+  };
+  document.getElementById("dash-tabs-bar").onclick = (e) => {
+    const btn = e.target.closest(".dash-tab");
+    if(!btn) return;
+    dashTab = btn.dataset.t;
+    renderDashboard();
+  };
+}
 let cachedMembership = null;
 
 async function renderDashboard(){
@@ -627,26 +685,12 @@ async function renderDashboard(){
       <div class="hint" style="margin-bottom:4px">⏳ العد التنازلي ليوم الهاكاثون</div>
       <div id="countdown-value" style="font-size:20px; font-weight:800; color:var(--navy)"></div>
     </div>
-    <div class="dash-tabs" id="dash-tabs-bar">
-      <button class="dash-tab ${dashTab==='team'?'active':''}" data-t="team"><i data-lucide="users-round"></i> فريقي</button>
-      <button class="dash-tab ${dashTab==='chat'?'active':''}" data-t="chat"><i data-lucide="message-circle"></i> دردشة الفريق</button>
-      <button class="dash-tab ${dashTab==='prep'?'active':''}" data-t="prep"><i data-lucide="graduation-cap"></i> التحضير</button>
-      <button class="dash-tab ${dashTab==='mentorship'?'active':''}" data-t="mentorship"><i data-lucide="compass"></i> الإرشاد</button>
-      <button class="dash-tab ${dashTab==='judging'?'active':''}" data-t="judging"><i data-lucide="scale"></i> معايير التحكيم</button>
-      <button class="dash-tab ${dashTab==='certs'?'active':''}" data-t="certs"><i data-lucide="award"></i> الشهادات</button>
-      <button class="dash-tab ${dashTab==='updates'?'active':''}" data-t="updates"><i data-lucide="megaphone"></i> التحديثات والملفات</button>
-      <button class="dash-tab ${dashTab==='profile'?'active':''}" data-t="profile"><i data-lucide="user-round"></i> ملفي الشخصي</button>
-      <button class="dash-tab ${dashTab==='surveys'?'active':''}" data-t="surveys"><i data-lucide="clipboard-list"></i> الاستبيانات</button>
-    </div>
+    <div class="dash-groups" id="dash-groups-bar"></div>
+    <div class="dash-tabs" id="dash-tabs-bar"></div>
     <div id="dash-tab-body"><div class="card">جاري التحميل...</div></div>
   `;
+  renderDashNavigation();
   if(window.lucide) lucide.createIcons();
-  document.getElementById("dash-tabs-bar").addEventListener("click", (e)=>{
-    const btn = e.target.closest(".dash-tab");
-    if(!btn) return;
-    dashTab = btn.dataset.t;
-    renderDashboard();
-  });
 
   initCountdown();
   loadJourneyWidget();
@@ -1790,6 +1834,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r73</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r74</div>
 </body>
 </html>
