@@ -286,6 +286,7 @@
       <div class="nav-group-label">الإعدادات والإدارة</div>
       <a data-page="tracks"><i data-lucide="signpost"></i> المسارات</a>
       <a data-page="submissionFields"><i data-lucide="list-plus"></i> حقول نموذج المشروع</a>
+      <a data-page="journeyMilestones"><i data-lucide="route"></i> رحلة المشارك</a>
       <a data-page="users"><i data-lucide="shield-check"></i> المستخدمون والأدوار</a>
       <a data-page="mentorApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمرشد <span id="badge-mentorApps" class="nav-badge" style="display:none"></span></a>
       <a data-page="judgeApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمحكّم <span id="badge-judgeApps" class="nav-badge" style="display:none"></span></a>
@@ -597,6 +598,7 @@ function navigateTo(page){
     participants: renderParticipants,
     tracks: renderTracks,
     submissionFields: renderSubmissionFields,
+    journeyMilestones: renderJourneyMilestones,
     teams: renderTeams,
     projects: renderProjects,
     prep: renderPrep,
@@ -918,6 +920,100 @@ async function saveField(id){
   showToast(id ? "تم التحديث" : "تمت الإضافة");
   closeModal();
   renderSubmissionFields();
+}
+
+/* ============================================================
+   رحلة المشارك (نظام خطوات مرن — "رحلتك بالهاكاثون")
+   ============================================================ */
+const MILESTONE_CHECK_TYPES = {
+  profile_complete: "الملف الشخصي مكتمل",
+  team_formed: "انضم لفريق",
+  idea_submitted: "قدّم فكرة المشروع",
+  file_uploaded: "أرفق ملف/رابط المشروع",
+  mentor_booked: "حجز موعد إرشاد",
+  prep_attended: "حضر جلسة تحضير",
+  survey_answered: "أجاب على استبيان",
+};
+async function renderJourneyMilestones(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header">
+      <div><h1>رحلة المشارك</h1><p>خطوات "رحلتك بالهاكاثون" اللي تظهر بلوحة المشارك — أضف وأعد ترتيب وفعّل/عطّل بالكامل بدون أي تعديل تقني</p></div>
+      <button class="btn btn-primary" onclick="openMilestoneModal()">+ إضافة خطوة</button>
+    </div>
+    <div class="card"><div id="milestones-table">${skeletonRows(4)}</div></div>`;
+
+  const { data, error } = await sb.from("journey_milestones").select("*").order("display_order");
+  const box = document.getElementById("milestones-table");
+  if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
+  if(!data.length) return box.innerHTML = emptyIllustration("route", "لا توجد خطوات مضافة بعد", "أضف أول خطوة بالزر أعلاه");
+
+  box.innerHTML = `<table><thead><tr>
+    <th style="width:70px">الترتيب</th><th>الخطوة</th><th>شرط الإنجاز</th><th>الحالة</th><th></th>
+    </tr></thead><tbody>
+    ${data.map((m, idx) => `<tr>
+      <td class="row-actions">
+        <button class="btn-link" style="font-size:14px" onclick="moveMilestone('${m.id}', -1)" ${idx===0?'disabled':''}>▲</button>
+        <button class="btn-link" style="font-size:14px" onclick="moveMilestone('${m.id}', 1)" ${idx===data.length-1?'disabled':''}>▼</button>
+      </td>
+      <td><i data-lucide="${esc(m.icon)}" style="width:15px;height:15px;vertical-align:-3px;color:var(--gold)"></i> <strong>${esc(m.label_ar)}</strong><br><span style="font-size:11.5px;color:var(--muted)">${esc(m.description||"")}</span></td>
+      <td><span class="badge badge-gray">${MILESTONE_CHECK_TYPES[m.check_type]||m.check_type}</span></td>
+      <td>${m.is_active ? '<span class="badge badge-green">نشط</span>' : '<span class="badge badge-gray">معطّل</span>'}</td>
+      <td class="row-actions">
+        <button class="btn btn-outline btn-sm" onclick='openMilestoneModal(${JSON.stringify(m)})'>تعديل</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteRow('journey_milestones','${m.id}', renderJourneyMilestones)">حذف</button>
+      </td>
+    </tr>`).join("")}
+    </tbody></table>`;
+  if(window.lucide) lucide.createIcons();
+}
+async function moveMilestone(id, direction){
+  const { data } = await sb.from("journey_milestones").select("id,display_order").order("display_order");
+  const idx = data.findIndex(m => m.id === id);
+  const swapIdx = idx + direction;
+  if(swapIdx < 0 || swapIdx >= data.length) return;
+  const a = data[idx], b = data[swapIdx];
+  await sb.from("journey_milestones").update({ display_order: b.display_order }).eq("id", a.id);
+  await sb.from("journey_milestones").update({ display_order: a.display_order }).eq("id", b.id);
+  renderJourneyMilestones();
+}
+function openMilestoneModal(m=null){
+  const isEdit = !!m;
+  m = m || { check_type:"profile_complete", label_ar:"", description:"", icon:"circle-check", is_active:true };
+  openModal(`
+    <h3>${isEdit ? "تعديل خطوة" : "إضافة خطوة جديدة"}</h3>
+    <div class="field"><label>عنوان الخطوة</label><input id="f-milestone-label" value="${esc(m.label_ar)}" placeholder="مثال: كوّن فريقك"></div>
+    <div class="field"><label>وصف مختصر (اختياري)</label><input id="f-milestone-desc" value="${esc(m.description||"")}"></div>
+    <div class="field"><label>شرط الإنجاز</label>
+      <select id="f-milestone-check">
+        ${Object.entries(MILESTONE_CHECK_TYPES).map(([key,label]) => `<option value="${key}" ${m.check_type===key?'selected':''}>${label}</option>`).join("")}
+      </select>
+      <p class="hint" style="margin-top:4px">يُحدَّد تلقائيًا متى تُعتبر الخطوة "مكتملة" لكل مشارك</p>
+    </div>
+    <div class="field"><label>اسم الأيقونة (Lucide)</label><input id="f-milestone-icon" value="${esc(m.icon)}" placeholder="مثال: users-round">
+      <p class="hint" style="margin-top:4px">شوف أسماء الأيقونات بـ lucide.dev/icons</p>
+    </div>
+    <div class="field"><label><input type="checkbox" id="f-milestone-active" ${m.is_active!==false?"checked":""}> نشط (يظهر بلوحة المشارك)</label></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveMilestone(${isEdit?`'${m.id}'`:'null'})">حفظ</button>
+    </div>
+  `);
+}
+async function saveMilestone(id){
+  const label_ar = document.getElementById("f-milestone-label").value.trim();
+  const description = document.getElementById("f-milestone-desc").value.trim();
+  const check_type = document.getElementById("f-milestone-check").value;
+  const icon = document.getElementById("f-milestone-icon").value.trim() || "circle-check";
+  const is_active = document.getElementById("f-milestone-active").checked;
+  if(!label_ar){ showToast("عنوان الخطوة مطلوب", true); return; }
+
+  const payload = { label_ar, description, check_type, icon, is_active };
+  const q = id ? sb.from("journey_milestones").update(payload).eq("id", id) : sb.from("journey_milestones").insert({...payload, display_order: 999});
+  const { error } = await q;
+  if(error) return showToast("خطأ: " + error.message, true);
+  showToast(id ? "تم التحديث" : "تمت الإضافة");
+  closeModal();
+  renderJourneyMilestones();
 }
 
 async function renderTracks(){
@@ -4353,6 +4449,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r69</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r70</div>
 </body>
 </html>
