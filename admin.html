@@ -1082,7 +1082,7 @@ function renderTracksTable(data, allowReorder){
 
   box.innerHTML = `<table><thead><tr>
     ${allowReorder ? '<th style="width:70px">الترتيب</th>' : ''}
-    <th>المسار</th><th>حجم الفريق</th><th>المسجّلون</th><th>التسجيل</th><th>الحالة</th><th></th>
+    <th>المسار</th><th>الرمز</th><th>حجم الفريق</th><th>المسجّلون</th><th>التسجيل</th><th>الحالة</th><th></th>
     </tr></thead><tbody>
     ${data.map((t, idx) => `<tr>
       ${allowReorder ? `<td class="row-actions">
@@ -1090,6 +1090,7 @@ function renderTracksTable(data, allowReorder){
         <button class="btn-link" style="font-size:14px" onclick="moveTrack('${t.id}', 1)" ${idx===data.length-1?'disabled':''}>▼</button>
       </td>` : ''}
       <td><strong>${esc(t.name_ar)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(t.description||"")}</span></td>
+      <td><code style="font-size:11px;color:var(--gold);background:#fbf3e2;padding:2px 8px;border-radius:6px">${esc(t.track_code||"—")}</code></td>
       <td>${t.min_team_size}–${t.max_team_size}</td>
       <td>${t._count}${t.max_participants ? " / " + t.max_participants : ""}</td>
       <td>${t.registration_open ? '<span class="badge badge-green">مفتوح</span>' : '<span class="badge badge-gray">مغلق</span>'}</td>
@@ -1149,12 +1150,16 @@ async function saveTrackCapacity(trackId){
 }
 function openTrackModal(t=null){
   const isEdit = !!t;
-  t = t || {name_ar:"",name_en:"",description:"",min_team_size:2,max_team_size:5,registration_open:true,is_active:true,display_order:0};
+  t = t || {name_ar:"",name_en:"",description:"",track_code:"",min_team_size:2,max_team_size:5,registration_open:true,is_active:true,display_order:0};
   openModal(`
     <h3>${isEdit ? "تعديل مسار" : "إضافة مسار جديد"}</h3>
     <div class="field"><label>اسم المسار (عربي)</label><input id="f-name-ar" value="${esc(t.name_ar)}"></div>
     <div class="field"><label>اسم المسار (إنجليزي)</label><input id="f-name-en" value="${esc(t.name_en)}"></div>
     <div class="field"><label>الوصف</label><textarea id="f-desc" rows="2">${esc(t.description)}</textarea></div>
+    <div class="field"><label>رمز المسار (لترميز الفرق تلقائيًا)</label>
+      <input id="f-track-code" value="${esc(t.track_code||"")}" placeholder="مثال: AUC" maxlength="6" style="text-transform:uppercase">
+      <p class="hint" style="margin-top:4px">أحرف إنجليزية قصيرة (2-4) — فرق هذا المسار تُرقَّم تلقائيًا بصيغة ${esc(t.track_code||"XXX")}-001, ${esc(t.track_code||"XXX")}-002...</p>
+    </div>
     <div class="form-row-2">
       <div class="field"><label>الحد الأدنى للفريق</label><input type="number" id="f-min" value="${t.min_team_size}"></div>
       <div class="field"><label>الحد الأقصى للفريق</label><input type="number" id="f-max" value="${t.max_team_size}"></div>
@@ -1175,6 +1180,7 @@ async function saveTrack(id){
     name_ar: document.getElementById("f-name-ar").value.trim(),
     name_en: document.getElementById("f-name-en").value.trim(),
     description: document.getElementById("f-desc").value.trim(),
+    track_code: document.getElementById("f-track-code").value.trim().toUpperCase(),
     min_team_size: parseInt(document.getElementById("f-min").value) || 2,
     max_team_size: parseInt(document.getElementById("f-max").value) || 5,
     display_order: parseInt(document.getElementById("f-order").value) || 0,
@@ -4449,6 +4455,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r70</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r71</div>
 </body>
 </html>
