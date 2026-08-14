@@ -2068,7 +2068,7 @@ async function renderAnnouncements(){
     <div class="card"><div id="announcements-table">${skeletonRows(4)}</div></div>`;
 
   const { data, error } = await sb.from("announcements")
-    .select("*, tracks(name_ar)")
+    .select("*, tracks(name_ar), teams(team_name, team_code)")
     .order("is_pinned", {ascending:false})
     .order("published_at", {ascending:false});
 
@@ -2077,11 +2077,11 @@ async function renderAnnouncements(){
   if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد تحديثات منشورة بعد</div>`;
 
   box.innerHTML = `<table><thead><tr>
-    <th>العنوان</th><th>المسار</th><th>ملف مرفق</th><th>تاريخ النشر</th><th></th>
+    <th>العنوان</th><th>الاستهداف</th><th>ملف مرفق</th><th>تاريخ النشر</th><th></th>
     </tr></thead><tbody>
     ${data.map(a => `<tr>
       <td><strong>${a.is_pinned ? '<i data-lucide="pin" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> ' : ''}${esc(a.title)}</strong><br><span style="color:var(--muted);font-size:12px">${esc((a.body||"").substring(0,80))}${(a.body||"").length>80?"…":""}</span></td>
-      <td>${esc(a.tracks?.name_ar || "جميع المسارات")}</td>
+      <td>${a.team_id ? `<span class="badge badge-gold">فريق: ${esc(a.teams?.team_name||"")}</span>` : esc(a.tracks?.name_ar || "جميع المسارات")}</td>
       <td>${a.file_url ? `<a href="${esc(a.file_url)}" target="_blank" style="color:var(--teal)">فتح الملف</a>` : "—"}</td>
       <td>${fmtDate(a.published_at)}</td>
       <td class="row-actions">
@@ -2093,8 +2093,10 @@ async function renderAnnouncements(){
 }
 async function openAnnouncementModal(a=null){
   const isEdit = !!a;
-  a = a || {title:"",body:"",file_url:"",track_id:"",is_pinned:false};
+  a = a || {title:"",body:"",file_url:"",track_id:"",team_id:"",is_pinned:false};
   const { data: tracks } = await sb.from("tracks").select("id,name_ar");
+  const { data: teams } = await sb.from("teams").select("id,team_name,team_code").eq("status","confirmed").order("team_name");
+  const initialScope = a.team_id ? "team" : (a.track_id ? "track" : "all");
   openModal(`
     <h3>${isEdit ? "تعديل تحديث" : "إضافة تحديث جديد"}</h3>
     <div class="field"><label>العنوان</label><input id="f-ann-title" value="${esc(a.title)}" placeholder="مثال: تحديث موعد الورشة الثانية"></div>
@@ -2109,11 +2111,31 @@ async function openAnnouncementModal(a=null){
       <p class="hint" style="margin-top:4px">حدّد نص بالمحرر ثم اضغط أحد الأزرار لتنسيقه</p>
     </div>
     <div class="field"><label>رابط ملف مرفق (اختياري)</label><input id="f-ann-file" value="${esc(a.file_url||"")}" placeholder="https://..."></div>
-    <div class="field"><label>المسار (اتركه فارغًا لجميع المسارات)</label>
-      <select id="f-ann-track"><option value="">جميع المسارات</option>
+
+    <div class="field"><label>الجهة المستهدفة</label>
+      <select id="f-ann-scope" onchange="
+        document.getElementById('f-ann-track-box').style.display = this.value==='track' ? 'block' : 'none';
+        document.getElementById('f-ann-team-box').style.display = this.value==='team' ? 'block' : 'none';
+      ">
+        <option value="all" ${initialScope==='all'?'selected':''}>الجميع</option>
+        <option value="track" ${initialScope==='track'?'selected':''}>مسار محدد</option>
+        <option value="team" ${initialScope==='team'?'selected':''}>فريق واحد محدد فقط ⭐</option>
+      </select>
+    </div>
+    <div class="field" id="f-ann-track-box" style="display:${initialScope==='track'?'block':'none'}">
+      <label>المسار</label>
+      <select id="f-ann-track"><option value="">اختر مسارًا</option>
         ${(tracks||[]).map(t=>`<option value="${t.id}" ${a.track_id===t.id?"selected":""}>${esc(t.name_ar)}</option>`).join("")}
       </select>
     </div>
+    <div class="field" id="f-ann-team-box" style="display:${initialScope==='team'?'block':'none'}">
+      <label>الفريق</label>
+      <select id="f-ann-team"><option value="">اختر فريقًا</option>
+        ${(teams||[]).map(t=>`<option value="${t.id}" ${a.team_id===t.id?"selected":""}>${esc(t.team_name)} (${esc(t.team_code||"")})</option>`).join("")}
+      </select>
+      <p class="hint" style="margin-top:4px">يصل هذا التحديث لأعضاء هذا الفريق فقط — مثالي لتحديثات الإرشاد أو التحكيم أو الاعتماد الخاصة بفريق واحد</p>
+    </div>
+
     <div class="field"><label><input type="checkbox" id="f-ann-pin" ${a.is_pinned?"checked":""}> تثبيت أعلى القائمة</label></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
@@ -2141,11 +2163,15 @@ async function saveAnnouncement(id){
   const title = document.getElementById("f-ann-title").value.trim();
   const body = document.getElementById("f-ann-body").value.trim();
   const file_url = document.getElementById("f-ann-file").value.trim();
-  const track_id = document.getElementById("f-ann-track").value || null;
+  const scope = document.getElementById("f-ann-scope").value;
+  const track_id = scope === "track" ? (document.getElementById("f-ann-track").value || null) : null;
+  const team_id = scope === "team" ? (document.getElementById("f-ann-team").value || null) : null;
   const is_pinned = document.getElementById("f-ann-pin").checked;
   if(!title){ showToast("العنوان مطلوب", true); return; }
+  if(scope === "track" && !track_id){ showToast("اختر المسار المستهدف", true); return; }
+  if(scope === "team" && !team_id){ showToast("اختر الفريق المستهدف", true); return; }
 
-  const payload = { title, body, file_url: file_url || null, track_id, is_pinned };
+  const payload = { title, body, file_url: file_url || null, track_id, team_id, is_pinned };
   const q = id ? sb.from("announcements").update(payload).eq("id", id) : sb.from("announcements").insert({...payload, created_by: currentUser.id});
   const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
@@ -4455,6 +4481,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r71</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r72</div>
 </body>
 </html>

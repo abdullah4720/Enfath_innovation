@@ -1394,6 +1394,7 @@ async function issueCertificate(certKey){
 async function renderUpdatesTab(membership){
   const body = document.getElementById("dash-tab-body");
   const trackId = membership?.teams?.track_id;
+  const teamId = membership?.team_id;
 
   const { data, error } = await sb.from("announcements")
     .select("*, tracks(name_ar)")
@@ -1401,7 +1402,12 @@ async function renderUpdatesTab(membership){
     .order("published_at", {ascending:false});
 
   if(error){ body.innerHTML = `<div class="card"><div class="hint">خطأ: ${esc(error.message)}</div></div>`; return; }
-  const relevant = (data||[]).filter(a => !a.track_id || a.track_id === trackId);
+  // التحديث يظهر لو: عام للجميع، أو لمسار الفريق، أو لفريقنا تحديدًا
+  const relevant = (data||[]).filter(a =>
+    (!a.track_id && !a.team_id) ||
+    (a.team_id && a.team_id === teamId) ||
+    (!a.team_id && a.track_id === trackId)
+  );
 
   if(!relevant.length){
     body.innerHTML = `<div class="card"><h2>التحديثات والملفات</h2><p class="sub">لا توجد تحديثات منشورة حتى الآن</p></div>`;
@@ -1411,8 +1417,8 @@ async function renderUpdatesTab(membership){
   body.innerHTML = `<div class="card"><h2>التحديثات والملفات</h2><p class="sub">آخر الإعلانات والملفات المتعلقة ببرنامجك</p>
     ${relevant.map(a => `
       <div class="announcement-item">
-        <h4>${a.is_pinned ? '<span class="pin-flag">📌</span>' : ''}${esc(a.title)}</h4>
-        <div class="meta">${fmtDate(a.published_at)} · ${esc(a.tracks?.name_ar || "جميع المسارات")}</div>
+        <h4>${a.is_pinned ? '<span class="pin-flag">📌</span>' : ''}${esc(a.title)} ${a.team_id ? '<span class="badge badge-gold" style="font-size:10px">خاص بفريقكم</span>' : ''}</h4>
+        <div class="meta">${fmtDate(a.published_at)} · ${a.team_id ? 'رسالة خاصة بفريقكم' : esc(a.tracks?.name_ar || "جميع المسارات")}</div>
         <p>${formatAnnouncementText(a.body||"")}</p>
         ${a.file_url ? `<a href="${esc(a.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600">📎 فتح الملف المرفق</a>` : ""}
       </div>
@@ -1757,6 +1763,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r70</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r72</div>
 </body>
 </html>
