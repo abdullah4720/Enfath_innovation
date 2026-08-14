@@ -14,6 +14,13 @@
     --gold:#C9922A; --bg:#F7F8FA; --card:#FFFFFF; --ink:#1A1A2E; --muted:#6B7A99;
     --border:#E4E6EF; --border-light:#EEF0F5; --danger:#C0392B; --radius:14px;
   }
+  body.dark{
+    --bg:#0d1520; --card:#151f30; --ink:#e5e9f0; --muted:#8b96a8; --border:#26324a; --border-light:#1c2536;
+  }
+  body.dark .stat-card, body.dark .card{ color:var(--ink); }
+  body.dark input, body.dark select, body.dark textarea{
+    background:#0f1826 !important; color:var(--ink) !important; border-color:var(--border) !important;
+  }
   *{box-sizing:border-box;}
   body{margin:0; font-family:'IBM Plex Sans Arabic', sans-serif; background:var(--bg); color:var(--ink);}
 
@@ -85,7 +92,10 @@
         <h1 id="judge-welcome">لوحة التحكيم</h1>
         <p id="round-name"></p>
       </div>
-      <button class="btn-link" onclick="handleLogout()">تسجيل الخروج</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button id="theme-toggle" onclick="toggleTheme()" title="تبديل الوضع الداكن/الفاتح" style="background:none;border:1px solid rgba(255,255,255,.25);border-radius:8px;width:32px;height:32px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center"><i data-lucide="moon" style="width:15px;height:15px"></i></button>
+        <button class="btn-link" onclick="handleLogout()">تسجيل الخروج</button>
+      </div>
     </div>
   </header>
   <main>
@@ -140,6 +150,21 @@ async function handleGateLogin(){
   }
   currentUser = data.user;
   showContent();
+}
+function toggleTheme(){
+  const isDark = document.body.classList.toggle("dark");
+  document.getElementById("theme-toggle").innerHTML = isDark
+    ? '<i data-lucide="sun" style="width:15px;height:15px"></i>'
+    : '<i data-lucide="moon" style="width:15px;height:15px"></i>';
+  if(window.lucide) lucide.createIcons();
+  localStorage.setItem("enfath-theme", isDark ? "dark" : "light");
+}
+if(localStorage.getItem("enfath-theme") === "dark"){
+  document.body.classList.add("dark");
+  document.addEventListener("DOMContentLoaded", () => {
+    const btn = document.getElementById("theme-toggle");
+    if(btn) btn.innerHTML = '<i data-lucide="sun" style="width:15px;height:15px"></i>';
+  });
 }
 async function handleLogout(){
   await sb.auth.signOut();
@@ -369,6 +394,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r55</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r63</div>
 </body>
 </html>

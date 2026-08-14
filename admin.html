@@ -160,6 +160,24 @@
   .row-actions{display:flex; gap:6px;}
   .empty-state{text-align:center; padding:40px 20px; color:var(--muted); font-size:13.5px;}
 
+  /* ---- Skeleton Loading ---- */
+  @keyframes skeleton-pulse{0%,100%{opacity:.55;} 50%{opacity:1;}}
+  .skel{background:var(--border-light); border-radius:8px; animation:skeleton-pulse 1.4s ease-in-out infinite;}
+  .skel-row{display:flex; align-items:center; gap:14px; padding:14px 16px;}
+  .skel-circle{width:38px; height:38px; border-radius:50%; flex-shrink:0;}
+  .skel-line{height:12px; border-radius:6px;}
+  .skel-stack{display:flex; flex-direction:column; gap:8px; flex:1;}
+
+  /* ---- حالة فارغة مصوّرة ---- */
+  .empty-illustration{text-align:center; padding:48px 20px;}
+  .empty-illustration .icon-wrap{
+    width:64px; height:64px; border-radius:50%; background:var(--border-light);
+    display:flex; align-items:center; justify-content:center; margin:0 auto 16px;
+  }
+  .empty-illustration .icon-wrap i{width:28px; height:28px; color:var(--muted);}
+  .empty-illustration h4{font-size:14px; color:var(--ink); margin:0 0 4px; font-weight:700;}
+  .empty-illustration p{font-size:12.5px; color:var(--muted); margin:0; max-width:280px; margin:0 auto;}
+
   .modal-overlay{
     display:none; position:fixed; inset:0; background:rgba(11,19,38,.55);
     align-items:center; justify-content:center; z-index:100; padding:20px;
@@ -336,6 +354,35 @@ function avatarColor(seed){
   let hash = 0;
   for(let i=0;i<(seed||"").length;i++) hash = seed.charCodeAt(i) + ((hash<<5)-hash);
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+/* ---- Skeleton Loading: يولّد N صفوف وهمية بنبض ناعم ريثما تجهز البيانات ---- */
+function skeletonRows(count=4){
+  return Array.from({length:count}).map(() => `
+    <div class="skel-row">
+      <div class="skel skel-circle"></div>
+      <div class="skel-stack">
+        <div class="skel skel-line" style="width:${40+Math.random()*30}%"></div>
+        <div class="skel skel-line" style="width:${20+Math.random()*20}%; height:9px"></div>
+      </div>
+    </div>
+  `).join("");
+}
+function skeletonCards(count=3){
+  return `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+    ${Array.from({length:count}).map(() => `
+      <div class="skel" style="height:110px;border-radius:14px"></div>
+    `).join("")}
+  </div>`;
+}
+/* ---- حالة فارغة مصوّرة: أيقونة Lucide بدائرة ناعمة + عنوان ووصف ---- */
+function emptyIllustration(icon, title, desc=""){
+  const html = `<div class="empty-illustration">
+    <div class="icon-wrap"><i data-lucide="${icon}"></i></div>
+    <h4>${title}</h4>
+    ${desc ? `<p>${desc}</p>` : ""}
+  </div>`;
+  if(window.lucide) setTimeout(()=>lucide.createIcons(), 0);
+  return html;
 }
 function fmtDate(d){
   if(!d) return "—";
@@ -577,9 +624,9 @@ async function renderOverview(){
   main.innerHTML = `<div class="page-header"><div><h1>نظرة عامة</h1><p>مؤشرات عامة عن سير البرنامج</p></div></div>
     <div class="card" style="background:linear-gradient(135deg,#f2fbf9,#fdfdfb); border-color:var(--teal)">
       <h3 style="margin:0 0 12px"><i data-lucide="pin" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> نظرة اليوم</h3>
-      <div class="grid-stats" id="today-stats">جاري التحميل...</div>
+      <div class="grid-stats" id="today-stats">${skeletonCards(4)}</div>
     </div>
-    <div class="grid-stats" id="stats-grid">جاري التحميل...</div>
+    <div class="grid-stats" id="stats-grid">${skeletonCards(4)}</div>
     <div class="grid-stats" id="stats-grid-extra" style="margin-top:-6px"></div>
     <div class="card">
       <div class="toolbar">
@@ -616,7 +663,7 @@ async function renderOverview(){
     <div class="card" id="mentor-alert-card"></div>
     <div class="card">
       <h3>الرضا حسب المرحلة</h3>
-      <div id="satisfaction-table">جاري التحميل...</div>
+      <div id="satisfaction-table">${skeletonRows(4)}</div>
     </div>`;
 
   const scheduleKeys = ["hackathon_start_date","hackathon_end_date","mentorship_start_date","mentorship_end_date","judging_start_date","judging_end_date","submission_deadline"];
@@ -776,7 +823,7 @@ async function renderSubmissionFields(){
       <div><h1>حقول نموذج المشروع</h1><p>خصّص أسئلة الفرز الأولي اللي يعبّيها الفريق عند تقديم مشروعه — إضافة وحذف وترتيب بالكامل بدون أي تعديل تقني</p></div>
       <button class="btn btn-primary" onclick="openFieldModal()">+ إضافة حقل</button>
     </div>
-    <div class="card"><div id="fields-table">جاري التحميل...</div></div>`;
+    <div class="card"><div id="fields-table">${skeletonRows(4)}</div></div>`;
 
   const { data, error } = await sb.from("submission_field_definitions").select("*").order("display_order");
   const box = document.getElementById("fields-table");
@@ -888,17 +935,17 @@ async function renderTracks(){
         </div>
       </div>
     </div>
-    <div class="card"><div id="tracks-table">جاري التحميل...</div></div>
+    <div class="card"><div id="tracks-table">${skeletonRows(4)}</div></div>
     <div class="card">
       <h3 style="margin:0 0 6px">التحكم بالتسجيل لكل مسار</h3>
       <p class="hint" style="margin-bottom:16px">حدّد السعة القصوى لكل مسار (تُغلق تلقائيًا عند الاكتمال)، أو أغلقه يدويًا بغض النظر عن السعة</p>
-      <div id="capacity-controls">جاري التحميل...</div>
+      <div id="capacity-controls">${skeletonRows(4)}</div>
     </div>`;
 
   const { data, error } = await sb.from("tracks").select("*").order("display_order");
   const box = document.getElementById("tracks-table");
   if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
-  if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد مسارات بعد. أضف أول مسار.</div>`;
+  if(!data.length) return box.innerHTML = emptyIllustration("signpost", "لا توجد مسارات بعد", "أضف أول مسار من الزر أعلاه ليبدأ المشاركون بالتسجيل");
 
   const counts = await Promise.all(data.map(t => sb.rpc("get_track_participant_count", { p_track_id: t.id })));
   cachedTracksData = data.map((t, i) => ({...t, _count: counts[i].data ?? 0}));
@@ -1068,7 +1115,7 @@ async function renderTeams(){
         </div>
       </div>
     </div>
-    <div id="teams-table">جاري التحميل...</div>`;
+    <div id="teams-table">${skeletonRows(4)}</div>`;
 
   const { data, error } = await sb.from("teams")
     .select("id, team_name, team_code, status, invite_code, created_at, tracks(name_ar, max_team_size), team_members(is_leader, profiles(full_name, email, organization))")
@@ -1364,7 +1411,7 @@ async function renderMentorshipAdmin(){
 /* ---------------- نظرة عامة ---------------- */
 async function renderMentorshipOverview(){
   const body = document.getElementById("mentorship-body");
-  body.innerHTML = `<div class="grid-stats" id="mentorship-stats">جاري التحميل...</div>`;
+  body.innerHTML = `<div class="grid-stats" id="mentorship-stats">${skeletonCards(3)}</div>`;
 
   const [slots, bookings, teams] = await Promise.all([
     sb.from("mentor_slots").select("id, is_booked"),
@@ -1396,7 +1443,7 @@ async function renderMentorshipMentorsList(){
         <div></div>
         <button class="btn btn-primary btn-sm" onclick="openAddMentorModal()">+ إضافة مرشد</button>
       </div>
-      <div id="mentors-mgmt-table">جاري التحميل...</div>
+      <div id="mentors-mgmt-table">${skeletonRows(4)}</div>
     </div>`;
 
   const { data: mentorRoles } = await sb.from("user_roles")
@@ -1407,7 +1454,7 @@ async function renderMentorshipMentorsList(){
   const { data: bookings } = await sb.from("mentor_bookings").select("id, status, slot_id, mentor_slots(mentor_user_id)");
 
   const box = document.getElementById("mentors-mgmt-table");
-  if(!mentorRoles || !mentorRoles.length){ box.innerHTML = `<div class="empty-state">لا يوجد مرشدون مسجّلون بعد — أضف أول مرشد بالزر أعلاه</div>`; return; }
+  if(!mentorRoles || !mentorRoles.length){ box.innerHTML = emptyIllustration("graduation-cap", "لا يوجد مرشدون بعد", "أضف أول مرشد بالزر أعلاه ليبدأ بدعم الفرق"); return; }
 
   box.innerHTML = `<table><thead><tr>
     <th>المرشد</th><th>التخصص / المسمى الوظيفي</th><th>إجمالي المواعيد</th><th>المحجوزة</th><th>الجلسات المغلقة</th><th></th>
@@ -1716,7 +1763,7 @@ async function renderPrep(){
           </div>
         </div>
       </div>
-      <div class="card"><div id="prep-table">جاري التحميل...</div></div>
+      <div class="card"><div id="prep-table">${skeletonRows(4)}</div></div>
     </div>`;
 
   const { data, error } = await sb.from("prep_sessions")
@@ -1788,7 +1835,7 @@ async function openPrepAttendanceManager(sessionId, sessionTitle, trackId){
       <button class="btn btn-outline btn-sm" onclick="renderPrep()">← رجوع لكل الجلسات</button>
     </div>
     <div class="field" style="margin-bottom:14px"><input id="prep-attendance-search" placeholder="بحث بالاسم أو البريد..." oninput="filterPrepAttendance()"></div>
-    <div id="prep-attendance-table">جاري التحميل...</div>
+    <div id="prep-attendance-table">${skeletonRows(4)}</div>
   </div>`;
 
   // جلب كل أعضاء الفرق المؤكدة (بالمسار المحدد أو الكل لو الجلسة عامة)
@@ -1906,7 +1953,7 @@ async function renderAnnouncements(){
       <div><h1>التحديثات والملفات</h1><p>إعلانات وملفات تظهر للمشاركين على صفحاتهم الشخصية</p></div>
       <button class="btn btn-primary" onclick="openAnnouncementModal()">+ إضافة تحديث</button>
     </div>
-    <div class="card"><div id="announcements-table">جاري التحميل...</div></div>`;
+    <div class="card"><div id="announcements-table">${skeletonRows(4)}</div></div>`;
 
   const { data, error } = await sb.from("announcements")
     .select("*, tracks(name_ar)")
@@ -2040,7 +2087,7 @@ async function renderJudgesManagement(){
         <div></div>
         <button class="btn btn-primary btn-sm" onclick="openAddJudgeToRoleModal()">+ إضافة محكّم</button>
       </div>
-      <div id="judges-mgmt-table">جاري التحميل...</div>
+      <div id="judges-mgmt-table">${skeletonRows(4)}</div>
     </div>`;
 
   const { data: judgeRoles } = await sb.from("user_roles")
@@ -2052,7 +2099,7 @@ async function renderJudgesManagement(){
   const { data: scores } = await sb.from("scores").select("judge_user_id");
 
   const box = document.getElementById("judges-mgmt-table");
-  if(!judgeRoles || !judgeRoles.length){ box.innerHTML = `<div class="empty-state">لا يوجد محكّمون مسجّلون بعد — أضف أول محكّم بالزر أعلاه</div>`; return; }
+  if(!judgeRoles || !judgeRoles.length){ box.innerHTML = emptyIllustration("scale", "لا يوجد محكّمون بعد", "أضف أول محكّم بالزر أعلاه ليبدأ تقييم المشاريع"); return; }
 
   box.innerHTML = `<table><thead><tr>
     <th>المحكّم</th><th>التخصص / المسمى الوظيفي</th><th>فرق معيّنة</th><th>درجات مسجَّلة</th><th></th>
@@ -2203,7 +2250,7 @@ async function renderJudgingAssignments(){
       <button class="btn btn-primary" style="align-self:flex-end" onclick="openBulkAssignModal()">تعيين جماعي</button>
     </div>
   </div>
-  <div id="assignments-list">جاري التحميل...</div>`;
+  <div id="assignments-list">${skeletonRows(4)}</div>`;
 
   await loadJudgingAssignmentsList();
 }
@@ -2225,7 +2272,7 @@ function filterJudgingAssignments(){
 }
 async function loadJudgingAssignmentsList(){
   const box = document.getElementById("assignments-list");
-  box.innerHTML = `<div class="card">جاري التحميل...</div>`;
+  box.innerHTML = `<div class="card">${skeletonRows(4)}</div>`;
 
   const { data: teams } = await sb.from("teams")
     .select("id, team_name, team_code, status, track_id, tracks(name_ar)")
@@ -2400,7 +2447,7 @@ async function assignJudgeToTeam(teamId){
 async function renderJudgingRounds(){
   const body = document.getElementById("judging-body");
   body.innerHTML = `<div class="toolbar"><div></div><button class="btn btn-primary" onclick="openRoundModal()">+ إضافة جولة</button></div>
-    <div id="rounds-list">جاري التحميل...</div>`;
+    <div id="rounds-list">${skeletonRows(4)}</div>`;
 
   const { data: rounds, error } = await sb.from("judging_rounds").select("*, judging_criteria(*)").order("round_order");
   const box = document.getElementById("rounds-list");
@@ -2501,7 +2548,7 @@ async function saveCriteria(roundId, id){
 }
 async function renderJudgingResults(){
   const body = document.getElementById("judging-body");
-  body.innerHTML = `<div class="card"><div id="results-table">جاري التحميل...</div></div>`;
+  body.innerHTML = `<div id="consistency-check-box"></div><div class="card"><div id="results-table">${skeletonRows(4)}</div></div>`;
   const { data, error } = await sb.from("team_scores_summary").select("*").order("weighted_average", {ascending:false});
   const box = document.getElementById("results-table");
   if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
@@ -2517,6 +2564,61 @@ async function renderJudgingResults(){
       <td>${r.weighted_average ? Number(r.weighted_average).toFixed(2) : "—"}</td>
     </tr>`).join("")}
     </tbody></table>`;
+
+  renderJudgingConsistencyCheck();
+}
+async function renderJudgingConsistencyCheck(){
+  const box = document.getElementById("consistency-check-box");
+  const { data: scores } = await sb.from("scores")
+    .select("team_id, judge_user_id, round_id, score, judging_criteria(weight), teams(team_name)");
+  if(!scores || !scores.length){ box.innerHTML = ""; return; }
+
+  // نحسب المعدل المرجّح لكل محكّم × فريق × جولة
+  const perJudgeTeam = {};
+  scores.forEach(s => {
+    const key = `${s.team_id}|${s.round_id}|${s.judge_user_id}`;
+    if(!perJudgeTeam[key]) perJudgeTeam[key] = { team_id:s.team_id, team_name:s.teams?.team_name, sumScore:0, sumWeight:0 };
+    const w = s.judging_criteria?.weight || 1;
+    perJudgeTeam[key].sumScore += (s.score||0) * w;
+    perJudgeTeam[key].sumWeight += w;
+  });
+
+  // نجمّع حسب الفريق: قائمة معدلات المحكّمين
+  const byTeam = {};
+  Object.values(perJudgeTeam).forEach(row => {
+    const avg = row.sumWeight ? row.sumScore / row.sumWeight : 0;
+    if(!byTeam[row.team_id]) byTeam[row.team_id] = { team_name: row.team_name, avgs: [] };
+    byTeam[row.team_id].avgs.push(avg);
+  });
+
+  const THRESHOLD = 2.5; // فرق أكبر من هذا (على مقياس 0-10) يُعتبر تفاوت ملحوظ
+  const flagged = Object.values(byTeam)
+    .filter(t => t.avgs.length >= 2)
+    .map(t => ({ ...t, spread: Math.max(...t.avgs) - Math.min(...t.avgs) }))
+    .filter(t => t.spread > THRESHOLD)
+    .sort((a,b) => b.spread - a.spread);
+
+  if(!flagged.length){ box.innerHTML = ""; return; }
+
+  box.innerHTML = `
+    <div class="card" style="background:#fef8ed; border-color:#f0d9a8; margin-bottom:16px">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px">
+        <i data-lucide="alert-triangle" style="width:17px;height:17px;color:var(--gold)"></i>
+        <h3 style="margin:0; font-size:14px">تفاوت ملحوظ بتقييم ${flagged.length} فريق</h3>
+      </div>
+      <p class="hint" style="margin-bottom:12px">فرق كبير بين درجات المحكّمين لنفس الفريق (أكثر من ${THRESHOLD} نقاط) — يستحق مراجعة، ممكن يشير لفهم مختلف لمعايير التقييم</p>
+      <div style="display:flex; flex-direction:column; gap:8px">
+        ${flagged.map(t => `
+          <div class="entity-row">
+            <span style="flex:1; font-size:13px; font-weight:600">${esc(t.team_name)}</span>
+            <span style="font-size:12px; color:var(--muted)">الدرجات: ${t.avgs.map(a=>a.toFixed(1)).join(" · ")}</span>
+            <span class="badge badge-gold">فرق ${t.spread.toFixed(1)}</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+  if(window.lucide) lucide.createIcons();
 }
 
 /* ============================================================
@@ -2528,12 +2630,12 @@ async function renderEvents(){
       <div><h1>الفعاليات والحضور</h1><p>الفعاليات الرئيسية وتتبع الحضور عبر QR</p></div>
       <button class="btn btn-primary" onclick="openEventModal()">+ إضافة فعالية</button>
     </div>
-    <div id="events-list">جاري التحميل...</div>`;
+    <div id="events-list">${skeletonRows(4)}</div>`;
 
   const { data, error } = await sb.from("events").select("*, event_attendance(count)").order("event_date");
   const box = document.getElementById("events-list");
   if(error) return box.innerHTML = `<div class="card"><div class="empty-state">خطأ: ${esc(error.message)}</div></div>`;
-  if(!data.length) return box.innerHTML = `<div class="card"><div class="empty-state">لا توجد فعاليات مضافة بعد</div></div>`;
+  if(!data.length) return box.innerHTML = `<div class="card">${emptyIllustration("map-pin", "لا توجد فعاليات بعد", "أضف أول فعالية لتتبّع الحضور عبر QR")}</div>`;
 
   const { count: totalParticipants } = await sb.from("profiles").select("id", {count:"exact", head:true});
 
@@ -2624,13 +2726,13 @@ async function renderCertificates(){
       <div><h1>الشهادات</h1><p>أنواع الشهادات وشروط إصدارها تلقائيًا</p></div>
       <button class="btn btn-primary" onclick="openCertTypeModal()">+ نوع شهادة</button>
     </div>
-    <div class="card"><div id="cert-types-table">جاري التحميل...</div></div>
+    <div class="card"><div id="cert-types-table">${skeletonRows(4)}</div></div>
     <div class="card">
       <div class="toolbar" style="margin-bottom:12px">
         <h3 style="margin:0">حالة الشهادات لكل مشارك</h3>
         <div class="field" style="margin:0"><input id="cert-matrix-search" placeholder="بحث بالاسم..." oninput="filterCertMatrix()"></div>
       </div>
-      <div id="cert-matrix-table">جاري التحميل...</div>
+      <div id="cert-matrix-table">${skeletonRows(4)}</div>
     </div>`;
 
   const { data: types, error } = await sb.from("certificate_types").select("*, certificates(count)");
@@ -2677,7 +2779,7 @@ function filterCertMatrix(){
 }
 function renderCertMatrixTable(users){
   const box = document.getElementById("cert-matrix-table");
-  if(!users.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج</div>`; return; }
+  if(!users.length){ box.innerHTML = emptyIllustration("users-round", "ما فيه مشاركين مؤهّلين بعد", "الفرق المكتملة والمؤكدة تظهر هنا"); return; }
   if(!users[0]?.certs?.length){ box.innerHTML = `<div class="empty-state">أضف نوع شهادة أولاً</div>`; return; }
 
   const certTypeNames = users[0].certs.map(c => c.cert_type_name);
@@ -2826,12 +2928,12 @@ async function renderSurveys(){
       <div><h1>الاستبيانات وقياس الرضا</h1><p>استبيانات كل مرحلة ونتائجها المجمّعة</p></div>
       <button class="btn btn-primary" onclick="openSurveyModal()">+ إضافة استبيان</button>
     </div>
-    <div class="card"><div id="surveys-table">جاري التحميل...</div></div>`;
+    <div class="card"><div id="surveys-table">${skeletonRows(4)}</div></div>`;
 
   const { data, error } = await sb.from("surveys").select("*, survey_responses(count)").order("created_at", {ascending:false});
   const box = document.getElementById("surveys-table");
   if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
-  if(!data.length) return box.innerHTML = `<div class="empty-state">لا توجد استبيانات بعد — أضف أول استبيان بالزر أعلاه</div>`;
+  if(!data.length) return box.innerHTML = emptyIllustration("clipboard-list", "لا توجد استبيانات بعد", "أضف أول استبيان بالزر أعلاه لقياس رضا المشاركين");
 
   const stageLabels = {prep:"التحضير", mentorship:"الإرشاد", judging:"التحكيم", closing:"الختام", overall:"عام"};
 
@@ -2934,7 +3036,7 @@ async function renderMentorApplications(){
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500"><input type="checkbox" id="mentor-select-all" onchange="toggleSelectAllMentorApps(this.checked)"> تحديد الكل</label>
         <button class="btn btn-primary btn-sm" style="width:auto" onclick="bulkApproveMentorApps()">✓ اعتماد المحدَّد</button>
       </div>
-      <div id="mentor-apps-table">جاري التحميل...</div>
+      <div id="mentor-apps-table">${skeletonRows(4)}</div>
     </div>`;
 
   const { data, error } = await sb.from("mentor_applications")
@@ -2943,7 +3045,7 @@ async function renderMentorApplications(){
 
   const box = document.getElementById("mentor-apps-table");
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
-  if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد طلبات انضمام بعد</div>`; return; }
+  if(!data.length){ box.innerHTML = emptyIllustration("user-plus", "لا توجد طلبات انضمام بعد", "طلبات المتقدمين الجدد تظهر هنا للمراجعة والاعتماد"); return; }
 
   const statusBadge = {
     pending: '<span class="badge badge-gray">قيد المراجعة</span>',
@@ -3018,7 +3120,7 @@ async function renderJudgeApplications(){
         <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500"><input type="checkbox" id="judge-select-all" onchange="toggleSelectAllJudgeApps(this.checked)"> تحديد الكل</label>
         <button class="btn btn-primary btn-sm" style="width:auto" onclick="bulkApproveJudgeApps()">✓ اعتماد المحدَّد</button>
       </div>
-      <div id="judge-apps-table">جاري التحميل...</div>
+      <div id="judge-apps-table">${skeletonRows(4)}</div>
     </div>`;
 
   const { data, error } = await sb.from("judge_applications")
@@ -3027,7 +3129,7 @@ async function renderJudgeApplications(){
 
   const box = document.getElementById("judge-apps-table");
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
-  if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد طلبات انضمام بعد</div>`; return; }
+  if(!data.length){ box.innerHTML = emptyIllustration("user-plus", "لا توجد طلبات انضمام بعد", "طلبات المتقدمين الجدد تظهر هنا للمراجعة والاعتماد"); return; }
 
   const statusBadge = {
     pending: '<span class="badge badge-gray">قيد المراجعة</span>',
@@ -3117,7 +3219,7 @@ async function renderFinalReportPage(){
           <input type="file" id="report-image-upload" accept="image/*" multiple style="display:none" onchange="handleReportImageUpload(event)">
         </label>
       </div>
-      <div id="report-images-grid">جاري التحميل...</div>
+      <div id="report-images-grid">${skeletonRows(4)}</div>
     </div>`;
   await loadReportImages();
 }
@@ -3125,7 +3227,7 @@ async function loadReportImages(){
   const box = document.getElementById("report-images-grid");
   const { data, error } = await sb.storage.from("report-images").list("", { sortBy: { column: "created_at", order: "desc" } });
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
-  if(!data || !data.length){ box.innerHTML = `<div class="empty-state">لا توجد صور مرفوعة بعد</div>`; return; }
+  if(!data || !data.length){ box.innerHTML = emptyIllustration("image", "لا توجد صور مرفوعة بعد", "ارفع لقطات من الفعالية لإدراجها بالتقرير النهائي"); return; }
 
   box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px">
     ${data.map(f => {
@@ -3723,7 +3825,7 @@ async function renderProjects(){
     <div class="card" style="margin-bottom:16px">
       <div class="field" style="margin:0"><label>بحث بعنوان الفكرة أو اسم الفريق</label><input id="projects-search" placeholder="اكتب للبحث..." oninput="filterProjectsView()"></div>
     </div>
-    <div id="projects-list">جاري التحميل...</div>`;
+    <div id="projects-list">${skeletonRows(4)}</div>`;
 
   const { data, error } = await sb.from("submissions")
     .select("id, title, description, file_url, version, submitted_at, custom_fields, teams(team_name, team_code, tracks(name_ar), team_members(is_leader, profiles(full_name, email, phone, category, city, organization, age_range, gender, project_role)))")
@@ -3797,7 +3899,7 @@ function filterProjectsView(){
     !term || (p.title||"").toLowerCase().includes(term) || (p.teams?.team_name||"").toLowerCase().includes(term)
   );
   const box = document.getElementById("projects-list");
-  if(!filtered.length){ box.innerHTML = `<div class="card"><div class="empty-state">لا توجد مشاريع مقدَّمة بعد</div></div>`; return; }
+  if(!filtered.length){ box.innerHTML = `<div class="card">${emptyIllustration("lightbulb", "لا توجد مشاريع مقدَّمة بعد", "الأفكار المُرسَلة من الفرق تظهر هنا فور تقديمها")}</div>`; return; }
 
   box.innerHTML = `<p class="hint" style="margin:0 0 12px">${filtered.length} من ${allProjectsCache.length} فكرة مقدَّمة</p>
     <div style="display:flex; flex-direction:column; gap:12px">
@@ -3970,7 +4072,7 @@ async function renderParticipants(){
       <p class="hint" style="margin-bottom:10px">صيغة ملف الاستيراد المتوقعة (بأول صف عناوين الأعمدة): <code>الاسم</code>, <code>البريد</code>, <code>الجوال</code>, <code>الجهة</code>, <code>المسار</code></p>
       <div class="field" style="margin:0"><label>بحث بالاسم أو البريد أو الجهة</label><input id="participants-search" placeholder="اكتب للبحث..." oninput="filterParticipantsView()"></div>
     </div>
-    <div class="card"><div id="participants-table">جاري التحميل...</div></div>`;
+    <div class="card"><div id="participants-table">${skeletonRows(4)}</div></div>`;
 
   const { data: profiles, error } = await sb.from("profiles")
     .select("id, full_name, email, phone, organization, category, city, age_range, gender, project_role, created_at, user_roles!user_roles_user_id_fkey(roles(name_ar)), team_members(is_leader, teams(team_name, team_code, tracks(name_ar)))")
@@ -4195,7 +4297,7 @@ function exportParticipantsExcel(){
 async function renderActivityLog(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header"><div><h1>سجل النشاط</h1><p>آخر الإجراءات الإدارية على المنصة</p></div></div>
-    <div class="card"><div id="activity-table">جاري التحميل...</div></div>`;
+    <div class="card"><div id="activity-table">${skeletonRows(4)}</div></div>`;
 
   const { data, error } = await sb.from("activity_log")
     .select("*, profiles(full_name)")
@@ -4204,7 +4306,7 @@ async function renderActivityLog(){
 
   const box = document.getElementById("activity-table");
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
-  if(!data.length){ box.innerHTML = `<div class="empty-state">لا يوجد نشاط مسجّل بعد</div>`; return; }
+  if(!data.length){ box.innerHTML = emptyIllustration("history", "لا يوجد نشاط مسجّل بعد", "كل إجراء إداري يُسجَّل هنا تلقائيًا"); return; }
 
   const iconMap = {
     team:"users-round", user:"user-round", track:"signpost", submission:"lightbulb",
@@ -4240,6 +4342,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r62</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r63</div>
 </body>
 </html>
