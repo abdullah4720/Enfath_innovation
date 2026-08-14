@@ -1513,7 +1513,7 @@ async function renderTeamView(membership){
 
       ${membership.is_leader && !deadlinePassed ? `
         <div class="field"><label>عنوان الفكرة</label><input id="sub-title" value="${esc(submission?.title||"")}"></div>
-        <div class="field"><label>وصف الفكرة</label><textarea id="sub-desc" rows="4">${esc(submission?.description||"")}</textarea></div>
+        <div class="field"><label>وصف الفكرة <span style="color:var(--danger)">*</span></label><textarea id="sub-desc" rows="4">${esc(submission?.description||"")}</textarea></div>
         ${customFieldDefs.length ? `
           <h3 style="font-size:14px;margin:24px 0 4px;color:var(--navy)">أسئلة الفرز الأولي</h3>
           <p class="sub" style="margin-bottom:14px">معلومات إضافية تساعد لجنة الفرز على تقييم مشروعكم</p>
@@ -1631,6 +1631,7 @@ async function saveSubmission(teamId, currentVersion){
   const description = document.getElementById("sub-desc").value.trim();
   let file_url = document.getElementById("sub-file").value.trim();
   if(!title){ alertBox.textContent = "عنوان الفكرة مطلوب"; alertBox.className = "alert error"; return; }
+  if(!description){ alertBox.textContent = "وصف الفكرة مطلوب"; alertBox.className = "alert error"; return; }
 
   // التحقق من الحقول الديناميكية الإلزامية
   let firstMissingLabel = null;
@@ -1689,6 +1690,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r63</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r69</div>
 </body>
 </html>
