@@ -1202,6 +1202,16 @@ async function renderMentorshipTab(membership){
     return;
   }
 
+  // بوابة: ما نسمح بحجز جديد إلا بعد تقييم كل الجلسات المكتملة السابقة
+  const unratedCompleted = cachedTeamBookings.filter(b => b.status === "completed" && !ratedBookingIds.has(b.id));
+  if(unratedCompleted.length){
+    body.innerHTML = bookingHtml + `<div class="card" style="background:#fef8ed;border-color:#f0d9a8">
+      <h2 style="margin-bottom:6px">⏸ قيّموا جلستكم الأخيرة أولًا</h2>
+      <p class="sub" style="margin-bottom:0">لازم تقيّموا جلسة الإرشاد المكتملة أعلاه قبل ما تقدروا تحجزوا موعد جديد — يساعدنا نحسّن جودة الإرشاد المقدَّم</p>
+    </div>`;
+    return;
+  }
+
   const { data: slots, error } = await sb.from("mentor_slots")
     .select("id, start_time, end_time, is_online, location, is_booked, track_id, mentor_user_id, profiles(full_name, specialization, current_position, bio)")
     .eq("is_booked", false)
@@ -1215,17 +1225,18 @@ async function renderMentorshipTab(membership){
   }
 
   // ترشيح: نطابق تخصص المرشد مع مسار الفريق لإبراز الأنسب
+  // (القيم مطابقة تمامًا لقائمة التخصصات الفعلية بنموذج التقديم كمرشد)
   const trackKeywordMap = {
-    "العدالة الرقمية": ["القانون والتشريع","التنفيذ القضائي والإجراءات القانونية","هندسة البرمجيات وتطوير الأنظمة"],
-    "الذكاء الاصطناعي القانوني": ["الذكاء الاصطناعي وتعلم الآلة","القانون والتشريع","البيانات وتحليل الأعمال"],
-    "تجربة المستخدم الحكومي": ["تجربة المستخدم وتصميم المنتجات","إدارة المشاريع وريادة الأعمال"],
-    "الأمن السيبراني القضائي": ["الأمن السيبراني","هندسة البرمجيات وتطوير الأنظمة"],
+    "المزادات الذكية": ["الذكاء الاصطناعي وتعلم الآلة","البيانات وتحليل الأعمال","إدارة المشاريع وريادة الأعمال"],
+    "التسويق الذكي للأصول": ["تجربة المستخدم وتصميم المنتجات","البيانات وتحليل الأعمال","إدارة المشاريع وريادة الأعمال"],
+    "العقود الذكية والتسجيل": ["القانون والتشريع","التنفيذ القضائي والإجراءات القانونية","هندسة البرمجيات وتطوير الأنظمة","الأمن السيبراني"],
   };
   const relevantKeywords = trackKeywordMap[team.tracks?.name_ar] || [];
   const isRecommended = (spec) => relevantKeywords.some(k => (spec||"").includes(k));
 
   cachedMentorSlots = (slots || []).sort((a,b) => (isRecommended(b.profiles?.specialization)?1:0) - (isRecommended(a.profiles?.specialization)?1:0));
   const specializations = [...new Set(cachedMentorSlots.map(s => s.profiles?.specialization).filter(Boolean))];
+  const mentorNames = [...new Map(cachedMentorSlots.filter(s=>s.mentor_user_id).map(s => [s.mentor_user_id, s.profiles?.full_name])).entries()];
 
   let displaySlots = cachedMentorSlots;
   let followUpBanner = "";
@@ -1242,13 +1253,26 @@ async function renderMentorshipTab(membership){
     : `<div class="card">
         <h2>المواعيد المتاحة</h2>
         <p class="sub">مرتّبة حسب الأنسب لمسار فريقكم — يمكنكم حجز أكثر من مرشد بشرط عدم تعارض الأوقات</p>
-        ${specializations.length && !followUpMentorFilter ? `
-          <div class="field" style="margin-bottom:16px">
-            <label>فلترة حسب التخصص</label>
-            <select id="mentor-spec-filter" onchange="filterMentorSlots('${team.id}')">
-              <option value="">كل التخصصات</option>
-              ${specializations.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
-            </select>
+        ${(specializations.length || mentorNames.length) && !followUpMentorFilter ? `
+          <div class="form-row-2" style="margin-bottom:16px">
+            ${specializations.length ? `
+              <div class="field" style="margin:0">
+                <label>فلترة حسب الاحتياج / التخصص</label>
+                <select id="mentor-spec-filter" onchange="filterMentorSlots('${team.id}')">
+                  <option value="">كل التخصصات</option>
+                  ${specializations.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join("")}
+                </select>
+              </div>
+            ` : '<div></div>'}
+            ${mentorNames.length ? `
+              <div class="field" style="margin:0">
+                <label>أو اختر مرشدًا محددًا</label>
+                <select id="mentor-name-filter" onchange="filterMentorSlots('${team.id}')">
+                  <option value="">كل المرشدين</option>
+                  ${mentorNames.map(([id,name]) => `<option value="${id}">${esc(name)}</option>`).join("")}
+                </select>
+              </div>
+            ` : ''}
           </div>
         ` : ""}
         <div id="mentor-slots-list"></div>
@@ -1260,14 +1284,17 @@ async function renderMentorshipTab(membership){
 let cachedMentorSlots = [];
 let cachedTeamBookings = [];
 function filterMentorSlots(teamId){
-  const spec = document.getElementById("mentor-spec-filter").value;
-  const filtered = spec ? cachedMentorSlots.filter(s => s.profiles?.specialization === spec) : cachedMentorSlots;
+  const spec = document.getElementById("mentor-spec-filter")?.value || "";
+  const mentorId = document.getElementById("mentor-name-filter")?.value || "";
+  let filtered = cachedMentorSlots;
+  if(spec) filtered = filtered.filter(s => s.profiles?.specialization === spec);
+  if(mentorId) filtered = filtered.filter(s => s.mentor_user_id === mentorId);
   renderMentorSlotsList(filtered, teamId);
 }
 function renderMentorSlotsList(slots, teamId, isRecommended){
   const box = document.getElementById("mentor-slots-list");
   if(!box) return;
-  if(!slots.length){ box.innerHTML = `<p class="hint">لا توجد مواعيد مطابقة لهذا التخصص</p>`; return; }
+  if(!slots.length){ box.innerHTML = `<p class="hint">لا توجد مواعيد مطابقة لهذا الفلتر</p>`; return; }
   box.innerHTML = slots.map(s => `
     <div class="member-row" style="align-items:flex-start">
       <div>
@@ -1763,6 +1790,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r72</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r73</div>
 </body>
 </html>
