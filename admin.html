@@ -287,6 +287,7 @@
       <a data-page="tracks"><i data-lucide="signpost"></i> المسارات</a>
       <a data-page="submissionFields"><i data-lucide="list-plus"></i> حقول نموذج المشروع</a>
       <a data-page="journeyMilestones"><i data-lucide="route"></i> رحلة المشارك</a>
+      <a data-page="generalSettings"><i data-lucide="settings-2"></i> الإعدادات العامة</a>
       <a data-page="users"><i data-lucide="shield-check"></i> المستخدمون والأدوار</a>
       <a data-page="mentorApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمرشد <span id="badge-mentorApps" class="nav-badge" style="display:none"></span></a>
       <a data-page="judgeApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمحكّم <span id="badge-judgeApps" class="nav-badge" style="display:none"></span></a>
@@ -599,6 +600,7 @@ function navigateTo(page){
     tracks: renderTracks,
     submissionFields: renderSubmissionFields,
     journeyMilestones: renderJourneyMilestones,
+    generalSettings: renderGeneralSettings,
     teams: renderTeams,
     projects: renderProjects,
     prep: renderPrep,
@@ -633,34 +635,9 @@ async function renderOverview(){
     <div class="card">
       <div class="toolbar">
         <h3 style="margin:0"><i data-lucide="calendar" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> الجدول الزمني للبرنامج</h3>
+        <button class="btn btn-outline btn-sm" onclick="navigateTo('generalSettings')">تعديل من الإعدادات العامة →</button>
       </div>
-      <p class="hint" style="margin-bottom:16px">هذي التواريخ تتحكم بالعداد التنازلي، وتحدد الفترة المسموحة للمرشدين بإضافة مواعيد الإرشاد</p>
-
-      <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px"><i data-lucide="rocket" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> أيام الهاكاثون</h4>
-      <div class="form-row-2" style="margin-bottom:16px">
-        <div class="field" style="margin:0"><label>بداية الهاكاثون</label><input type="datetime-local" id="date-hackathon-start"></div>
-        <div class="field" style="margin:0"><label>نهاية الهاكاثون</label><input type="datetime-local" id="date-hackathon-end"></div>
-      </div>
-
-      <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px"><i data-lucide="graduation-cap" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فترة الإرشاد</h4>
-      <div class="form-row-2" style="margin-bottom:16px">
-        <div class="field" style="margin:0"><label>بداية فترة الإرشاد</label><input type="datetime-local" id="date-mentorship-start"></div>
-        <div class="field" style="margin:0"><label>نهاية فترة الإرشاد</label><input type="datetime-local" id="date-mentorship-end"></div>
-      </div>
-      <p class="hint" style="margin:-10px 0 16px">لو تركتها فاضية، المرشدون يقدرون يضيفون مواعيد بأي وقت بدون قيد</p>
-
-      <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px"><i data-lucide="lightbulb" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> موعد تقديم المشاريع</h4>
-      <div class="field" style="margin-bottom:16px"><label>الموعد النهائي لتقديم/تعديل الفكرة</label><input type="datetime-local" id="date-submission-deadline"></div>
-      <p class="hint" style="margin:-10px 0 16px">بعد هذا الموعد، قائد الفريق ما يقدر يعدّل فكرة فريقه — تركه فاضي يعني بلا موعد نهائي</p>
-
-      <h4 style="font-size:13px;color:var(--muted);margin:0 0 8px"><i data-lucide="scale" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فترة التحكيم</h4>
-      <div class="form-row-2" style="margin-bottom:16px">
-        <div class="field" style="margin:0"><label>بداية التحكيم</label><input type="datetime-local" id="date-judging-start"></div>
-        <div class="field" style="margin:0"><label>نهاية التحكيم</label><input type="datetime-local" id="date-judging-end"></div>
-      </div>
-
-      <button class="btn btn-primary btn-sm" onclick="saveProgramSchedule()">حفظ الجدول الزمني</button>
-      <span id="schedule-alert" style="font-size:12.5px;color:var(--teal);display:none;margin-right:10px">تم الحفظ ✓</span>
+      <div id="overview-schedule-glance" class="hint">${skeletonRows(2)}</div>
     </div>
     <div class="card" id="mentor-alert-card"></div>
     <div class="card">
@@ -669,19 +646,18 @@ async function renderOverview(){
     </div>`;
 
   const scheduleKeys = ["hackathon_start_date","hackathon_end_date","mentorship_start_date","mentorship_end_date","judging_start_date","judging_end_date","submission_deadline"];
-  const scheduleInputIds = {
-    hackathon_start_date: "date-hackathon-start", hackathon_end_date: "date-hackathon-end",
-    mentorship_start_date: "date-mentorship-start", mentorship_end_date: "date-mentorship-end",
-    judging_start_date: "date-judging-start", judging_end_date: "date-judging-end",
-    submission_deadline: "date-submission-deadline",
+  const scheduleLabels = {
+    hackathon_start_date:"بداية الهاكاثون", hackathon_end_date:"نهاية الهاكاثون",
+    mentorship_start_date:"بداية الإرشاد", mentorship_end_date:"نهاية الإرشاد",
+    judging_start_date:"بداية التحكيم", judging_end_date:"نهاية التحكيم",
+    submission_deadline:"الموعد النهائي للتقديم",
   };
   const { data: scheduleRows } = await sb.from("platform_settings").select("key,value").in("key", scheduleKeys);
-  (scheduleRows||[]).forEach(row => {
-    if(row.value){
-      const el = document.getElementById(scheduleInputIds[row.key]);
-      if(el) el.value = row.value.substring(0,16);
-    }
-  });
+  const glanceBox = document.getElementById("overview-schedule-glance");
+  const setRows = (scheduleRows||[]).filter(r => r.value);
+  glanceBox.innerHTML = setRows.length
+    ? setRows.map(r => `<span style="display:inline-block;margin:0 12px 6px 0">${scheduleLabels[r.key]}: <strong style="color:var(--ink)">${fmtDate(r.value)}</strong></span>`).join("")
+    : "لا توجد تواريخ محدَّدة بعد";
 
   await renderTodayStats();
   await renderMentorAlert();
@@ -723,25 +699,7 @@ async function renderOverview(){
 function statCard(num, label, accent=false){
   return `<div class="stat-card ${accent ? 'accent' : ''}"><div class="num">${num ?? "—"}</div><div class="label">${label}</div></div>`;
 }
-async function saveProgramSchedule(){
-  const scheduleInputIds = {
-    hackathon_start_date: "date-hackathon-start", hackathon_end_date: "date-hackathon-end",
-    mentorship_start_date: "date-mentorship-start", mentorship_end_date: "date-mentorship-end",
-    judging_start_date: "date-judging-start", judging_end_date: "date-judging-end",
-    submission_deadline: "date-submission-deadline",
-  };
-  const rows = Object.entries(scheduleInputIds).map(([key, inputId]) => {
-    const val = document.getElementById(inputId).value;
-    return { key, value: val ? new Date(val).toISOString() : null };
-  });
 
-  const { error } = await sb.from("platform_settings").upsert(rows);
-  const alertEl = document.getElementById("schedule-alert");
-  if(error){ showToast("خطأ: " + error.message, true); return; }
-  logActivity("تحديث الجدول الزمني للبرنامج", "platform_settings");
-  alertEl.style.display = "inline";
-  setTimeout(() => alertEl.style.display = "none", 2500);
-}
 const MIN_MENTOR_SLOTS = 3;
 async function renderTodayStats(){
   const box = document.getElementById("today-stats");
@@ -934,6 +892,147 @@ const MILESTONE_CHECK_TYPES = {
   prep_attended: "حضر جلسة تحضير",
   survey_answered: "أجاب على استبيان",
 };
+/* ============================================================
+   الإعدادات العامة — صفحة موحّدة (جدول زمني + وضع الإرشاد + قالب الإيميل)
+   ============================================================ */
+async function renderGeneralSettings(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header"><div><h1>الإعدادات العامة</h1><p>كل إعدادات المنصة الأساسية بمكان واحد</p></div></div>
+
+    <div class="card">
+      <h3 style="margin:0 0 4px">📅 الجدول الزمني للبرنامج</h3>
+      <p class="hint" style="margin-bottom:16px">هذي التواريخ تتحكم بالعدّاد التنازلي وموعد إغلاق التقديم بصفحة المشارك</p>
+      <div class="form-row-2">
+        <div class="field"><label>بداية الهاكاثون</label><input type="datetime-local" id="gs-date-hackathon-start"></div>
+        <div class="field"><label>نهاية الهاكاثون</label><input type="datetime-local" id="gs-date-hackathon-end"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="field"><label>بداية الإرشاد</label><input type="datetime-local" id="gs-date-mentorship-start"></div>
+        <div class="field"><label>نهاية الإرشاد</label><input type="datetime-local" id="gs-date-mentorship-end"></div>
+      </div>
+      <div class="form-row-2">
+        <div class="field"><label>بداية التحكيم</label><input type="datetime-local" id="gs-date-judging-start"></div>
+        <div class="field"><label>نهاية التحكيم</label><input type="datetime-local" id="gs-date-judging-end"></div>
+      </div>
+      <div class="field"><label>الموعد النهائي لتقديم المشاريع</label><input type="datetime-local" id="gs-date-submission-deadline"></div>
+      <button class="btn btn-primary" onclick="saveGeneralSchedule()">حفظ الجدول الزمني</button>
+      <span id="gs-schedule-alert" style="font-size:12.5px;color:var(--teal);display:none;margin-right:10px">تم الحفظ ✓</span>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 4px">🧭 من يوجّه الفرق للمرشدين؟</h3>
+      <p class="hint" style="margin-bottom:16px">يتحكم بتجربة المشارك بتبويب "الإرشاد" بصفحته</p>
+      <div id="gs-mentorship-mode-box">${skeletonRows(2)}</div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 4px">✉️ قالب الإيميل</h3>
+      <p class="hint" style="margin-bottom:16px">يتحكم بشكل ونص كل الإيميلات المرسَلة تلقائيًا من المنصة (يحتاج Resend مفعّل)</p>
+      <div id="gs-email-template-box">${skeletonRows(3)}</div>
+    </div>`;
+
+  // تعبئة الجدول الزمني
+  const scheduleKeys = ["hackathon_start_date","hackathon_end_date","mentorship_start_date","mentorship_end_date","judging_start_date","judging_end_date","submission_deadline"];
+  const { data: scheduleRows } = await sb.from("platform_settings").select("key,value").in("key", scheduleKeys);
+  (scheduleRows||[]).forEach(row => {
+    if(row.value){
+      const el = document.getElementById(`gs-date-${row.key.replace(/_date$/,'').replace(/_/g,'-')}`);
+      if(el) el.value = row.value.substring(0,16);
+    }
+  });
+
+  await renderGsMentorshipMode();
+  await renderGsEmailTemplate();
+}
+async function saveGeneralSchedule(){
+  const map = {
+    hackathon_start_date: "gs-date-hackathon-start", hackathon_end_date: "gs-date-hackathon-end",
+    mentorship_start_date: "gs-date-mentorship-start", mentorship_end_date: "gs-date-mentorship-end",
+    judging_start_date: "gs-date-judging-start", judging_end_date: "gs-date-judging-end",
+    submission_deadline: "gs-date-submission-deadline",
+  };
+  const rows = Object.entries(map).map(([key, inputId]) => {
+    const val = document.getElementById(inputId).value;
+    return { key, value: val ? new Date(val).toISOString() : null };
+  });
+  const { error } = await sb.from("platform_settings").upsert(rows);
+  const alertEl = document.getElementById("gs-schedule-alert");
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("تحديث الجدول الزمني للبرنامج", "platform_settings");
+  alertEl.style.display = "inline";
+  setTimeout(() => alertEl.style.display = "none", 2500);
+}
+
+async function renderGsMentorshipMode(){
+  const box = document.getElementById("gs-mentorship-mode-box");
+  const { data } = await sb.from("platform_settings").select("value").eq("key","mentorship_mode").maybeSingle();
+  const currentMode = data?.value || "self";
+  box.innerHTML = `
+    <div class="track-option ${currentMode==='self'?'selected':''}" style="cursor:pointer" onclick="selectGsMentorshipMode('self')">
+      <h4><i data-lucide="hand" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> حجز ذاتي من الفريق</h4>
+      <p>الفريق يشوف كل المواعيد المتاحة ويحجز بنفسه — أسرع وأبسط</p>
+    </div>
+    <div class="track-option ${currentMode==='admin_only'?'selected':''}" style="cursor:pointer;margin-top:10px" onclick="selectGsMentorshipMode('admin_only')">
+      <h4><i data-lucide="user-cog" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> توجيه من الإدارة فقط</h4>
+      <p>الإدارة تحدد يدويًا أي مرشد يناسب كل فريق — تحكم دقيق بالمطابقة</p>
+    </div>
+    <div id="gs-mentorship-mode-alert" class="alert" style="margin-top:12px"></div>`;
+  if(window.lucide) lucide.createIcons();
+}
+async function selectGsMentorshipMode(mode){
+  const { error } = await sb.from("platform_settings").upsert({ key: "mentorship_mode", value: mode });
+  const alertBox = document.getElementById("gs-mentorship-mode-alert");
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  logActivity("تغيير وضع توجيه الإرشاد", "platform_settings", null, {mode});
+  alertBox.textContent = "تم الحفظ — التغيير يظهر فورًا بصفحات المشاركين"; alertBox.className = "alert success";
+  renderGsMentorshipMode();
+}
+
+async function renderGsEmailTemplate(){
+  const box = document.getElementById("gs-email-template-box");
+  const { data: t } = await sb.from("email_templates").select("*").limit(1).maybeSingle();
+  box.innerHTML = `
+    <div class="field"><label>عبارة الترحيب (استخدم {{name}} لاسم المستلم)</label><input id="gs-email-greeting" value="${esc(t?.greeting_text || 'مرحبًا {{name}}،')}"></div>
+    <div class="field"><label>نص شريط الهيدر</label><input id="gs-email-footer" value="${esc(t?.footer_org_text || 'هاكاثون إنفاذ — بالشراكة مع جامعة القصيم')}"></div>
+    <div class="field"><label>نص زر الدعوة</label><input id="gs-email-button" value="${esc(t?.button_text || 'فتح المنصة')}"></div>
+    <button class="btn btn-primary" onclick="saveGsEmailTemplate('${t?.id||''}')">حفظ القالب</button>
+    <button class="btn btn-outline" onclick="previewGsEmailTemplate()">معاينة</button>
+    <div id="gs-email-alert" class="alert" style="margin-top:12px"></div>`;
+}
+async function saveGsEmailTemplate(id){
+  const payload = {
+    greeting_text: document.getElementById("gs-email-greeting").value.trim() || "مرحبًا {{name}}،",
+    footer_org_text: document.getElementById("gs-email-footer").value.trim() || "هاكاثون إنفاذ — بالشراكة مع جامعة القصيم",
+    button_text: document.getElementById("gs-email-button").value.trim() || "فتح المنصة",
+  };
+  const q = id ? sb.from("email_templates").update(payload).eq("id", id) : sb.from("email_templates").insert(payload);
+  const { error } = await q;
+  const alertBox = document.getElementById("gs-email-alert");
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  logActivity("تحديث قالب الإيميل", "email_templates");
+  alertBox.textContent = "تم الحفظ — يسري على كل الإيميلات القادمة فورًا"; alertBox.className = "alert success";
+  renderGsEmailTemplate();
+}
+function previewGsEmailTemplate(){
+  const greeting = (document.getElementById("gs-email-greeting").value || "مرحبًا {{name}}،").replace("{{name}}", "عبدالله");
+  const footer = document.getElementById("gs-email-footer").value || "هاكاثون إنفاذ";
+  const button = document.getElementById("gs-email-button").value || "فتح المنصة";
+  openModal(`
+    <div style="font-family:Arial,sans-serif; max-width:420px; margin:0 auto">
+      <div style="background:#0D1B3E; padding:16px 20px; border-radius:10px 10px 0 0">
+        <span style="color:#fff; font-size:15px; font-weight:bold">${esc(footer)}</span>
+      </div>
+      <div style="background:#F7F8FA; padding:20px; border-radius:0 0 10px 10px">
+        <p style="font-size:14px; color:#1A1A2E; margin:0 0 8px">${esc(greeting)}</p>
+        <h3 style="font-size:16px; color:#1A2E5A; margin:0 0 8px">مثال: تم تأكيد موعد إرشادك</h3>
+        <p style="font-size:13px; color:#6B7A99; line-height:1.7">هذا نص تجريبي لمعاينة شكل الإيميل الفعلي اللي بيوصل للمشاركين.</p>
+        <span style="display:inline-block; margin-top:14px; background:#C9922A; color:#1A1300; padding:9px 18px; border-radius:8px; font-weight:bold; font-size:13px">${esc(button)}</span>
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
+  `);
+}
+
 async function renderJourneyMilestones(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
@@ -1840,30 +1939,14 @@ async function renderMentorshipSettings(){
   const body = document.getElementById("mentorship-body");
   const { data } = await sb.from("platform_settings").select("value").eq("key","mentorship_mode").maybeSingle();
   const currentMode = data?.value || "self";
+  const modeLabel = currentMode === "admin_only" ? "توجيه من الإدارة فقط" : "حجز ذاتي من الفريق";
 
   body.innerHTML = `<div class="card">
     <h3 style="margin:0 0 10px">من يوجّه الفرق للمرشدين؟</h3>
-    <p class="hint" style="margin-bottom:16px">هذا الإعداد يتحكم بتجربة المشارك بتبويب "الإرشاد" بصفحته</p>
-
-    <div class="track-option ${currentMode==='self'?'selected':''}" style="cursor:pointer" onclick="selectMentorshipMode('self')">
-      <h4><i data-lucide="hand" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> حجز ذاتي من الفريق</h4>
-      <p>الفريق يشوف كل المواعيد المتاحة ويحجز بنفسه أي موعد يناسبه — أسرع وأبسط، مناسب لأعداد كبيرة</p>
-    </div>
-    <div class="track-option ${currentMode==='admin_only'?'selected':''}" style="cursor:pointer;margin-top:10px" onclick="selectMentorshipMode('admin_only')">
-      <h4><i data-lucide="user-cog" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> توجيه من الإدارة فقط</h4>
-      <p>الإدارة تحدد يدويًا أي مرشد يناسب كل فريق (من تبويب "الفرق")، والفريق ما يقدر يحجز بنفسه — مناسب لما تبي تحكم دقيق بالمطابقة حسب التخصص</p>
-    </div>
-
-    <div id="mentorship-mode-alert" class="alert" style="margin-top:16px"></div>
+    <p class="hint" style="margin-bottom:16px">الوضع الحالي: <strong style="color:var(--ink)">${modeLabel}</strong></p>
+    <button class="btn btn-outline" onclick="navigateTo('generalSettings')">تعديل من الإعدادات العامة →</button>
+    <p class="hint" style="margin-top:14px">توحّد هذا الإعداد بصفحة "الإعدادات العامة" — مكان واحد لكل إعدادات المنصة</p>
   </div>`;
-}
-async function selectMentorshipMode(mode){
-  const { error } = await sb.from("platform_settings").upsert({ key: "mentorship_mode", value: mode });
-  const alertBox = document.getElementById("mentorship-mode-alert");
-  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
-  logActivity("تغيير وضع توجيه الإرشاد", "platform_settings", null, {mode});
-  alertBox.textContent = "تم الحفظ — التغيير يظهر فورًا بصفحات المشاركين"; alertBox.className = "alert success";
-  renderMentorshipSettings();
 }
 
 let cachedPrepData = [];
@@ -4493,6 +4576,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r76</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r78</div>
 </body>
 </html>
