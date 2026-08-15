@@ -419,7 +419,7 @@ async function renderSlots(){
   if(window.lucide) lucide.createIcons();
 }
 async function deleteSlot(slotId){
-  if(!confirm("متأكد تبي تحذف هذا الموعد؟ ما يمكن حذفه إلا لو غير محجوز.")) return;
+  if(!confirm("هل أنت متأكد من حذف هذا الموعد؟ لا يمكن حذفه إلا إذا كان غير محجوز.")) return;
   const { error } = await sb.from("mentor_slots").delete().eq("id", slotId);
   if(error){ alert("خطأ: " + error.message); return; }
   renderSlots();
@@ -474,7 +474,7 @@ async function confirmBooking(bookingId){
   renderSlots();
 }
 async function cancelBookingByMentor(bookingId){
-  if(!confirm("متأكد تبي تلغي هذا الحجز؟")) return;
+  if(!confirm("هل أنت متأكد من إلغاء هذا الحجز؟")) return;
   const { error } = await sb.from("mentor_bookings").update({ status: "cancelled" }).eq("id", bookingId);
   if(error){ alert("تعذّر الإلغاء: " + error.message); return; }
   renderSlots();
@@ -727,6 +727,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r63</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r86</div>
 </body>
 </html>

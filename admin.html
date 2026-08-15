@@ -1744,7 +1744,7 @@ async function saveAddTeam(){
   renderTeams();
 }
 async function confirmDeleteTeam(teamId, teamName){
-  if(!confirm(`متأكد تبي تحذف فريق "${teamName}"؟ راح يُحذف كل أعضائه ومشاريعه وحجوزات إرشاده ودرجاته المرتبطة به. لا يمكن التراجع.`)) return;
+  if(!confirm(`هل أنت متأكد من حذف فريق "${teamName}"؟ سيُحذف كل أعضائه ومشاريعه وحجوزات إرشاده ودرجاته المرتبطة به. لا يمكن التراجع عن هذا الإجراء.`)) return;
   await sb.from("scores").delete().eq("team_id", teamId);
   await sb.from("judge_assignments").delete().eq("team_id", teamId);
   await sb.from("mentor_bookings").delete().eq("team_id", teamId);
@@ -1976,7 +1976,7 @@ async function addMentorRole(userId, userName){
   renderMentorshipMentorsList();
 }
 async function removeMentorRole(userRoleId, userName){
-  if(!confirm(`متأكد تبي تحذف ${userName} من قائمة المرشدين؟ مواعيده وحجوزاته السابقة تبقى محفوظة، بس ما يقدر يدخل لوحة الإرشاد بعدها.`)) return;
+  if(!confirm(`هل أنت متأكد من حذف ${userName} من قائمة المرشدين؟ ستبقى مواعيده وحجوزاته السابقة محفوظة، لكنه لن يستطيع الدخول للوحة الإرشاد بعد ذلك.`)) return;
   const { error } = await sb.from("user_roles").delete().eq("id", userRoleId);
   if(error){ showToast("خطأ: " + error.message, true); return; }
   logActivity("حذف مرشد", "user", null, {name: userName});
@@ -2137,7 +2137,7 @@ async function manualAssignMentor(teamId){
   const hasConflict = (existingBookings||[]).some(b =>
     b.mentor_slots && new Date(targetSlot.start_time) < new Date(b.mentor_slots.end_time) && new Date(b.mentor_slots.start_time) < new Date(targetSlot.end_time)
   );
-  if(hasConflict && !confirm("تنبيه: هذا الموعد يتعارض بالتوقيت مع موعد آخر للفريق. تبي تكمل التعيين رغم ذلك؟")) return;
+  if(hasConflict && !confirm("تنبيه: هذا الموعد يتعارض بالتوقيت مع موعد آخر للفريق. هل ترغب بإتمام التعيين رغم ذلك؟")) return;
 
   const { error } = await sb.from("mentor_bookings").insert({ slot_id: slotId, team_id: teamId, status: "pending" });
   if(error){ showToast("خطأ: " + error.message, true); return; }
@@ -2147,7 +2147,7 @@ async function manualAssignMentor(teamId){
   renderMentorshipTeamsList();
 }
 async function cancelMentorBooking(bookingId){
-  if(!confirm("متأكد تبي تلغي هذا الموعد؟ الموعد بيرجع متاح لفرق ثانية.")) return;
+  if(!confirm("هل أنت متأكد من إلغاء هذا الموعد؟ سيصبح متاحًا لفرق أخرى.")) return;
   const { error } = await sb.from("mentor_bookings").update({ status: "cancelled" }).eq("id", bookingId);
   if(error){ showToast("خطأ: " + error.message, true); return; }
   showToast("تم إلغاء الموعد");
@@ -2654,7 +2654,7 @@ async function addJudgeRole(userId, userName){
   renderJudgesManagement();
 }
 async function removeJudgeRole(userRoleId, userName){
-  if(!confirm(`متأكد تبي تحذف ${userName} من قائمة المحكّمين؟ درجاته السابقة تبقى محفوظة بالسجل.`)) return;
+  if(!confirm(`هل أنت متأكد من حذف ${userName} من قائمة المحكّمين؟ ستبقى درجاته السابقة محفوظة بالسجل.`)) return;
   const { error } = await sb.from("user_roles").delete().eq("id", userRoleId);
   if(error){ showToast("خطأ: " + error.message, true); return; }
   logActivity("حذف محكّم", "user", null, {name: userName});
@@ -2878,7 +2878,7 @@ async function openBulkAssignModal(){
 
   openModal(`
     <h3>تعيين جماعي</h3>
-    <p class="hint" style="margin:-8px 0 16px">اختر محكّمًا وحدد الفرق اللي تبي تعيّنه لها دفعة وحدة</p>
+    <p class="hint" style="margin:-8px 0 16px">اختر محكّمًا وحدد الفرق التي ترغب بتعيينه لها دفعة واحدة</p>
     <div class="field"><label>المحكّم</label>
       <select id="bulk-judge-select">
         ${judges.map(j => `<option value="${j.user_id}">${esc(j.profiles?.full_name||"")}${j.profiles?.specialization ? " — " + esc(j.profiles.specialization) : ""}</option>`).join("")}
@@ -3302,7 +3302,7 @@ async function manualIssueCertificate(userId, certTypeKey){
   loadCertMatrix();
 }
 async function deleteCertificate(certId, userName){
-  if(!confirm(`متأكد تبي تحذف شهادة ${userName}؟ هذا إجراء لا يمكن التراجع عنه.`)) return;
+  if(!confirm(`هل أنت متأكد من حذف شهادة ${userName}؟ هذا إجراء لا يمكن التراجع عنه.`)) return;
   const { error } = await sb.from("certificates").delete().eq("id", certId);
   if(error){ showToast("خطأ: " + error.message, true); return; }
   logActivity("حذف شهادة", "certificate", certId, {name: userName});
@@ -4741,7 +4741,7 @@ function openDeleteParticipantModal(userId, userName){
   `);
 }
 async function safeRemoveParticipant(userId, userName){
-  if(!confirm(`متأكد تبي تزيل ${userName} من فريقه وتلغي كل أدواره؟`)) return;
+  if(!confirm(`هل أنت متأكد من إزالة ${userName} من فريقه وإلغاء كل أدواره؟`)) return;
   await sb.from("team_members").delete().eq("user_id", userId);
   await sb.from("user_roles").delete().eq("user_id", userId);
   logActivity("إزالة آمنة لمشارك", "user", userId, {name: userName});
@@ -4823,6 +4823,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r85</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r86</div>
 </body>
 </html>

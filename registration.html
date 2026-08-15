@@ -1500,7 +1500,7 @@ async function renderMentorshipTab(membership){
   const body = document.getElementById("dash-tab-body");
 
   if(!membership || !membership.teams){
-    body.innerHTML = `<div class="card"><h2>الإرشاد</h2><p class="sub">لازم تكون بفريق أول عشان تحجز موعد إرشاد</p></div>`;
+    body.innerHTML = `<div class="card"><h2>الإرشاد</h2><p class="sub">يجب أن تنضم لفريق أولًا لتتمكن من حجز موعد إرشاد</p></div>`;
     return;
   }
   const team = membership.teams;
@@ -1702,13 +1702,13 @@ async function bookMentorSlot(slotId, teamId){
       return;
     }
   }
-  const topic = prompt("اختياري: وش الموضوع اللي تبي تناقشه بالجلسة؟") || null;
+  const topic = prompt("ما موضوع الجلسة الذي ترغب مناقشته؟ (اختياري)") || null;
   const { error } = await sb.from("mentor_bookings").insert({ slot_id: slotId, team_id: teamId, requested_topic: topic });
   if(error){ alert("تعذّر الحجز: " + error.message); return; }
   renderMentorshipTab(cachedMembership);
 }
 async function cancelMyMentorBooking(bookingId){
-  if(!confirm("متأكد تبي تلغي هذا الموعد؟")) return;
+  if(!confirm("هل أنت متأكد من إلغاء هذا الموعد؟")) return;
   const { error } = await sb.from("mentor_bookings").update({ status: "cancelled" }).eq("id", bookingId);
   if(error){ alert("تعذّر الإلغاء: " + error.message); return; }
   renderMentorshipTab(cachedMembership);
@@ -2153,19 +2153,19 @@ function toggleTeamNameEdit(show){
   document.getElementById("team-name-alert").className = "alert";
 }
 async function leaveTeam(membershipId){
-  if(!confirm("متأكد تبي تغادر الفريق؟ ما تقدر ترجع إلا برمز دعوة جديد.")) return;
+  if(!confirm("هل أنت متأكد من مغادرة الفريق؟ لن تتمكن من العودة إلا برمز دعوة جديد.")) return;
   const { error } = await sb.from("team_members").delete().eq("id", membershipId);
   if(error){ alert("تعذّرت المغادرة: " + error.message); return; }
   renderDashboard();
 }
 async function kickMember(memberRowId, memberName){
-  if(!confirm(`متأكد تبي تزيل ${memberName} من الفريق؟`)) return;
+  if(!confirm(`هل أنت متأكد من إزالة ${memberName} من الفريق؟`)) return;
   const { error } = await sb.from("team_members").delete().eq("id", memberRowId);
   if(error){ alert("تعذّرت الإزالة: " + error.message); return; }
   renderDashboard();
 }
 async function transferLeadership(teamId, newLeaderId, memberName){
-  if(!confirm(`متأكد تبي تنقل قيادة الفريق لـ${memberName}؟ ما تقدر ترجع قائد إلا لو نقلها لك مرة ثانية.`)) return;
+  if(!confirm(`هل أنت متأكد من نقل قيادة الفريق إلى ${memberName}؟ ما تقدر ترجع قائد إلا لو نقلها لك مرة ثانية.`)) return;
   const { data, error } = await sb.rpc("transfer_team_leadership", { p_team_id: teamId, p_new_leader_id: newLeaderId });
   if(error || !data.success){ alert("خطأ: " + (data?.error || error?.message)); return; }
   renderDashboard();
@@ -2286,6 +2286,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r85</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r86</div>
 </body>
 </html>
