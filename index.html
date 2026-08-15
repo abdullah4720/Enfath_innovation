@@ -85,6 +85,15 @@
   .track-card:hover{transform:translateY(-4px); box-shadow:0 12px 28px rgba(26,46,90,.08);}
   .track-card h3{font-size:16px; margin:16px 0 8px;}
   .track-card p{font-size:13px; color:var(--muted); line-height:1.7;}
+  .track-details-toggle{
+    background:none; border:none; color:var(--gold); font-family:inherit; font-size:12.5px; font-weight:700;
+    cursor:pointer; padding:10px 0 0; display:block;
+  }
+  .track-details{display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);}
+  .track-details.open{display:block;}
+  .track-details p{margin:0 0 10px;}
+  .track-req-label{font-size:11px; font-weight:700; color:var(--navy); margin:10px 0 6px; text-transform:uppercase; letter-spacing:.03em;}
+  .track-details ul{margin:0; padding-right:18px; font-size:12.5px; color:var(--muted); line-height:1.9;}
 
   .journey{position:relative; max-width:900px; margin:0 auto;}
   .journey::before{content:""; position:absolute; top:26px; right:26px; left:26px; height:1px; background:var(--border);}
@@ -250,15 +259,29 @@ const TRACK_GLOWS = ["var(--gold)","var(--teal)","var(--violet)"];
     return;
   }
   document.getElementById("fact-tracks").textContent = data.length;
-  grid.innerHTML = data.map((t, i) => `
+  grid.innerHTML = data.map((t, i) => {
+    const hasDetails = t.long_description || (t.requirements && t.requirements.length) || t.evaluation_focus;
+    return `
     <div class="track-card" data-reveal>
       <div class="glow-icon" style="--glow:${TRACK_GLOWS[i % TRACK_GLOWS.length]}">
         <i data-lucide="${TRACK_ICONS[i % TRACK_ICONS.length]}"></i>
       </div>
       <h3>${esc(t.name_ar)}</h3>
       <p>${esc(t.description || "")}</p>
+      ${hasDetails ? `
+        <button class="track-details-toggle" onclick="this.nextElementSibling.classList.toggle('open'); this.textContent = this.nextElementSibling.classList.contains('open') ? 'إخفاء التفاصيل ▲' : 'التفاصيل الكاملة ▾'">التفاصيل الكاملة ▾</button>
+        <div class="track-details">
+          ${t.long_description ? `<p>${esc(t.long_description)}</p>` : ""}
+          ${t.requirements && t.requirements.length ? `
+            <div class="track-req-label">المطلوب تحديدًا</div>
+            <ul>${t.requirements.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+          ` : ""}
+          ${t.evaluation_focus ? `<div class="track-req-label">محاور التقييم</div><p>${esc(t.evaluation_focus)}</p>` : ""}
+        </div>
+      ` : ""}
     </div>
-  `).join("");
+  `;
+  }).join("");
   if(window.lucide) lucide.createIcons();
   initReveal(grid);
 })();
@@ -288,6 +311,6 @@ const TRACK_GLOWS = ["var(--gold)","var(--teal)","var(--violet)"];
 }catch(err){ console.error("تعذّر تحميل بيانات Supabase:", err); }
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r67</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r76</div>
 </body>
 </html>

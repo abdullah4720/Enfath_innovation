@@ -1150,12 +1150,20 @@ async function saveTrackCapacity(trackId){
 }
 function openTrackModal(t=null){
   const isEdit = !!t;
-  t = t || {name_ar:"",name_en:"",description:"",track_code:"",min_team_size:2,max_team_size:5,registration_open:true,is_active:true,display_order:0};
+  t = t || {name_ar:"",name_en:"",description:"",long_description:"",requirements:[],evaluation_focus:"",track_code:"",min_team_size:2,max_team_size:5,registration_open:true,is_active:true,display_order:0};
   openModal(`
     <h3>${isEdit ? "تعديل مسار" : "إضافة مسار جديد"}</h3>
     <div class="field"><label>اسم المسار (عربي)</label><input id="f-name-ar" value="${esc(t.name_ar)}"></div>
     <div class="field"><label>اسم المسار (إنجليزي)</label><input id="f-name-en" value="${esc(t.name_en)}"></div>
-    <div class="field"><label>الوصف</label><textarea id="f-desc" rows="2">${esc(t.description)}</textarea></div>
+    <div class="field"><label>الوصف المختصر (يظهر بالبطاقة مباشرة)</label><textarea id="f-desc" rows="2">${esc(t.description)}</textarea></div>
+
+    <h4 style="font-size:13px;margin:18px 0 8px;color:var(--navy)">التفاصيل الكاملة (تظهر عند الضغط على "التفاصيل")</h4>
+    <div class="field"><label>نظرة عامة موسّعة</label><textarea id="f-long-desc" rows="3">${esc(t.long_description||"")}</textarea></div>
+    <div class="field"><label>المطلوب تحديدًا (كل نقطة بسطر)</label>
+      <textarea id="f-requirements" rows="4" placeholder="مثال:&#10;حل يدعم اللغة العربية بالكامل&#10;واجهة سهلة للمزايدين غير التقنيين&#10;تكامل مع أنظمة الدفع الإلكتروني">${(t.requirements||[]).join("\n")}</textarea>
+    </div>
+    <div class="field"><label>محاور التقييم المتوقعة</label><textarea id="f-eval-focus" rows="2" placeholder="مثال: يركّز المحكّمون بهذا المسار على قابلية التطبيق العملي وسهولة الاستخدام">${esc(t.evaluation_focus||"")}</textarea></div>
+
     <div class="field"><label>رمز المسار (لترميز الفرق تلقائيًا)</label>
       <input id="f-track-code" value="${esc(t.track_code||"")}" placeholder="مثال: AUC" maxlength="6" style="text-transform:uppercase">
       <p class="hint" style="margin-top:4px">أحرف إنجليزية قصيرة (2-4) — فرق هذا المسار تُرقَّم تلقائيًا بصيغة ${esc(t.track_code||"XXX")}-001, ${esc(t.track_code||"XXX")}-002...</p>
@@ -1176,10 +1184,14 @@ function openTrackModal(t=null){
   `);
 }
 async function saveTrack(id){
+  const requirementsRaw = document.getElementById("f-requirements").value.trim();
   const payload = {
     name_ar: document.getElementById("f-name-ar").value.trim(),
     name_en: document.getElementById("f-name-en").value.trim(),
     description: document.getElementById("f-desc").value.trim(),
+    long_description: document.getElementById("f-long-desc").value.trim(),
+    requirements: requirementsRaw ? requirementsRaw.split("\n").map(r=>r.trim()).filter(Boolean) : [],
+    evaluation_focus: document.getElementById("f-eval-focus").value.trim(),
     track_code: document.getElementById("f-track-code").value.trim().toUpperCase(),
     min_team_size: parseInt(document.getElementById("f-min").value) || 2,
     max_team_size: parseInt(document.getElementById("f-max").value) || 5,
@@ -4481,6 +4493,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r72</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r76</div>
 </body>
 </html>

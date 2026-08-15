@@ -135,6 +135,15 @@
   .track-option.selected{border-color:var(--teal); background:#f2fbf9;}
   .track-option h4{margin:0 0 3px; font-size:14px;}
   .track-option p{margin:0; font-size:12.5px; color:var(--muted);}
+  .track-details-toggle{
+    background:none; border:none; color:var(--gold); font-family:inherit; font-size:12px; font-weight:700;
+    cursor:pointer; padding:8px 0 0; display:block;
+  }
+  .track-details{display:none; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);}
+  .track-details.open{display:block;}
+  .track-details p{margin:0 0 8px; font-size:12.5px; color:var(--muted); line-height:1.7;}
+  .track-req-label{font-size:10.5px; font-weight:700; color:var(--navy); margin:8px 0 5px; text-transform:uppercase; letter-spacing:.03em;}
+  .track-details ul{margin:0; padding-right:16px; font-size:12px; color:var(--muted); line-height:1.8;}
 
   .member-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);}
   .member-row:last-child{border-bottom:none;}
@@ -1604,12 +1613,26 @@ async function renderNoTeamView(){
       <p class="sub">اختر المسار ثم اسم الفريق، وستحصل على رمز دعوة لمشاركته مع زملائك</p>
       <div class="field"><label>اختر المسار</label></div>
       <div id="track-list">
-        ${(tracks||[]).map(t => `
+        ${(tracks||[]).map(t => {
+          const hasDetails = t.long_description || (t.requirements && t.requirements.length) || t.evaluation_focus;
+          return `
           <div class="track-option" data-id="${t.id}" onclick="selectTrack('${t.id}')">
             <h4>${esc(t.name_ar)}</h4>
             <p>${esc(t.description||"")} · حجم الفريق ${t.min_team_size}–${t.max_team_size}</p>
+            ${hasDetails ? `
+              <button type="button" class="track-details-toggle" onclick="event.stopPropagation(); this.nextElementSibling.classList.toggle('open'); this.textContent = this.nextElementSibling.classList.contains('open') ? 'إخفاء التفاصيل ▲' : 'التفاصيل الكاملة ▾'">التفاصيل الكاملة ▾</button>
+              <div class="track-details">
+                ${t.long_description ? `<p>${esc(t.long_description)}</p>` : ""}
+                ${t.requirements && t.requirements.length ? `
+                  <div class="track-req-label">المطلوب تحديدًا</div>
+                  <ul>${t.requirements.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+                ` : ""}
+                ${t.evaluation_focus ? `<div class="track-req-label">محاور التقييم</div><p>${esc(t.evaluation_focus)}</p>` : ""}
+              </div>
+            ` : ""}
           </div>
-        `).join("") || '<p class="hint">لا توجد مسارات مفتوحة حاليًا</p>'}
+        `;
+        }).join("") || '<p class="hint">لا توجد مسارات مفتوحة حاليًا</p>'}
       </div>
       <div class="field" style="margin-top:16px"><label>اسم الفريق</label><input id="new-team-name" placeholder="اسم فريقك"></div>
       <div id="create-alert" class="alert"></div>
@@ -1925,6 +1948,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r75</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r76</div>
 </body>
 </html>
