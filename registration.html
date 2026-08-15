@@ -148,6 +148,15 @@
   .track-details ul{margin:0; padding-right:16px; font-size:12px; color:var(--muted); line-height:1.8;}
 
   .member-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);}
+  .slot-row{
+    display:flex; align-items:flex-start; gap:14px; padding:16px; margin-bottom:10px;
+    background:#fff; border:1px solid var(--border); border-radius:14px; transition:.15s;
+  }
+  .slot-row:hover{box-shadow:0 4px 14px rgba(13,27,62,.06); border-color:rgba(26,46,90,.15);}
+  .avatar-circle{
+    width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:14px; font-weight:700; color:#fff; flex-shrink:0;
+  }
   .member-row:last-child{border-bottom:none;}
   .leader-tag{font-size:11px; background:var(--purple); color:#fff; padding:2px 9px; border-radius:12px; margin-right:6px;}
 
@@ -893,16 +902,23 @@ const DASH_SECTIONS = {
     { t:"team", label:"فريقي", icon:"users-round" },
     { t:"chat", label:"دردشة الفريق", icon:"message-circle" },
   ]},
-  program: { label:"مسار البرنامج", icon:"sparkles", color:"var(--gold)", tabs:[
+  prep: { label:"التحضير", icon:"graduation-cap", color:"#0EA5E9", tabs:[
     { t:"prep", label:"التحضير", icon:"graduation-cap" },
+  ]},
+  mentorship: { label:"الإرشاد", icon:"compass", color:"var(--gold)", tabs:[
     { t:"mentorship", label:"الإرشاد", icon:"compass" },
+  ]},
+  extra: { label:"معلومات إضافية", icon:"info", color:"#8B5CF6", tabs:[
     { t:"judging", label:"معايير التحكيم", icon:"scale" },
   ]},
   certs: { label:"الشهادات", icon:"award", color:"var(--teal)", tabs:[
     { t:"certs", label:"الشهادات", icon:"award" },
   ]},
-  updates: { label:"التحديثات والملفات", icon:"megaphone", color:"var(--violet, #7C6FE0)", tabs:[
-    { t:"updates", label:"التحديثات والملفات", icon:"megaphone" },
+  updates: { label:"التحديثات", icon:"megaphone", color:"#7C6FE0", tabs:[
+    { t:"updates", label:"التحديثات", icon:"megaphone" },
+  ]},
+  files: { label:"الملفات", icon:"folder-open", color:"#0D9488", tabs:[
+    { t:"files", label:"الملفات", icon:"folder-open" },
   ]},
   account: { label:"حسابي", icon:"circle-user", color:"#6B7A99", tabs:[
     { t:"profile", label:"ملفي الشخصي", icon:"user-round" },
@@ -946,20 +962,26 @@ async function loadHomeStats(membership){
   setStat("project", team ? `${esc(team.team_name)}` : "لست بفريق بعد");
 
   if(team){
-    const [subRes, bookingRes] = await Promise.all([
-      sb.from("submissions").select("id",{count:"exact",head:true}).eq("team_id", team.id),
+    const [bookingRes, prepRes] = await Promise.all([
       sb.from("mentor_bookings").select("id",{count:"exact",head:true}).eq("team_id", team.id).neq("status","cancelled"),
+      sb.from("prep_attendance").select("id",{count:"exact",head:true}).eq("user_id", currentUser.id),
     ]);
-    setStat("program", (bookingRes.count||0) > 0 ? `${bookingRes.count} موعد إرشاد` : (subRes.count>0 ? "الفكرة مقدَّمة" : "لسا ما بدأتوا"));
+    setStat("mentorship", (bookingRes.count||0) > 0 ? `${bookingRes.count} موعد إرشاد` : "لم تحجزوا بعد");
+    setStat("prep", (prepRes.count||0) > 0 ? `حضرت ${prepRes.count} جلسة` : "لسا ما حضرت");
   } else {
-    setStat("program", "كوّن فريقك أولًا");
+    setStat("mentorship", "كوّن فريقك أولًا");
+    setStat("prep", "كوّن فريقك أولًا");
   }
+  setStat("extra", "معايير التحكيم");
 
   const { count: certCount } = await sb.from("certificates").select("id",{count:"exact",head:true}).eq("user_id", currentUser.id);
   setStat("certs", certCount > 0 ? `${certCount} شهادة صادرة` : "لا توجد بعد");
 
   const { count: annCount } = await sb.from("announcements").select("id",{count:"exact",head:true});
   setStat("updates", annCount > 0 ? `${annCount} تحديث منشور` : "لا توجد تحديثات");
+
+  const { count: filesCount } = await sb.from("resource_files").select("id",{count:"exact",head:true});
+  setStat("files", filesCount > 0 ? `${filesCount} ملف متاح` : "لا توجد ملفات بعد");
 
   const { data: profile } = await sb.from("profiles").select("phone,category,city,age_range,gender,project_role").eq("id", currentUser.id).single();
   const fields = [profile?.phone, profile?.category, profile?.city, profile?.age_range, profile?.gender, profile?.project_role];
@@ -1002,6 +1024,7 @@ async function renderDashSection(membership){
   else if(dashTab === "judging") renderJudgingCriteriaTab(membership);
   else if(dashTab === "certs") renderCertsTab();
   else if(dashTab === "updates") renderUpdatesTab(membership);
+  else if(dashTab === "files") renderFilesTab(membership);
   else if(dashTab === "surveys") renderSurveysTab();
   else renderMyProfileTab();
 }
@@ -1633,17 +1656,37 @@ function renderMentorSlotsList(slots, teamId, isRecommended){
   const box = document.getElementById("mentor-slots-list");
   if(!box) return;
   if(!slots.length){ box.innerHTML = `<p class="hint">لا توجد مواعيد مطابقة لهذا الفلتر</p>`; return; }
-  box.innerHTML = slots.map(s => `
-    <div class="member-row" style="align-items:flex-start">
-      <div>
-        <strong>${fmtDate(s.start_time)}</strong> ${isRecommended && isRecommended(s.profiles?.specialization) ? '<span class="badge-gold" style="font-size:10.5px;padding:2px 8px;border-radius:10px;background:#fbf3e2;color:var(--gold)">⭐ مقترح لتخصصكم</span>' : ""}<br>
-        <span class="hint">${esc(s.profiles?.full_name||"مرشد")}${s.profiles?.specialization ? " · " + esc(s.profiles.specialization) : ""}${s.profiles?.current_position ? " · " + esc(s.profiles.current_position) : ""}</span><br>
-        ${s.profiles?.bio ? `<span class="hint" style="font-size:11.5px">${esc(s.profiles.bio.substring(0,90))}${s.profiles.bio.length>90?"…":""}</span><br>` : ""}
-        <span class="hint">${esc(s.location || (s.is_online ? "عبر الإنترنت" : ""))}</span>
+  box.innerHTML = slots.map(s => {
+    const mentorName = s.profiles?.full_name || "مرشد";
+    const initial = mentorName.trim().charAt(0) || "؟";
+    return `
+    <div class="slot-row">
+      <div class="avatar-circle" style="background:${avatarColorForName(mentorName)}">${esc(initial)}</div>
+      <div style="flex:1; min-width:0">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:2px">
+          <strong style="font-size:14px; color:var(--ink)">${esc(mentorName)}</strong>
+          ${isRecommended && isRecommended(s.profiles?.specialization) ? '<span style="font-size:10.5px;padding:2px 8px;border-radius:10px;background:#fbf3e2;color:var(--gold);font-weight:700">⭐ مقترح لتخصصكم</span>' : ""}
+        </div>
+        <div style="font-size:12px; color:var(--muted); margin-bottom:6px">
+          ${[s.profiles?.specialization, s.profiles?.current_position].filter(Boolean).map(esc).join(" · ") || "—"}
+        </div>
+        ${s.profiles?.bio ? `<p style="font-size:11.5px; color:var(--muted); margin:0 0 8px; line-height:1.6">${esc(s.profiles.bio.substring(0,110))}${s.profiles.bio.length>110?"…":""}</p>` : ""}
+        <div style="display:flex; align-items:center; gap:14px; font-size:12px; color:var(--ink); font-weight:600">
+          <span><i data-lucide="calendar-clock" style="width:13px;height:13px;vertical-align:-2px;display:inline-block;color:var(--gold)"></i> ${fmtDate(s.start_time)}</span>
+          <span><i data-lucide="${s.is_online ? 'video' : 'map-pin'}" style="width:13px;height:13px;vertical-align:-2px;display:inline-block;color:var(--muted)"></i> ${esc(s.location || (s.is_online ? "عبر الإنترنت" : "—"))}</span>
+        </div>
       </div>
-      <button class="btn btn-outline" style="width:auto;padding:8px 16px" onclick="bookMentorSlot('${s.id}','${teamId}')">حجز</button>
+      <button class="btn btn-outline" style="width:auto;padding:9px 18px;flex-shrink:0" onclick="bookMentorSlot('${s.id}','${teamId}')">حجز</button>
     </div>
-  `).join("");
+  `;
+  }).join("");
+  if(window.lucide) lucide.createIcons();
+}
+function avatarColorForName(name){
+  const colors = ["#1A2E5A","#C9922A","#1F9E8E","#7C6FE0","#2A3D6B","#B0752E"];
+  let hash = 0;
+  for(let i=0;i<(name||"").length;i++) hash = name.charCodeAt(i) + ((hash<<5)-hash);
+  return colors[Math.abs(hash) % colors.length];
 }
 function timesOverlap(startA, endA, startB, endB){
   return new Date(startA) < new Date(endB) && new Date(startB) < new Date(endA);
@@ -1817,7 +1860,7 @@ async function issueCertificate(certKey){
   renderCertsTab();
 }
 
-/* ---------------- تبويب: التحديثات والملفات ---------------- */
+/* ---------------- تبويب: التحديثات ---------------- */
 async function renderUpdatesTab(membership){
   const body = document.getElementById("dash-tab-body");
   const trackId = membership?.teams?.track_id;
@@ -1837,11 +1880,11 @@ async function renderUpdatesTab(membership){
   );
 
   if(!relevant.length){
-    body.innerHTML = `<div class="card"><h2>التحديثات والملفات</h2><p class="sub">لا توجد تحديثات منشورة حتى الآن</p></div>`;
+    body.innerHTML = `<div class="card"><h2>التحديثات</h2><p class="sub">لا توجد تحديثات منشورة حتى الآن</p></div>`;
     return;
   }
 
-  body.innerHTML = `<div class="card"><h2>التحديثات والملفات</h2><p class="sub">آخر الإعلانات والملفات المتعلقة ببرنامجك</p>
+  body.innerHTML = `<div class="card"><h2>التحديثات</h2><p class="sub">آخر الإعلانات المتعلقة ببرنامجك</p>
     ${relevant.map(a => `
       <div class="announcement-item">
         <h4>${a.is_pinned ? '<span class="pin-flag">📌</span>' : ''}${esc(a.title)} ${a.team_id ? '<span class="badge badge-gold" style="font-size:10px">خاص بفريقكم</span>' : ''}</h4>
@@ -1851,6 +1894,64 @@ async function renderUpdatesTab(membership){
       </div>
     `).join("")}
   </div>`;
+}
+
+/* ---------------- تبويب: الملفات (مكتبة مرجعية مستقلة) ---------------- */
+async function renderFilesTab(membership){
+  const body = document.getElementById("dash-tab-body");
+  const trackId = membership?.teams?.track_id;
+  const teamId = membership?.team_id;
+
+  const { data, error } = await sb.from("resource_files")
+    .select("*, tracks(name_ar)")
+    .order("is_pinned", {ascending:false})
+    .order("created_at", {ascending:false});
+
+  if(error){ body.innerHTML = `<div class="card"><div class="hint">خطأ: ${esc(error.message)}</div></div>`; return; }
+
+  const relevant = (data||[]).filter(f =>
+    (!f.track_id && !f.team_id) ||
+    (f.team_id && f.team_id === teamId) ||
+    (!f.team_id && f.track_id === trackId)
+  );
+
+  if(!relevant.length){
+    body.innerHTML = `<div class="card"><h2>الملفات</h2><p class="sub">لا توجد ملفات مرفوعة حتى الآن</p></div>`;
+    return;
+  }
+
+  // تجميع حسب التصنيف (لو موجود)
+  const groups = {};
+  relevant.forEach(f => {
+    const key = f.category || "عام";
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(f);
+  });
+
+  body.innerHTML = `<div class="card">
+    <h2>الملفات</h2>
+    <p class="sub" style="margin-bottom:18px">أدلة وقوالب وموارد مرجعية تخص برنامجك</p>
+    ${Object.entries(groups).map(([category, files]) => `
+      <div style="margin-bottom:18px">
+        ${Object.keys(groups).length > 1 ? `<div style="font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.03em">${esc(category)}</div>` : ""}
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${files.map(f => `
+            <a href="${esc(f.file_url)}" target="_blank" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg);border:1px solid var(--border);border-radius:10px;text-decoration:none;color:inherit;transition:.15s">
+              <div style="width:36px;height:36px;border-radius:9px;background:#e6f7f3;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                <i data-lucide="file-text" style="width:17px;height:17px;color:#0D9488"></i>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13.5px;font-weight:600;color:var(--ink)">${f.is_pinned ? '📌 ' : ''}${esc(f.title)}${f.team_id ? ' <span style="font-size:10px;color:var(--gold);font-weight:700">· خاص بفريقكم</span>' : ''}</div>
+                ${f.description ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(f.description)}</div>` : ""}
+              </div>
+              <i data-lucide="download" style="width:15px;height:15px;color:var(--muted);flex-shrink:0"></i>
+            </a>
+          `).join("")}
+        </div>
+      </div>
+    `).join("")}
+  </div>`;
+  if(window.lucide) lucide.createIcons();
 }
 
 /* ---------------- حالة: لا يوجد فريق بعد ---------------- */
@@ -2185,6 +2286,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r83</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r85</div>
 </body>
 </html>

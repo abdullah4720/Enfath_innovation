@@ -281,7 +281,8 @@
       <a data-page="surveys"><i data-lucide="clipboard-list"></i> الاستبيانات والرضا</a>
 
       <div class="nav-group-label">التواصل</div>
-      <a data-page="announcements"><i data-lucide="megaphone"></i> التحديثات والملفات</a>
+      <a data-page="announcements"><i data-lucide="megaphone"></i> التحديثات</a>
+      <a data-page="resourceFiles"><i data-lucide="folder-open"></i> الملفات</a>
 
       <div class="nav-group-label">الإعدادات والإدارة</div>
       <a data-page="tracks"><i data-lucide="signpost"></i> المسارات</a>
@@ -600,6 +601,7 @@ function navigateTo(page){
     tracks: renderTracks,
     submissionFields: renderSubmissionFields,
     journeyMilestones: renderJourneyMilestones,
+    resourceFiles: renderResourceFiles,
     generalSettings: renderGeneralSettings,
     teams: renderTeams,
     projects: renderProjects,
@@ -1197,6 +1199,140 @@ async function saveMilestone(id){
   showToast(id ? "تم التحديث" : "تمت الإضافة");
   closeModal();
   renderJourneyMilestones();
+}
+
+/* ============================================================
+   الملفات (مكتبة مرجعية مستقلة عن التحديثات)
+   ============================================================ */
+async function renderResourceFiles(){
+  const main = document.getElementById("main-content");
+  main.innerHTML = `<div class="page-header">
+      <div><h1>الملفات</h1><p>مكتبة مرجعية دائمة (أدلة، قوالب، شعارات) — مستقلة عن التحديثات الزمنية</p></div>
+      <button class="btn btn-primary" onclick="openResourceFileModal()">+ رفع ملف</button>
+    </div>
+    <div class="card"><div id="resource-files-table">${skeletonRows(4)}</div></div>`;
+
+  const { data, error } = await sb.from("resource_files")
+    .select("*, tracks(name_ar), teams(team_name)")
+    .order("is_pinned", {ascending:false})
+    .order("created_at", {ascending:false});
+
+  const box = document.getElementById("resource-files-table");
+  if(error) return box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
+  if(!data.length) return box.innerHTML = emptyIllustration("folder-open", "لا توجد ملفات مرفوعة بعد", "ارفع أول ملف مرجعي (دليل، قالب، شعار) بالزر أعلاه");
+
+  box.innerHTML = `<table><thead><tr>
+    <th>الملف</th><th>التصنيف</th><th>الاستهداف</th><th>تاريخ الرفع</th><th></th>
+    </tr></thead><tbody>
+    ${data.map(f => `<tr>
+      <td><strong>${f.is_pinned ? '<i data-lucide="pin" style="width:13px;height:13px;vertical-align:-2px;display:inline-block"></i> ' : ''}${esc(f.title)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(f.description||"")}</span></td>
+      <td>${f.category ? `<span class="badge badge-gray">${esc(f.category)}</span>` : "—"}</td>
+      <td>${f.team_id ? `<span class="badge badge-gold">فريق: ${esc(f.teams?.team_name||"")}</span>` : (f.track_id ? esc(f.tracks?.name_ar||"") : "الجميع")}</td>
+      <td>${fmtDate(f.created_at)}</td>
+      <td class="row-actions">
+        <a href="${esc(f.file_url)}" target="_blank" class="btn btn-outline btn-sm">فتح</a>
+        <button class="btn btn-outline btn-sm" onclick='openResourceFileModal(${JSON.stringify(f)})'>تعديل</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteRow('resource_files','${f.id}', renderResourceFiles)">حذف</button>
+      </td>
+    </tr>`).join("")}
+    </tbody></table>`;
+  if(window.lucide) lucide.createIcons();
+}
+async function openResourceFileModal(f=null){
+  const isEdit = !!f;
+  f = f || {title:"",description:"",file_url:"",category:"",track_id:"",team_id:"",is_pinned:false};
+  const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  const { data: teams } = await sb.from("teams").select("id,team_name,team_code").eq("status","confirmed").order("team_name");
+  const initialScope = f.team_id ? "team" : (f.track_id ? "track" : "all");
+
+  openModal(`
+    <h3>${isEdit ? "تعديل ملف" : "رفع ملف جديد"}</h3>
+    <div class="field"><label>عنوان الملف</label><input id="rf-title" value="${esc(f.title)}" placeholder="مثال: دليل المشارك"></div>
+    <div class="field"><label>وصف مختصر (اختياري)</label><textarea id="rf-desc" rows="2">${esc(f.description||"")}</textarea></div>
+    <div class="field"><label>تصنيف (اختياري)</label><input id="rf-category" value="${esc(f.category||"")}" placeholder="مثال: أدلة، قوالب، شعارات" list="rf-category-suggestions">
+      <datalist id="rf-category-suggestions"><option value="أدلة"><option value="قوالب"><option value="شعارات"><option value="عروض تقديمية"></datalist>
+    </div>
+
+    <div class="field"><label>رابط الملف</label><input id="rf-url" value="${esc(f.file_url||"")}" placeholder="https://..."></div>
+    <div class="field"><label>أو ارفع ملف مباشرة</label><input type="file" id="rf-upload"></div>
+    <div id="rf-upload-progress" class="hint" style="display:none">جاري الرفع...</div>
+
+    <div class="field"><label>الجهة المستهدفة</label>
+      <select id="rf-scope" onchange="
+        document.getElementById('rf-track-box').style.display = this.value==='track' ? 'block' : 'none';
+        document.getElementById('rf-team-box').style.display = this.value==='team' ? 'block' : 'none';
+      ">
+        <option value="all" ${initialScope==='all'?'selected':''}>الجميع</option>
+        <option value="track" ${initialScope==='track'?'selected':''}>مسار محدد</option>
+        <option value="team" ${initialScope==='team'?'selected':''}>فريق واحد محدد فقط</option>
+      </select>
+    </div>
+    <div class="field" id="rf-track-box" style="display:${initialScope==='track'?'block':'none'}">
+      <label>المسار</label>
+      <select id="rf-track"><option value="">اختر مسارًا</option>
+        ${(tracks||[]).map(t=>`<option value="${t.id}" ${f.track_id===t.id?"selected":""}>${esc(t.name_ar)}</option>`).join("")}
+      </select>
+    </div>
+    <div class="field" id="rf-team-box" style="display:${initialScope==='team'?'block':'none'}">
+      <label>الفريق</label>
+      <select id="rf-team"><option value="">اختر فريقًا</option>
+        ${(teams||[]).map(t=>`<option value="${t.id}" ${f.team_id===t.id?"selected":""}>${esc(t.team_name)} (${esc(t.team_code||"")})</option>`).join("")}
+      </select>
+    </div>
+
+    <div class="field"><label><input type="checkbox" id="rf-pin" ${f.is_pinned?"checked":""}> تثبيت أعلى القائمة</label></div>
+    <div id="rf-alert" class="alert"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-primary" onclick="saveResourceFile('${f.id||""}')">${isEdit ? "حفظ" : "رفع الملف"}</button>
+    </div>
+  `);
+}
+async function saveResourceFile(id){
+  const alertBox = document.getElementById("rf-alert");
+  alertBox.className = "alert";
+  const title = document.getElementById("rf-title").value.trim();
+  const description = document.getElementById("rf-desc").value.trim();
+  const category = document.getElementById("rf-category").value.trim() || null;
+  let file_url = document.getElementById("rf-url").value.trim();
+  const scope = document.getElementById("rf-scope").value;
+  const track_id = scope === "track" ? (document.getElementById("rf-track").value || null) : null;
+  const team_id = scope === "team" ? (document.getElementById("rf-team").value || null) : null;
+  const is_pinned = document.getElementById("rf-pin").checked;
+
+  if(!title){ alertBox.textContent = "عنوان الملف مطلوب"; alertBox.className = "alert error"; return; }
+  if(scope === "track" && !track_id){ alertBox.textContent = "اختر المسار المستهدف"; alertBox.className = "alert error"; return; }
+  if(scope === "team" && !team_id){ alertBox.textContent = "اختر الفريق المستهدف"; alertBox.className = "alert error"; return; }
+
+  const fileInput = document.getElementById("rf-upload");
+  const selectedFile = fileInput?.files?.[0];
+  if(selectedFile){
+    const progressEl = document.getElementById("rf-upload-progress");
+    progressEl.style.display = "block";
+    const path = `${Date.now()}_${selectedFile.name}`;
+    try{
+      const { error: uploadError } = await sb.storage.from("resource-files").upload(path, selectedFile, { upsert:true });
+      progressEl.style.display = "none";
+      if(uploadError){ alertBox.textContent = "تعذّر رفع الملف: " + uploadError.message; alertBox.className = "alert error"; return; }
+      const { data: urlData } = sb.storage.from("resource-files").getPublicUrl(path);
+      file_url = urlData.publicUrl;
+    } catch(e){
+      progressEl.style.display = "none";
+      alertBox.textContent = "تعذّر الاتصال بخادم الرفع — جرّب مرة ثانية أو استخدم رابط خارجي";
+      alertBox.className = "alert error";
+      return;
+    }
+  }
+  if(!file_url){ alertBox.textContent = "أدخل رابط ملف أو ارفع ملفًا"; alertBox.className = "alert error"; return; }
+
+  const payload = { title, description, category, file_url, track_id, team_id, is_pinned };
+  const q = id ? sb.from("resource_files").update(payload).eq("id", id) : sb.from("resource_files").insert({...payload, uploaded_by: currentUser.id});
+  const { error } = await q;
+  if(error){ alertBox.textContent = "خطأ: " + error.message; alertBox.className = "alert error"; return; }
+  logActivity(id ? "تعديل ملف مرجعي" : "رفع ملف مرجعي", "resource_file", id || null, {title});
+  showToast(id ? "تم التحديث" : "تم الرفع بنجاح");
+  closeModal();
+  renderResourceFiles();
 }
 
 async function renderTracks(){
@@ -4687,6 +4823,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r82</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r85</div>
 </body>
 </html>
