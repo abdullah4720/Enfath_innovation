@@ -1090,17 +1090,17 @@ function previewGsEmailTemplate(){
   const button = document.getElementById("gs-email-button").value || "فتح المنصة";
   const F = "'IBM Plex Sans Arabic', Tahoma, Arial, sans-serif";
   openModal(`
-    <div style="max-width:460px; margin:0 auto; border-radius:16px; overflow:hidden; box-shadow:0 10px 32px rgba(13,27,62,.18); font-family:${F}">
-      <div style="background:linear-gradient(135deg,#0D1B3E,#1A2E5A); padding:22px 24px; text-align:center">
+    <div style="max-width:460px; margin:0 auto; border-radius:16px; overflow:hidden; box-shadow:0 10px 32px rgba(13,27,62,.18); font-family:${F}; border:1px solid var(--border)">
+      <div style="background:#fff; padding:20px 24px; text-align:center">
         <div style="display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:8px">
           <img src="data:image/png;base64,${QASSIM_LOGO_B64}" style="height:26px">
-          <div style="width:1px;height:20px;background:rgba(255,255,255,.25)"></div>
+          <div style="width:1px;height:20px;background:var(--border)"></div>
           <img src="data:image/png;base64,${ENFATH_LOGO_B64}" style="height:26px">
         </div>
-        <span style="color:#c8d3e8; font-size:11.5px; font-family:${F}">${esc(footer)}</span>
+        <span style="color:var(--muted); font-size:11.5px; font-family:${F}">${esc(footer)}</span>
       </div>
       <div style="height:3px; background:linear-gradient(90deg,var(--gold),#e0b84f,var(--gold))"></div>
-      <div style="background:#fff; padding:28px 26px">
+      <div style="background:#fff; padding:26px 24px; border-top:1px solid var(--border-light)">
         <p style="font-size:14.5px; color:#1A1A2E; margin:0 0 10px; font-family:${F}; line-height:1.7">${esc(greeting)}</p>
         <h3 style="font-size:17px; color:#1A2E5A; margin:0 0 10px; font-family:${F}; font-weight:700">مثال: تم تأكيد موعد إرشادك</h3>
         <p style="font-size:13.5px; color:#6B7A99; line-height:1.8; margin:0; font-family:${F}">هذا نص تجريبي لمعاينة شكل الإيميل الفعلي اللي بيوصل للمشاركين.</p>
@@ -4687,6 +4687,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r81</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r82</div>
 </body>
 </html>
