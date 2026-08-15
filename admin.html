@@ -1031,24 +1031,46 @@ async function renderGsEmailTemplate(){
     <div class="field"><label>عبارة الترحيب (استخدم {{name}} لاسم المستلم)</label><input id="gs-email-greeting" value="${esc(t?.greeting_text || 'مرحبًا {{name}}،')}"></div>
     <div class="field">
       <label>محتوى إضافي (يظهر بكل الإيميلات، اختياري)</label>
-      <div style="display:flex;gap:6px;margin-bottom:6px">
+      <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
         <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px;font-weight:800" onclick="wrapAnnBodySelection('**','**','gs-email-body-extra')">B عريض</button>
         <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px" onclick="wrapAnnBodySelection('++','++','gs-email-body-extra')">A+ كبير</button>
         <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px;font-size:11px" onclick="wrapAnnBodySelection('--','--','gs-email-body-extra')">a- صغير</button>
+        <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px;text-decoration:underline" onclick="wrapAnnBodySelection('__','__','gs-email-body-extra')">U تسطير</button>
+        <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px" onclick="insertBulletLine('gs-email-body-extra')">☰ نقطة</button>
+        <span style="width:1px;background:var(--border);margin:0 4px"></span>
+        <button type="button" class="btn btn-outline btn-sm" id="gs-align-right-btn" style="width:auto;padding:5px 12px" onclick="setEmailAlignment('right')">⇥ محاذاة يمين</button>
+        <button type="button" class="btn btn-outline btn-sm" id="gs-align-center-btn" style="width:auto;padding:5px 12px" onclick="setEmailAlignment('center')">⇔ توسيط</button>
       </div>
       <textarea id="gs-email-body-extra" rows="4">${esc(t?.body_extra_text || "")}</textarea>
-      <p class="hint" style="margin-top:4px">حدّد نص ثم اضغط أحد الأزرار لتنسيقه — يظهر بين نص الإشعار وزر الدعوة بكل إيميل</p>
+      <input type="hidden" id="gs-email-alignment" value="${t?.body_alignment || 'right'}">
+      <p class="hint" style="margin-top:4px">حدّد نص ثم اضغط أحد الأزرار لتنسيقه — أو ابدأ سطر بـ "☰ نقطة" لقائمة نقطية</p>
     </div>
     <div class="field"><label>نص شريط الهيدر</label><input id="gs-email-footer" value="${esc(t?.footer_org_text || 'هاكاثون إنفاذ — بالشراكة مع جامعة القصيم')}"></div>
     <div class="field"><label>نص زر الدعوة</label><input id="gs-email-button" value="${esc(t?.button_text || 'فتح المنصة')}"></div>
     <button class="btn btn-primary" onclick="saveGsEmailTemplate('${t?.id||''}')">حفظ القالب</button>
     <button class="btn btn-outline" onclick="previewGsEmailTemplate()">معاينة</button>
     <div id="gs-email-alert" class="alert" style="margin-top:12px"></div>`;
+  syncEmailAlignmentButtons();
+}
+function setEmailAlignment(mode){
+  document.getElementById("gs-email-alignment").value = mode;
+  syncEmailAlignmentButtons();
+}
+function syncEmailAlignmentButtons(){
+  const current = document.getElementById("gs-email-alignment")?.value || "right";
+  const rightBtn = document.getElementById("gs-align-right-btn");
+  const centerBtn = document.getElementById("gs-align-center-btn");
+  if(!rightBtn || !centerBtn) return;
+  rightBtn.style.background = current === "right" ? "var(--navy)" : "";
+  rightBtn.style.color = current === "right" ? "#fff" : "";
+  centerBtn.style.background = current === "center" ? "var(--navy)" : "";
+  centerBtn.style.color = current === "center" ? "#fff" : "";
 }
 async function saveGsEmailTemplate(id){
   const payload = {
     greeting_text: document.getElementById("gs-email-greeting").value.trim() || "مرحبًا {{name}}،",
     body_extra_text: document.getElementById("gs-email-body-extra").value.trim() || null,
+    body_alignment: document.getElementById("gs-email-alignment").value || "right",
     footer_org_text: document.getElementById("gs-email-footer").value.trim() || "هاكاثون إنفاذ — بالشراكة مع جامعة القصيم",
     button_text: document.getElementById("gs-email-button").value.trim() || "فتح المنصة",
   };
@@ -1063,19 +1085,32 @@ async function saveGsEmailTemplate(id){
 function previewGsEmailTemplate(){
   const greeting = (document.getElementById("gs-email-greeting").value || "مرحبًا {{name}}،").replace("{{name}}", "عبدالله");
   const bodyExtra = document.getElementById("gs-email-body-extra").value || "";
+  const alignment = document.getElementById("gs-email-alignment").value || "right";
   const footer = document.getElementById("gs-email-footer").value || "هاكاثون إنفاذ";
   const button = document.getElementById("gs-email-button").value || "فتح المنصة";
+  const F = "'IBM Plex Sans Arabic', Tahoma, Arial, sans-serif";
   openModal(`
-    <div style="font-family:Arial,sans-serif; max-width:420px; margin:0 auto">
-      <div style="background:#0D1B3E; padding:16px 20px; border-radius:10px 10px 0 0">
-        <span style="color:#fff; font-size:15px; font-weight:bold">${esc(footer)}</span>
+    <div style="max-width:460px; margin:0 auto; border-radius:16px; overflow:hidden; box-shadow:0 10px 32px rgba(13,27,62,.18); font-family:${F}">
+      <div style="background:linear-gradient(135deg,#0D1B3E,#1A2E5A); padding:22px 24px; text-align:center">
+        <div style="display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:8px">
+          <img src="data:image/png;base64,${QASSIM_LOGO_B64}" style="height:26px">
+          <div style="width:1px;height:20px;background:rgba(255,255,255,.25)"></div>
+          <img src="data:image/png;base64,${ENFATH_LOGO_B64}" style="height:26px">
+        </div>
+        <span style="color:#c8d3e8; font-size:11.5px; font-family:${F}">${esc(footer)}</span>
       </div>
-      <div style="background:#F7F8FA; padding:20px; border-radius:0 0 10px 10px">
-        <p style="font-size:14px; color:#1A1A2E; margin:0 0 8px">${esc(greeting)}</p>
-        <h3 style="font-size:16px; color:#1A2E5A; margin:0 0 8px">مثال: تم تأكيد موعد إرشادك</h3>
-        <p style="font-size:13px; color:#6B7A99; line-height:1.7">هذا نص تجريبي لمعاينة شكل الإيميل الفعلي اللي بيوصل للمشاركين.</p>
-        ${bodyExtra ? `<div style="font-size:13px; color:#1A1A2E; line-height:1.8; margin-top:10px; padding-top:10px; border-top:1px dashed var(--border)">${formatAnnouncementText(bodyExtra)}</div>` : ""}
-        <span style="display:inline-block; margin-top:14px; background:#C9922A; color:#1A1300; padding:9px 18px; border-radius:8px; font-weight:bold; font-size:13px">${esc(button)}</span>
+      <div style="height:3px; background:linear-gradient(90deg,var(--gold),#e0b84f,var(--gold))"></div>
+      <div style="background:#fff; padding:28px 26px">
+        <p style="font-size:14.5px; color:#1A1A2E; margin:0 0 10px; font-family:${F}; line-height:1.7">${esc(greeting)}</p>
+        <h3 style="font-size:17px; color:#1A2E5A; margin:0 0 10px; font-family:${F}; font-weight:700">مثال: تم تأكيد موعد إرشادك</h3>
+        <p style="font-size:13.5px; color:#6B7A99; line-height:1.8; margin:0; font-family:${F}">هذا نص تجريبي لمعاينة شكل الإيميل الفعلي اللي بيوصل للمشاركين.</p>
+        ${bodyExtra ? `<div style="font-size:13.5px; color:#1A1A2E; line-height:1.9; margin-top:16px; padding:14px 16px; background:var(--border-light); border-radius:10px; text-align:${alignment}; font-family:${F}">${formatAnnouncementText(bodyExtra)}</div>` : ""}
+        <div style="text-align:center; margin-top:22px">
+          <span style="display:inline-block; background:var(--gold); color:#1A1300; padding:11px 28px; border-radius:8px; font-weight:700; font-size:13.5px; font-family:${F}">${esc(button)}</span>
+        </div>
+      </div>
+      <div style="background:var(--border-light); padding:15px 24px; text-align:center">
+        <span style="font-size:10.5px; color:var(--muted); font-family:${F}">© 2026 ${esc(footer)} — جميع الحقوق محفوظة</span>
       </div>
     </div>
     <div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
@@ -2250,9 +2285,11 @@ async function openAnnouncementModal(a=null){
         <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px;font-weight:800" onclick="wrapAnnBodySelection('**','**')">B عريض</button>
         <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px" onclick="wrapAnnBodySelection('++','++')">A+ كبير</button>
         <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px;font-size:11px" onclick="wrapAnnBodySelection('--','--')">a- صغير</button>
+        <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px;text-decoration:underline" onclick="wrapAnnBodySelection('__','__')">U تسطير</button>
+        <button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:5px 12px" onclick="insertBulletLine('f-ann-body')">☰ نقطة</button>
       </div>
       <textarea id="f-ann-body" rows="5">${esc(a.body||"")}</textarea>
-      <p class="hint" style="margin-top:4px">حدّد نص بالمحرر ثم اضغط أحد الأزرار لتنسيقه</p>
+      <p class="hint" style="margin-top:4px">حدّد نص بالمحرر ثم اضغط أحد الأزرار لتنسيقه — أو ابدأ سطر بـ "☰ نقطة" لقائمة نقطية</p>
     </div>
     <div class="field"><label>رابط ملف مرفق (اختياري)</label><input id="f-ann-file" value="${esc(a.file_url||"")}" placeholder="https://..."></div>
 
@@ -2296,12 +2333,37 @@ function wrapAnnBodySelection(startMark, endMark, targetId){
   ta.selectionStart = start + startMark.length;
   ta.selectionEnd = start + startMark.length + selected.length;
 }
+function insertBulletLine(targetId){
+  const ta = document.getElementById(targetId);
+  const start = ta.selectionStart;
+  const needsNewline = start > 0 && ta.value[start-1] !== "\n";
+  const insertion = (needsNewline ? "\n" : "") + "- نقطة جديدة";
+  ta.value = ta.value.substring(0, start) + insertion + ta.value.substring(start);
+  ta.focus();
+  const selStart = start + (needsNewline ? 1 : 0) + 2;
+  ta.selectionStart = selStart;
+  ta.selectionEnd = selStart + 10;
+}
 function formatAnnouncementText(str){
   let s = esc(str||"");
   s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/\+\+(.+?)\+\+/g, '<span style="font-size:1.3em;font-weight:700">$1</span>');
   s = s.replace(/--(.+?)--/g, '<span style="font-size:0.85em;color:var(--muted)">$1</span>');
-  return s.replace(/\n/g, "<br>");
+  s = s.replace(/__(.+?)__/g, "<u>$1</u>");
+  // قوائم نقطية: أي سطر يبدأ بـ "- "
+  const lines = s.split("\n");
+  let html = "", inList = false;
+  for(const line of lines){
+    if(line.trim().startsWith("- ")){
+      if(!inList){ html += "<ul style='margin:6px 0;padding-right:18px'>"; inList = true; }
+      html += `<li>${line.trim().substring(2)}</li>`;
+    } else {
+      if(inList){ html += "</ul>"; inList = false; }
+      html += line + "<br>";
+    }
+  }
+  if(inList) html += "</ul>";
+  return html.replace(/<br>$/, "");
 }
 async function saveAnnouncement(id){
   const title = document.getElementById("f-ann-title").value.trim();
@@ -4625,6 +4687,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r79</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r81</div>
 </body>
 </html>
