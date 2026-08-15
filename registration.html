@@ -241,8 +241,8 @@
 
     <!-- تسجيل جديد -->
     <div id="signup-form">
-      <h2>إنشاء حساب مشارك</h2>
-      <p class="sub">عبّي بياناتك، ثم تختار مسارك وتنشئ فريقك أو تنضم لفريق</p>
+      <h2 id="su-heading">إنشاء حساب مشارك</h2>
+      <p class="sub" id="su-subheading">عبّي بياناتك ومعلومات فريقك — كل شي بخطوة وحدة</p>
 
       <h4 style="font-size:12.5px;color:var(--muted);margin:16px 0 10px">البيانات الأساسية</h4>
       <div class="field"><label>الاسم الثلاثي</label><input id="su-name" placeholder="مثال: عبدالله محمد العييدي"></div>
@@ -319,7 +319,30 @@
       </div>
       <div class="field" id="su-role-other-box" style="display:none"><label>حدّد الدور</label><input id="su-role-other" placeholder="اكتب دورك بالمشروع"></div>
 
-      <button class="btn btn-primary" id="su-btn" onclick="handleSignup()">إنشاء الحساب والمتابعة</button>
+      <div id="su-join-banner" style="display:none; background:#e6f7f3; border:1px solid #b8e6dc; border-radius:12px; padding:14px 16px; margin-top:20px">
+        <strong id="su-join-team-name" style="color:var(--navy); font-size:14px"></strong>
+        <p id="su-join-track-name" class="hint" style="margin:4px 0 0"></p>
+      </div>
+
+      <div id="su-team-section" style="margin-top:20px">
+        <h4 style="font-size:12.5px;color:var(--muted);margin:0 0 10px">فريقك</h4>
+        <div class="switcher" id="su-team-switcher">
+          <button id="su-opt-create" class="active" onclick="setSignupTeamMode('create')">إنشاء فريق جديد</button>
+          <button id="su-opt-join" onclick="setSignupTeamMode('join')">لدي رمز دعوة</button>
+        </div>
+
+        <div id="su-create-box">
+          <div class="field" style="margin-top:14px"><label>اختر المسار</label></div>
+          <div id="su-track-list"><p class="hint">جاري تحميل المسارات...</p></div>
+          <div class="field" style="margin-top:14px"><label>اسم الفريق</label><input id="su-team-name" placeholder="اسم فريقك"></div>
+        </div>
+
+        <div id="su-join-box" style="display:none; margin-top:14px">
+          <div class="field"><label>رمز الدعوة</label><input id="su-join-code" placeholder="مثال: a1b2c3d4" style="text-transform:uppercase"></div>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" id="su-btn" style="margin-top:20px" onclick="handleSignup()">إنشاء الحساب والمتابعة</button>
     </div>
 
     <!-- تسجيل دخول -->
@@ -384,6 +407,28 @@ let currentProfile = null;
 function esc(str){
   if(str === null || str === undefined) return "";
   return String(str).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function trackOptionsHtml(tracks, onSelectFnName){
+  if(!tracks.length) return '<p class="hint">لا توجد مسارات مفتوحة حاليًا</p>';
+  return tracks.map(t => {
+    const hasDetails = t.long_description || (t.requirements && t.requirements.length) || t.evaluation_focus;
+    return `
+    <div class="track-option" data-id="${t.id}" onclick="${onSelectFnName}('${t.id}')">
+      <h4>${esc(t.name_ar)}</h4>
+      <p>${esc(t.description||"")} · حجم الفريق ${t.min_team_size}–${t.max_team_size}</p>
+      ${hasDetails ? `
+        <button type="button" class="track-details-toggle" onclick="event.stopPropagation(); this.nextElementSibling.classList.toggle('open'); this.textContent = this.nextElementSibling.classList.contains('open') ? 'إخفاء التفاصيل ▲' : 'التفاصيل الكاملة ▾'">التفاصيل الكاملة ▾</button>
+        <div class="track-details">
+          ${t.long_description ? `<p>${esc(t.long_description)}</p>` : ""}
+          ${t.requirements && t.requirements.length ? `
+            <div class="track-req-label">المطلوب تحديدًا</div>
+            <ul>${t.requirements.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
+          ` : ""}
+          ${t.evaluation_focus ? `<div class="track-req-label">محاور التقييم</div><p>${esc(t.evaluation_focus)}</p>` : ""}
+        </div>
+      ` : ""}
+    </div>`;
+  }).join("");
 }
 function formatAnnouncementText(str){
   let s = esc(str||"");
@@ -490,10 +535,81 @@ function validateSignupFields(){
   return null;
 }
 
+/* ---------------- تدفّق الانضمام الذكي عبر رابط دعوة ---------------- */
+let joinInviteCode = null; // لو الصفحة فُتحت برابط ?join=CODE
+let signupTeamMode = "create"; // create | join
+
+async function initJoinFlow(){
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("join");
+  if(!code) { loadTracksForSignup(); return; }
+
+  joinInviteCode = code;
+  const { data } = await sb.rpc("get_team_preview_by_code", { p_invite_code: code });
+
+  if(!data?.found){
+    // رمز غير صالح — نكمل بالتدفق العادي (إنشاء فريق)
+    joinInviteCode = null;
+    loadTracksForSignup();
+    return;
+  }
+
+  if(data.is_full || !data.registration_open){
+    // الفريق مكتمل أو التسجيل مغلق — رسالة واضحة فورًا قبل أي بيانات
+    document.getElementById("signup-form").innerHTML = `
+      <div style="text-align:center; padding:20px 10px">
+        <div style="font-size:36px; margin-bottom:10px">⚠️</div>
+        <h2 style="margin-bottom:8px">${data.is_full ? "عذرًا، هذا الفريق مكتمل العدد" : "التسجيل بهذا المسار مغلق حاليًا"}</h2>
+        <p class="sub" style="margin-bottom:20px">فريق "${esc(data.team_name)}" ما عاد يقبل أعضاء جدد. تقدر تنشئ فريقك الخاص بدلًا من ذلك.</p>
+        <button class="btn btn-primary" style="width:auto;padding:11px 26px" onclick="window.location.href='./registration.html'">إنشاء فريق جديد</button>
+      </div>
+    `;
+    return;
+  }
+
+  // فريق صالح ومتاح — نعرض شارة الانضمام ونخفي قسم اختيار الفريق كامل
+  joinInviteCode = code;
+  document.getElementById("su-heading").textContent = "الانضمام لفريق";
+  document.getElementById("su-subheading").textContent = "عبّي بياناتك الشخصية بس — فريقك محدَّد مسبقًا";
+  document.getElementById("su-join-banner").style.display = "block";
+  document.getElementById("su-join-team-name").textContent = `أنت على وشك الانضمام لفريق "${data.team_name}"`;
+  document.getElementById("su-join-track-name").textContent = `مسار: ${data.track_name} · ${data.current_count}/${data.max_count} أعضاء`;
+  document.getElementById("su-team-section").style.display = "none";
+}
+
+async function loadTracksForSignup(){
+  const { data: tracks } = await sb.from("tracks").select("*").eq("is_active", true).eq("registration_open", true).order("display_order");
+  document.getElementById("su-track-list").innerHTML = trackOptionsHtml(tracks || [], "selectSignupTrack");
+}
+let selectedSignupTrackId = null;
+function selectSignupTrack(id){
+  selectedSignupTrackId = id;
+  document.querySelectorAll("#su-track-list .track-option").forEach(el=>{
+    el.classList.toggle("selected", el.dataset.id === id);
+  });
+}
+function setSignupTeamMode(mode){
+  signupTeamMode = mode;
+  document.getElementById("su-opt-create").classList.toggle("active", mode==="create");
+  document.getElementById("su-opt-join").classList.toggle("active", mode==="join");
+  document.getElementById("su-create-box").style.display = mode==="create" ? "block" : "none";
+  document.getElementById("su-join-box").style.display = mode==="join" ? "block" : "none";
+}
+
 async function handleSignup(){
   clearAlert();
   const validationError = validateSignupFields();
   if(validationError){ showAlert(validationError); return; }
+
+  // تحقّق إضافي لبيانات الفريق (لو ما كان عندنا رابط دعوة جاهز)
+  if(!joinInviteCode){
+    if(signupTeamMode === "create"){
+      if(!selectedSignupTrackId){ showAlert("اختر مسار فريقك"); return; }
+      if(!document.getElementById("su-team-name").value.trim()){ showAlert("اسم الفريق مطلوب"); return; }
+    } else {
+      if(!document.getElementById("su-join-code").value.trim()){ showAlert("أدخل رمز الدعوة"); return; }
+    }
+  }
 
   const full_name = document.getElementById("su-name").value.trim();
   const email = document.getElementById("su-email").value.trim();
@@ -521,9 +637,6 @@ async function handleSignup(){
     return;
   }
 
-  // ملاحظة: الملف الشخصي والدور يُنشآن تلقائيًا عبر trigger بقاعدة البيانات
-  // (راجع 06_auth_trigger.sql) — نكمّل هنا بالحقول الإضافية بعد إنشاء الجلسة
-
   if(!data.session){
     btn.disabled = false; btn.textContent = "إنشاء الحساب والمتابعة";
     showAlert("تم إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيد الحساب ثم سجّل الدخول.", "success");
@@ -533,24 +646,86 @@ async function handleSignup(){
   currentUser = data.user;
   await sb.from("profiles").update({ category, city, age_range, gender, project_role }).eq("id", currentUser.id);
   await loadProfile();
-  showSignupSuccessThenDashboard();
+
+  // إنشاء الفريق أو الانضمام له مباشرة — بنفس الخطوة
+  let teamResult = null;
+  if(joinInviteCode){
+    const { data: joinData, error: joinErr } = await sb.rpc("join_team_with_code", { p_invite_code: joinInviteCode });
+    if(joinErr || !joinData.success){
+      showSignupSuccessThenDashboard(null, joinData?.error || joinErr?.message);
+      return;
+    }
+    teamResult = { joined: true, team_name: joinData.team_name };
+  } else if(signupTeamMode === "create"){
+    const teamName = document.getElementById("su-team-name").value.trim();
+    const { data: createData, error: createErr } = await sb.rpc("create_team_with_leader", {
+      p_track_id: selectedSignupTrackId, p_team_name: teamName
+    });
+    if(createErr || !createData.success){
+      showSignupSuccessThenDashboard(null, createData?.error || createErr?.message);
+      return;
+    }
+    teamResult = { created: true, team_name: createData.team_name, invite_code: createData.invite_code };
+  } else {
+    const code = document.getElementById("su-join-code").value.trim();
+    const { data: joinData, error: joinErr } = await sb.rpc("join_team_with_code", { p_invite_code: code });
+    if(joinErr || !joinData.success){
+      showSignupSuccessThenDashboard(null, joinData?.error || joinErr?.message);
+      return;
+    }
+    teamResult = { joined: true, team_name: joinData.team_name };
+  }
+
+  showSignupSuccessThenDashboard(teamResult);
 }
 
-function showSignupSuccessThenDashboard(){
+function showSignupSuccessThenDashboard(teamResult, teamError){
   document.getElementById("auth-screen").style.display = "none";
   document.querySelector(".hero").style.display = "none";
   const dashScreen = document.getElementById("dash-screen");
   dashScreen.style.display = "block";
   document.getElementById("dash-name").textContent = currentProfile?.full_name || currentUser.email;
   const content = document.getElementById("dash-content");
+
+  if(teamError){
+    content.innerHTML = `
+      <div class="card" style="text-align:center;padding:40px 24px">
+        <div style="font-size:40px;margin-bottom:10px">✅</div>
+        <h2 style="margin-bottom:6px">تم إنشاء حسابك بنجاح</h2>
+        <p class="sub" style="margin-bottom:6px;color:var(--danger)">لكن تعذّر ربطك بالفريق: ${esc(teamError)}</p>
+        <p class="sub" style="margin-bottom:22px">لا تقلق — تقدر تنشئ فريقك أو تنضم لفريق من صفحتك مباشرة</p>
+        <button class="btn btn-primary" style="width:auto;padding:12px 28px" onclick="renderDashboard()">متابعة إلى فريقي</button>
+      </div>
+    `;
+    return;
+  }
+
+  const inviteLink = teamResult?.invite_code ? `${window.location.origin}${window.location.pathname}?join=${teamResult.invite_code}` : null;
+
   content.innerHTML = `
     <div class="card" style="text-align:center;padding:40px 24px">
       <div style="font-size:40px;margin-bottom:10px">✅</div>
-      <h2 style="margin-bottom:6px">تم إنشاء حسابك بنجاح</h2>
-      <p class="sub" style="margin-bottom:22px">مرحبًا ${esc(currentProfile?.full_name || "")}، الخطوة التالية اختيار مسارك وإنشاء فريقك أو الانضمام لفريق قائم</p>
+      <h2 style="margin-bottom:6px">${teamResult?.created ? `تم إنشاء فريق "${esc(teamResult.team_name)}" بنجاح` : (teamResult?.joined ? `انضممت لفريق "${esc(teamResult.team_name)}"` : "تم إنشاء حسابك بنجاح")}</h2>
+      ${inviteLink ? `
+        <p class="sub" style="margin-bottom:14px">شارك رابط الدعوة مع زملائك للانضمام مباشرة — أرسلناه لبريدك الإلكتروني كمان</p>
+        <div style="display:flex;gap:8px;max-width:420px;margin:0 auto 22px">
+          <input id="invite-link-box" value="${inviteLink}" readonly style="flex:1;font-size:12.5px;text-align:left;direction:ltr">
+          <button class="btn btn-outline" style="width:auto;padding:9px 16px;white-space:nowrap" onclick="copyInviteLink()">نسخ الرابط</button>
+        </div>
+      ` : `<p class="sub" style="margin-bottom:22px">مرحبًا ${esc(currentProfile?.full_name || "")}، جاهز تبدأ رحلتك بالهاكاثون</p>`}
       <button class="btn btn-primary" style="width:auto;padding:12px 28px" onclick="renderDashboard()">متابعة إلى فريقي</button>
     </div>
   `;
+}
+function copyInviteLink(){
+  const box = document.getElementById("invite-link-box");
+  box.select();
+  navigator.clipboard.writeText(box.value).then(() => {
+    const btn = event.target;
+    const original = btn.textContent;
+    btn.textContent = "تم النسخ ✓";
+    setTimeout(() => btn.textContent = original, 1800);
+  });
 }
 
 /* ---------------- تسجيل الدخول ---------------- */
@@ -606,6 +781,8 @@ async function restoreSession(){
     currentUser = data.session.user;
     await loadProfile();
     showDashboard();
+  } else {
+    initJoinFlow();
   }
 }
 restoreSession();
@@ -1692,26 +1869,7 @@ async function renderNoTeamView(){
       <p class="sub">اختر المسار ثم اسم الفريق، وستحصل على رمز دعوة لمشاركته مع زملائك</p>
       <div class="field"><label>اختر المسار</label></div>
       <div id="track-list">
-        ${(tracks||[]).map(t => {
-          const hasDetails = t.long_description || (t.requirements && t.requirements.length) || t.evaluation_focus;
-          return `
-          <div class="track-option" data-id="${t.id}" onclick="selectTrack('${t.id}')">
-            <h4>${esc(t.name_ar)}</h4>
-            <p>${esc(t.description||"")} · حجم الفريق ${t.min_team_size}–${t.max_team_size}</p>
-            ${hasDetails ? `
-              <button type="button" class="track-details-toggle" onclick="event.stopPropagation(); this.nextElementSibling.classList.toggle('open'); this.textContent = this.nextElementSibling.classList.contains('open') ? 'إخفاء التفاصيل ▲' : 'التفاصيل الكاملة ▾'">التفاصيل الكاملة ▾</button>
-              <div class="track-details">
-                ${t.long_description ? `<p>${esc(t.long_description)}</p>` : ""}
-                ${t.requirements && t.requirements.length ? `
-                  <div class="track-req-label">المطلوب تحديدًا</div>
-                  <ul>${t.requirements.map(r => `<li>${esc(r)}</li>`).join("")}</ul>
-                ` : ""}
-                ${t.evaluation_focus ? `<div class="track-req-label">محاور التقييم</div><p>${esc(t.evaluation_focus)}</p>` : ""}
-              </div>
-            ` : ""}
-          </div>
-        `;
-        }).join("") || '<p class="hint">لا توجد مسارات مفتوحة حاليًا</p>'}
+        ${trackOptionsHtml(tracks || [], "selectTrack")}
       </div>
       <div class="field" style="margin-top:16px"><label>اسم الفريق</label><input id="new-team-name" placeholder="اسم فريقك"></div>
       <div id="create-alert" class="alert"></div>
@@ -2027,6 +2185,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r80</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r83</div>
 </body>
 </html>
