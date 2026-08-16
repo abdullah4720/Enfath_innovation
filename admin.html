@@ -1864,9 +1864,16 @@ function exportTeamsExcel(){
 }
 async function updateTeamStatus(id, status){
   if(!status) return;
+  const negativeStatuses = ["disqualified", "withdrawn"];
+  let reason = null;
+  if(negativeStatuses.includes(status)){
+    reason = prompt("اذكر سبب هذا الإجراء (سيُسجَّل بسجل النشاط):");
+    if(reason === null) return; // المستخدم ألغى العملية
+    if(!reason.trim()){ showToast("السبب مطلوب لهذا الإجراء", true); return; }
+  }
   const { error } = await sb.from("teams").update({status}).eq("id", id);
   if(error) return showToast("خطأ: " + error.message, true);
-  logActivity("تغيير حالة فريق", "team", id, {new_status: status});
+  logActivity("تغيير حالة فريق", "team", id, reason ? {new_status: status, reason} : {new_status: status});
   showToast("تم تحديث حالة الفريق");
   renderTeams();
 }
@@ -3116,19 +3123,48 @@ async function renderJudgingRounds(){
         </div>
       </div>
       ${!r.judging_criteria.length ? '<div class="empty-state">لا توجد معايير مضافة لهذه الجولة</div>' : `
-      <table><thead><tr><th>المعيار</th><th>الوزن</th><th>أقصى درجة</th><th></th></tr></thead><tbody>
-        ${r.judging_criteria.sort((a,b)=>a.display_order-b.display_order).map(c => `<tr>
-          <td>${esc(c.name_ar)}</td>
-          <td>${c.weight}</td>
-          <td>${c.max_score}</td>
-          <td class="row-actions">
-            <button class="btn btn-outline btn-sm" onclick='openCriteriaModal("${r.id}", ${JSON.stringify(c)})'>تعديل</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteRow('judging_criteria','${c.id}', renderJudgingRounds)">حذف</button>
-          </td>
-        </tr>`).join("")}
-      </tbody></table>`}
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${r.judging_criteria.sort((a,b)=>(a.display_order??0)-(b.display_order??0)).map((c, idx, arr) => `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--bg);border:1px solid var(--border-light);border-radius:12px">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <button class="btn-link" style="padding:0;line-height:1;opacity:${idx===0?'.25':'1'}" ${idx===0?'disabled':''} onclick="moveCriteriaOrder('${r.id}','${c.id}',-1)" title="نقل لأعلى">▲</button>
+              <button class="btn-link" style="padding:0;line-height:1;opacity:${idx===arr.length-1?'.25':'1'}" ${idx===arr.length-1?'disabled':''} onclick="moveCriteriaOrder('${r.id}','${c.id}',1)" title="نقل لأسفل">▼</button>
+            </div>
+            <div style="width:34px;height:34px;border-radius:9px;background:#fbf3e2;color:var(--gold);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13.5px;font-weight:700;color:var(--ink)">${esc(c.name_ar)}</div>
+              ${c.description ? `<div style="font-size:12px;color:var(--muted);margin-top:2px">${esc(c.description)}</div>` : ""}
+            </div>
+            <div style="text-align:center;flex-shrink:0">
+              <div style="font-size:15px;font-weight:800;color:var(--navy)">${c.weight}%</div>
+              <div style="font-size:10px;color:var(--muted)">الوزن</div>
+            </div>
+            <div style="text-align:center;flex-shrink:0">
+              <div style="font-size:15px;font-weight:800;color:var(--teal)">${c.max_score}</div>
+              <div style="font-size:10px;color:var(--muted)">أقصى درجة</div>
+            </div>
+            <div class="row-actions" style="flex-shrink:0">
+              <button class="btn btn-outline btn-sm" onclick='openCriteriaModal("${r.id}", ${JSON.stringify(c)})'>تعديل</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteRow('judging_criteria','${c.id}', renderJudgingRounds)">حذف</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>`}
     </div>
   `).join("");
+}
+async function moveCriteriaOrder(roundId, criteriaId, direction){
+  const { data: criteria } = await sb.from("judging_criteria").select("id,display_order").eq("round_id", roundId).order("display_order");
+  const sorted = (criteria||[]).map((c,i) => ({...c, display_order: c.display_order ?? i}));
+  const idx = sorted.findIndex(c => c.id === criteriaId);
+  const swapWith = idx + direction;
+  if(swapWith < 0 || swapWith >= sorted.length) return;
+  const a = sorted[idx], b = sorted[swapWith];
+  await Promise.all([
+    sb.from("judging_criteria").update({display_order: b.display_order}).eq("id", a.id),
+    sb.from("judging_criteria").update({display_order: a.display_order}).eq("id", b.id),
+  ]);
+  renderJudgingRounds();
 }
 function openRoundModal(){
   openModal(`
@@ -3166,10 +3202,14 @@ async function togglePublishResults(id, value){
 }
 function openCriteriaModal(roundId, c=null){
   const isEdit = !!c;
-  c = c || {name_ar:"",weight:25,max_score:10};
+  c = c || {name_ar:"",description:"",weight:25,max_score:10};
   openModal(`
     <h3>${isEdit ? "تعديل معيار" : "إضافة معيار تقييم"}</h3>
     <div class="field"><label>اسم المعيار</label><input id="f-crit-name" value="${esc(c.name_ar)}" placeholder="مثال: الابتكار وجدة الفكرة"></div>
+    <div class="field"><label>وصف المعيار (يظهر للمحكّم كشرح توضيحي)</label>
+      <textarea id="f-crit-desc" rows="3" placeholder="مثال: مدى تميّز الفكرة عن الحلول الموجودة حاليًا بالسوق، وقدرتها على تقديم قيمة مختلفة فعليًا">${esc(c.description||"")}</textarea>
+      <p class="hint" style="margin-top:4px">اختياري، لكن موصى به بشدة — يوحّد فهم كل المحكّمين لنفس المعيار</p>
+    </div>
     <div class="form-row-2">
       <div class="field"><label>الوزن (%)</label><input type="number" id="f-crit-weight" value="${c.weight}"></div>
       <div class="field"><label>أقصى درجة</label><input type="number" id="f-crit-max" value="${c.max_score}"></div>
@@ -3182,11 +3222,20 @@ function openCriteriaModal(roundId, c=null){
 }
 async function saveCriteria(roundId, id){
   const name_ar = document.getElementById("f-crit-name").value.trim();
+  const description = document.getElementById("f-crit-desc").value.trim();
   const weight = parseFloat(document.getElementById("f-crit-weight").value) || 1;
   const max_score = parseInt(document.getElementById("f-crit-max").value) || 10;
   if(!name_ar){ showToast("اسم المعيار مطلوب", true); return; }
-  const payload = { name_ar, weight, max_score };
-  const q = id ? sb.from("judging_criteria").update(payload).eq("id", id) : sb.from("judging_criteria").insert({round_id: roundId, ...payload});
+  const payload = { name_ar, description: description || null, weight, max_score };
+
+  let q;
+  if(id){
+    q = sb.from("judging_criteria").update(payload).eq("id", id);
+  } else {
+    // نحدد ترتيب العرض تلقائيًا: يُضاف بآخر القائمة الحالية
+    const { count } = await sb.from("judging_criteria").select("id", {count:"exact", head:true}).eq("round_id", roundId);
+    q = sb.from("judging_criteria").insert({round_id: roundId, display_order: count||0, ...payload});
+  }
   const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
   showToast(id ? "تم التحديث" : "تمت الإضافة");
@@ -3688,8 +3737,12 @@ async function approveMentorApp(id){
   refreshNavBadges();
 }
 async function rejectMentorApp(id){
-  const { data, error } = await sb.rpc("reject_mentor_application", { p_application_id: id });
+  const reason = prompt("اذكر سبب رفض هذا الطلب (سيُسجَّل بسجل النشاط):");
+  if(reason === null) return;
+  if(!reason.trim()){ showToast("السبب مطلوب", true); return; }
+  const { data, error } = await sb.rpc("reject_mentor_application", { p_application_id: id, p_reason: reason.trim() });
   if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  logActivity("رفض طلب مرشد", "mentor_application", id, {reason: reason.trim()});
   showToast("تم رفض الطلب");
   renderMentorApplications();
   refreshNavBadges();
@@ -3772,8 +3825,12 @@ async function approveJudgeApp(id){
   refreshNavBadges();
 }
 async function rejectJudgeApp(id){
-  const { data, error } = await sb.rpc("reject_judge_application", { p_application_id: id });
+  const reason = prompt("اذكر سبب رفض هذا الطلب (سيُسجَّل بسجل النشاط):");
+  if(reason === null) return;
+  if(!reason.trim()){ showToast("السبب مطلوب", true); return; }
+  const { data, error } = await sb.rpc("reject_judge_application", { p_application_id: id, p_reason: reason.trim() });
   if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+  logActivity("رفض طلب محكّم", "judge_application", id, {reason: reason.trim()});
   showToast("تم رفض الطلب");
   renderJudgeApplications();
   refreshNavBadges();
@@ -4506,8 +4563,11 @@ async function renderProjects(){
     <div id="projects-list">${skeletonRows(4)}</div>`;
 
   const { data, error } = await sb.from("submissions")
-    .select("id, title, description, file_url, version, submitted_at, custom_fields, teams(team_name, team_code, tracks(name_ar), team_members(is_leader, profiles(full_name, email, phone, category, city, organization, age_range, gender, project_role)))")
+    .select("id, title, description, file_url, version, submitted_at, custom_fields, teams(id, team_name, team_code, track_id, tracks(name_ar), team_members(is_leader, profiles(full_name, email, phone, category, city, organization, age_range, gender, project_role)))")
     .order("submitted_at", {ascending:false});
+
+  const { data: allTracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  window._allTracksCache = allTracks || [];
 
   const { data: fieldDefs } = await sb.from("submission_field_definitions").select("*").eq("is_active", true).order("display_order");
   window._submissionFieldDefs = fieldDefs || [];
@@ -4571,6 +4631,23 @@ async function renderMissingSubmissions(submissions){
     </div>`;
 }
 let allProjectsCache = [];
+async function updateProjectTeamTrack(teamId){
+  if(!teamId || teamId === "undefined"){ showToast("تعذّر تحديد الفريق", true); return; }
+  const select = document.getElementById(`track-select-${teamId}`);
+  const newTrackId = select.value;
+
+  const { data: teamBefore } = await sb.from("teams").select("track_id, tracks(name_ar)").eq("id", teamId).maybeSingle();
+  const { error } = await sb.from("teams").update({track_id: newTrackId}).eq("id", teamId);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+
+  const { data: newTrack } = await sb.from("tracks").select("name_ar").eq("id", newTrackId).maybeSingle();
+  logActivity("تغيير مسار فريق (من المشاريع)", "team", teamId, {
+    old_track: teamBefore?.tracks?.name_ar || "—",
+    new_track: newTrack?.name_ar || "—"
+  });
+  showToast("تم تحديث مسار الفريق");
+  renderProjects();
+}
 function filterProjectsView(){
   const term = (document.getElementById("projects-search")?.value || "").trim().toLowerCase();
   const filtered = allProjectsCache.filter(p =>
@@ -4600,6 +4677,13 @@ function filterProjectsView(){
             <p style="font-size:13.5px; color:var(--ink); line-height:1.7">${esc(p.description||"لا يوجد وصف بعد")}</p>
             ${renderTeamMembersDetailed(p.teams?.team_members)}
             ${renderCustomFieldsAnswers(p.custom_fields)}
+            <div style="margin-top:14px;padding:12px 14px;background:var(--border-light);border-radius:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span style="font-size:12px;color:var(--muted);font-weight:600;flex-shrink:0">مسار الفريق:</span>
+              <select id="track-select-${p.teams?.id}" style="flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:12.5px">
+                ${(window._allTracksCache||[]).map(t => `<option value="${t.id}" ${t.id===p.teams?.track_id?'selected':''}>${esc(t.name_ar)}</option>`).join("")}
+              </select>
+              <button class="btn btn-outline btn-sm" onclick="updateProjectTeamTrack('${p.teams?.id}')">حفظ المسار</button>
+            </div>
             <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px">
               ${p.file_url ? `<a href="${esc(p.file_url)}" target="_blank" style="color:var(--teal);font-size:13px;font-weight:600"><i data-lucide="paperclip" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فتح الملف المرفق</a>` : '<span></span>'}
               <div class="row-actions">
@@ -5006,11 +5090,12 @@ async function renderActivityLog(){
       <div style="font-size:11.5px; color:var(--muted); font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em">${esc(day)}</div>
       <div style="display:flex;flex-direction:column;gap:2px">
         ${items.map(a => `
-          <div class="entity-row" style="padding:10px 12px; border:none; border-right:2px solid var(--border-light)">
-            <i data-lucide="${iconMap[a.entity_type] || iconMap.default}" style="width:16px;height:16px;color:var(--gold);flex-shrink:0"></i>
+          <div class="entity-row" style="padding:10px 12px; border:none; border-right:2px solid var(--border-light); align-items:flex-start">
+            <i data-lucide="${iconMap[a.entity_type] || iconMap.default}" style="width:16px;height:16px;color:var(--gold);flex-shrink:0;margin-top:2px"></i>
             <div style="flex:1">
               <span style="font-size:13px">${esc(a.action)}</span>
               <span style="font-size:11.5px;color:var(--muted)"> — ${esc(a.profiles?.full_name||"النظام")}</span>
+              ${formatActivityMetadata(a.metadata)}
             </div>
             <span style="font-size:11px;color:var(--muted);flex-shrink:0">${new Date(a.created_at).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}</span>
           </div>
@@ -5020,7 +5105,19 @@ async function renderActivityLog(){
   `).join("");
   if(window.lucide) lucide.createIcons();
 }
+function formatActivityMetadata(metadata){
+  if(!metadata || typeof metadata !== "object" || !Object.keys(metadata).length) return "";
+  const LABELS = {
+    reason:"السبب", new_status:"الحالة الجديدة", title:"العنوان", name:"الاسم", mode:"الوضع",
+    old_track:"المسار السابق", new_track:"المسار الجديد",
+  };
+  const parts = Object.entries(metadata)
+    .filter(([k,v]) => v !== null && v !== undefined && v !== "")
+    .map(([k,v]) => `<strong style="color:var(--ink)">${esc(LABELS[k]||k)}:</strong> ${esc(String(v))}`);
+  if(!parts.length) return "";
+  return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
+}
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r99</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r102</div>
 </body>
 </html>
