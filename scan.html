@@ -74,14 +74,7 @@
   <main>
     <div class="card">
       <div class="field">
-        <label>نوع الفعالية</label>
-        <select id="mode-select" onchange="loadSessionOptions()">
-          <option value="prep">جلسة تحضير</option>
-          <option value="event">فعالية عامة</option>
-        </select>
-      </div>
-      <div class="field">
-        <label id="session-label">اختر الجلسة</label>
+        <label id="session-label">اختر الجلسة أو الفعالية</label>
         <select id="session-select"></select>
       </div>
       <div class="field" style="margin:0"><label style="display:flex;align-items:center;gap:6px;font-weight:400"><input type="checkbox" id="show-all-sessions" onchange="loadSessionOptions()"> عرض كل الجلسات (وليس المفعّلة فقط)</label></div>
@@ -163,24 +156,16 @@ async function showContent(){
 }
 
 async function loadSessionOptions(){
-  const mode = document.getElementById("mode-select").value;
-  const label = document.getElementById("session-label");
-  const select = document.getElementById("session-select");
-  label.textContent = mode === "prep" ? "اختر جلسة التحضير" : "اختر الفعالية";
+  const showAll = document.getElementById("show-all-sessions")?.checked;
+  let query = sb.from("prep_sessions").select("id, title, session_date, session_type, is_checkin_active").order("session_date", {ascending:false});
+  if(!showAll) query = query.eq("is_checkin_active", true);
+  const { data } = await query;
 
-  if(mode === "prep"){
-    const showAll = document.getElementById("show-all-sessions")?.checked;
-    let query = sb.from("prep_sessions").select("id, title, session_date, is_checkin_active").order("session_date", {ascending:false});
-    if(!showAll) query = query.eq("is_checkin_active", true);
-    const { data } = await query;
-    if(!showAll && (!data || !data.length)){
-      select.innerHTML = `<option value="">لا توجد جلسة مفعّلة حاليًا للتسجيل</option>`;
-    } else {
-      select.innerHTML = (data||[]).map(s => `<option value="${s.id}">${esc(s.title)} — ${new Date(s.session_date).toLocaleDateString('ar-SA')}</option>`).join("");
-    }
+  const select = document.getElementById("session-select");
+  if(!showAll && (!data || !data.length)){
+    select.innerHTML = `<option value="">لا توجد جلسة مفعّلة حاليًا للتسجيل</option>`;
   } else {
-    const { data } = await sb.from("events").select("id, title, event_date").order("event_date", {ascending:false});
-    select.innerHTML = (data||[]).map(s => `<option value="${s.id}">${esc(s.title)} — ${new Date(s.event_date).toLocaleDateString('ar-SA')}</option>`).join("");
+    select.innerHTML = (data||[]).map(s => `<option value="${s.id}">${s.session_type === 'event' ? '📍 ' : '🎓 '}${esc(s.title)} — ${new Date(s.session_date).toLocaleDateString('ar-SA')}</option>`).join("");
   }
   scanLog = [];
   renderScanLog();
@@ -213,16 +198,13 @@ async function onScanSuccess(decodedText){
     return;
   }
   const userId = decodedText.replace("ENFATH-USER:", "").trim();
-  const mode = document.getElementById("mode-select").value;
   const sessionId = document.getElementById("session-select").value;
   if(!sessionId){
     resultBox.innerHTML = `<div class="result-flash err">اختر الجلسة/الفعالية أولاً</div>`;
     return;
   }
 
-  const rpcName = mode === "prep" ? "record_attendance" : "record_event_attendance";
-  const params = mode === "prep" ? { p_session_id: sessionId, p_user_id: userId } : { p_event_id: sessionId, p_user_id: userId };
-  const { data, error } = await sb.rpc(rpcName, params);
+  const { data, error } = await sb.rpc("record_attendance", { p_session_id: sessionId, p_user_id: userId });
 
   if(error || !data.success){
     resultBox.innerHTML = `<div class="result-flash err">${esc(data?.error || error?.message || "خطأ غير متوقع")}</div>`;
@@ -242,6 +224,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r55</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r92</div>
 </body>
 </html>

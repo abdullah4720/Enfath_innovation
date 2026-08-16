@@ -272,10 +272,9 @@
       <a data-page="projects"><i data-lucide="lightbulb"></i> المشاريع</a>
 
       <div class="nav-group-label">البرنامج</div>
-      <a data-page="prep"><i data-lucide="graduation-cap"></i> جلسات التحضير</a>
+      <a data-page="prep"><i data-lucide="graduation-cap"></i> الجلسات والفعاليات</a>
       <a data-page="mentorship"><i data-lucide="compass"></i> إدارة الإرشاد</a>
       <a data-page="judging"><i data-lucide="scale"></i> التحكيم</a>
-      <a data-page="events"><i data-lucide="map-pin"></i> الفعاليات والحضور</a>
       <a href="./scan.html" target="_blank" style="opacity:.9"><i data-lucide="qr-code"></i> تسجيل الحضور (مسح QR)</a>
       <a data-page="certificates"><i data-lucide="award"></i> الشهادات</a>
       <a data-page="surveys"><i data-lucide="clipboard-list"></i> الاستبيانات والرضا</a>
@@ -609,8 +608,7 @@ function navigateTo(page){
     mentorship: renderMentorshipAdmin,
     announcements: renderAnnouncements,
     judging: renderJudging,
-    events: renderEvents,
-    certificates: renderCertificates,
+        certificates: renderCertificates,
     surveys: renderSurveys,
     users: renderUsers,
     mentorApps: renderMentorApplications,
@@ -2233,10 +2231,11 @@ function renderPrepTable(data){
   if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد نتائج مطابقة</div>`; return; }
 
   box.innerHTML = `<table><thead><tr>
-    <th>الجلسة</th><th>المسار</th><th>الموعد</th><th>الحضور المسجَّل</th><th>QR نشط</th><th></th>
+    <th>الجلسة</th><th>التصنيف</th><th>المسار</th><th>الموعد</th><th>الحضور المسجَّل</th><th>QR نشط</th><th></th>
     </tr></thead><tbody>
     ${data.map(p => `<tr>
       <td><strong>${esc(p.title)}</strong><br><span style="color:var(--muted);font-size:12px">${esc(p.location||(p.is_online?"عبر الإنترنت":""))}</span></td>
+      <td>${p.session_type === 'event' ? '<span class="badge badge-gold">فعالية رئيسية</span>' : '<span class="badge badge-gray">تحضيرية</span>'}</td>
       <td>${esc(p.tracks?.name_ar || "جميع المسارات")}</td>
       <td>${fmtDate(p.session_date)}</td>
       <td>${p.prep_attendance?.[0]?.count ?? 0}${p.capacity ? " / " + p.capacity : ""}</td>
@@ -2329,11 +2328,17 @@ async function togglePrepActive(sessionId, activate){
 }
 async function openPrepModal(p=null){
   const isEdit = !!p;
-  p = p || {title:"",description:"",track_id:"",session_date:"",duration_minutes:60,location:"",is_online:false,capacity:""};
+  p = p || {title:"",description:"",track_id:"",session_date:"",duration_minutes:60,location:"",is_online:false,capacity:"",session_type:"prep"};
   const { data: tracks } = await sb.from("tracks").select("id,name_ar");
   openModal(`
-    <h3>${isEdit ? "تعديل جلسة" : "إضافة جلسة تحضير"}</h3>
+    <h3>${isEdit ? "تعديل جلسة" : "إضافة جلسة / فعالية"}</h3>
     <div class="field"><label>عنوان الجلسة</label><input id="f-title" value="${esc(p.title)}"></div>
+    <div class="field"><label>التصنيف</label>
+      <select id="f-session-type">
+        <option value="prep" ${p.session_type!=='event'?'selected':''}>جلسة تحضيرية</option>
+        <option value="event" ${p.session_type==='event'?'selected':''}>فعالية رئيسية (تظهر للجميع بيوم الهاكاثون)</option>
+      </select>
+    </div>
     <div class="field"><label>المسار (اتركه فارغًا لجميع المسارات)</label>
       <select id="f-track"><option value="">جميع المسارات</option>
         ${(tracks||[]).map(t=>`<option value="${t.id}" ${p.track_id===t.id?"selected":""}>${esc(t.name_ar)}</option>`).join("")}
@@ -2356,6 +2361,7 @@ async function savePrep(id){
   if(!dateVal){ showToast("الموعد مطلوب", true); return; }
   const payload = {
     title: document.getElementById("f-title").value.trim(),
+    session_type: document.getElementById("f-session-type").value,
     track_id: document.getElementById("f-track").value || null,
     session_date: new Date(dateVal).toISOString(),
     duration_minutes: parseInt(document.getElementById("f-duration").value) || 60,
@@ -3099,102 +3105,6 @@ async function renderJudgingConsistencyCheck(){
     </div>
   `;
   if(window.lucide) lucide.createIcons();
-}
-
-/* ============================================================
-   6. الفعاليات والحضور
-   ============================================================ */
-async function renderEvents(){
-  const main = document.getElementById("main-content");
-  main.innerHTML = `<div class="page-header">
-      <div><h1>الفعاليات والحضور</h1><p>الفعاليات الرئيسية وتتبع الحضور عبر QR</p></div>
-      <button class="btn btn-primary" onclick="openEventModal()">+ إضافة فعالية</button>
-    </div>
-    <div id="events-list">${skeletonRows(4)}</div>`;
-
-  const { data, error } = await sb.from("events").select("*, event_attendance(count)").order("event_date");
-  const box = document.getElementById("events-list");
-  if(error) return box.innerHTML = `<div class="card"><div class="empty-state">خطأ: ${esc(error.message)}</div></div>`;
-  if(!data.length) return box.innerHTML = `<div class="card">${emptyIllustration("map-pin", "لا توجد فعاليات بعد", "أضف أول فعالية لتتبّع الحضور عبر QR")}</div>`;
-
-  const { count: totalParticipants } = await sb.from("profiles").select("id", {count:"exact", head:true});
-
-  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">
-    ${data.map(e => {
-      const attCount = e.event_attendance?.[0]?.count ?? 0;
-      const pct = totalParticipants ? Math.min(100, Math.round((attCount/totalParticipants)*100)) : 0;
-      const color = avatarColor(e.title);
-      return `
-      <details class="card" style="margin:0;padding:0;overflow:hidden">
-        <summary style="cursor:pointer;padding:16px 20px;list-style:none;display:flex;align-items:center;gap:14px">
-          <div class="avatar-circle" style="background:${color}"><i data-lucide="map-pin" style="width:18px;height:18px"></i></div>
-          <div style="flex:1;min-width:0">
-            <strong style="font-size:14.5px">${esc(e.title)}</strong>
-            <div style="color:var(--muted);font-size:12px;margin-top:2px">${fmtDate(e.event_date)} ${e.location ? "· "+esc(e.location) : ""}</div>
-            <div class="progress-track" style="margin-top:8px;max-width:280px"><div class="progress-fill" style="width:${pct}%"></div></div>
-          </div>
-          <span class="badge badge-green" style="flex-shrink:0">${attCount} حاضر</span>
-        </summary>
-        <div style="padding:0 20px 18px 76px">
-          <div style="display:flex;gap:8px;margin-bottom:12px">
-            <button class="btn btn-outline btn-sm" onclick='openEventModal(${JSON.stringify(e)})'>تعديل</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteRow('events','${e.id}', renderEvents)">حذف</button>
-          </div>
-          <div id="event-attendees-${e.id}">
-            <button class="btn-link" onclick="loadEventAttendees('${e.id}')">عرض قائمة الحاضرين ↓</button>
-          </div>
-        </div>
-      </details>`;
-    }).join("")}
-  </div>`;
-  if(window.lucide) lucide.createIcons();
-}
-async function loadEventAttendees(eventId){
-  const box = document.getElementById(`event-attendees-${eventId}`);
-  box.innerHTML = `<p class="hint">جاري التحميل...</p>`;
-  const { data, error } = await sb.from("event_attendance")
-    .select("scanned_at, profiles(full_name, email)")
-    .eq("event_id", eventId)
-    .order("scanned_at", {ascending:false});
-  if(error){ box.innerHTML = `<p class="hint">خطأ: ${esc(error.message)}</p>`; return; }
-  if(!data.length){ box.innerHTML = `<p class="hint">ما فيه حضور مسجَّل بعد</p>`; return; }
-
-  box.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto">
-    ${data.map(a => `
-      <div class="entity-row" style="padding:8px 12px">
-        <div class="avatar-circle" style="width:28px;height:28px;font-size:11px;background:${avatarColor(a.profiles?.full_name||"?")}">${esc(initials(a.profiles?.full_name))}</div>
-        <span style="flex:1;font-size:12.5px">${esc(a.profiles?.full_name||"—")}</span>
-        <span style="font-size:11px;color:var(--muted)">${fmtDate(a.scanned_at)}</span>
-      </div>
-    `).join("")}
-  </div>`;
-}
-function openEventModal(e=null){
-  const isEdit = !!e;
-  e = e || {title:"",event_date:"",location:""};
-  openModal(`
-    <h3>${isEdit ? "تعديل فعالية" : "إضافة فعالية"}</h3>
-    <div class="field"><label>عنوان الفعالية</label><input id="f-ev-title" value="${esc(e.title)}" placeholder="مثال: حفل الافتتاح"></div>
-    <div class="field"><label>الموعد</label><input type="datetime-local" id="f-ev-date" value="${e.event_date ? e.event_date.substring(0,16) : ''}"></div>
-    <div class="field"><label>الموقع</label><input id="f-ev-location" value="${esc(e.location||'')}"></div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
-      <button class="btn btn-primary" onclick="saveEvent('${e.id||""}')">حفظ</button>
-    </div>
-  `);
-}
-async function saveEvent(id){
-  const title = document.getElementById("f-ev-title").value.trim();
-  const dateVal = document.getElementById("f-ev-date").value;
-  const location = document.getElementById("f-ev-location").value.trim();
-  if(!title || !dateVal){ showToast("العنوان والموعد مطلوبان", true); return; }
-  const payload = {title, event_date:new Date(dateVal).toISOString(), location};
-  const q = id ? sb.from("events").update(payload).eq("id", id) : sb.from("events").insert(payload);
-  const { error } = await q;
-  if(error) return showToast("خطأ: " + error.message, true);
-  showToast(id ? "تم التحديث" : "تمت الإضافة");
-  closeModal();
-  renderEvents();
 }
 
 /* ============================================================
@@ -4823,6 +4733,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r88</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r92</div>
 </body>
 </html>

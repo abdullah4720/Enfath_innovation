@@ -271,9 +271,9 @@ function renderFilteredSessions(){
   }
   container.innerHTML = filtered.map(s => `
     <div class="session-card" onclick="openSessionDetail('${s.id}')">
-      <div class="session-icon"><i data-lucide="graduation-cap"></i></div>
+      <div class="session-icon"><i data-lucide="${s.session_type === 'event' ? 'map-pin' : 'graduation-cap'}"></i></div>
       <div style="flex:1">
-        <div class="session-title">${isToday(s.session_date) ? '<span class="today-flag">اليوم</span>' : ''}${esc(s.title)}</div>
+        <div class="session-title">${isToday(s.session_date) ? '<span class="today-flag">اليوم</span>' : ''}${s.session_type === 'event' ? '<span class="today-flag" style="background:#e6f0fb;color:var(--navy)">فعالية</span> ' : ''}${esc(s.title)}</div>
         <div class="session-meta">${fmtDate(s.session_date)}${s.location ? ' · ' + esc(s.location) : ''}</div>
       </div>
       <span class="session-count">${s.prep_attendance?.[0]?.count ?? 0} حاضر</span>
@@ -541,6 +541,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r91</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r92</div>
 </body>
 </html>
