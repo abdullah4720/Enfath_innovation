@@ -60,10 +60,54 @@
   .project-box h4{margin:0 0 4px; font-size:13.5px;}
   .project-box p{margin:0; font-size:13px; color:var(--muted); line-height:1.6;}
 
+  /* ---------------- بطاقة المشروع المحسّنة ---------------- */
+  .project-card{
+    background:linear-gradient(180deg,#fff,#fbfbfd); border:1px solid var(--border-light); border-radius:14px;
+    padding:18px 20px; margin-bottom:16px; position:relative; overflow:hidden;
+  }
+  body.dark .project-card{ background:linear-gradient(180deg,var(--card),var(--card)); }
+  .project-card::before{content:"";position:absolute;top:0;right:0;width:4px;height:100%;background:var(--gold);}
+  .project-card-head{display:flex; align-items:flex-start; gap:12px; margin-bottom:10px;}
+  .project-card-icon{width:38px;height:38px;border-radius:10px;background:#fbf3e2;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .project-card-icon i{width:18px;height:18px;color:var(--gold);}
+  .project-card-title{font-size:15px;font-weight:700;color:var(--ink);margin:0 0 2px;}
+  .project-card-meta{font-size:11.5px;color:var(--muted);}
+  .project-card-desc{font-size:13.5px;color:var(--ink);line-height:1.75;margin:12px 0;padding-top:12px;border-top:1px solid var(--border-light);}
+  .project-card-file{display:inline-flex;align-items:center;gap:6px;background:#e6f7f3;color:var(--teal);font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:20px;text-decoration:none;}
+
+  /* ---------------- أزرار الدرجات (1 إلى الأقصى) ---------------- */
+  .score-scale{display:flex; gap:6px; flex-wrap:wrap;}
+  .score-btn{
+    width:42px; height:42px; border-radius:10px; border:1.5px solid var(--border); background:#fff;
+    font-family:inherit; font-size:14.5px; font-weight:700; color:var(--muted); cursor:pointer; transition:.15s; flex-shrink:0;
+  }
+  .score-btn:hover{border-color:var(--gold);}
+  .score-btn.selected{background:var(--navy); border-color:var(--navy); color:#fff; transform:scale(1.06);}
+  body.dark .score-btn{background:#0f1826;}
+
+  /* ---------------- شريط المجموع الحي ---------------- */
+  .live-total-bar{
+    display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg,var(--navy),var(--navy-light));
+    color:#fff; border-radius:12px; padding:14px 18px; margin:16px 0; position:sticky; bottom:10px; z-index:5;
+    box-shadow:0 8px 24px rgba(13,27,62,.25);
+  }
+  .live-total-bar .lbl{font-size:12.5px; color:#c8d3e8;}
+  .live-total-bar .val{font-size:22px; font-weight:800; color:var(--gold);}
+  .live-total-bar .val small{font-size:13px; color:#c8d3e8; font-weight:500;}
+
+  /* ---------------- نافذة تأكيد الإرسال ---------------- */
+  .confirm-overlay{position:fixed; inset:0; background:rgba(13,27,62,.7); z-index:200; display:flex; align-items:center; justify-content:center; padding:20px;}
+  .confirm-box{background:var(--card); border-radius:16px; padding:26px; max-width:440px; width:100%; max-height:85vh; overflow-y:auto;}
+  .confirm-box h3{margin:0 0 4px;}
+  .confirm-row{display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border-light); font-size:13.5px;}
+  .confirm-total-row{display:flex; justify-content:space-between; padding:14px 0 4px; font-size:15px; font-weight:800; color:var(--navy);}
+  body.dark .confirm-total-row{ color:var(--gold); }
+
   .criteria-row{display:grid; grid-template-columns:1fr 90px; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);}
   .criteria-row:last-of-type{border-bottom:none;}
   .criteria-row .c-name{font-size:13.5px;}
   .criteria-row .c-hint{font-size:11.5px; color:var(--muted);}
+  .criteria-row .c-desc{font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.6; max-width:340px;}
   .criteria-row input{width:100%; padding:9px; border:1px solid var(--border); border-radius:8px; text-align:center; font-family:inherit;}
 
   .conflict-notice{background:#fdeceb; color:var(--danger); border-radius:9px; padding:12px 16px; font-size:13px; text-align:center;}
@@ -323,10 +367,16 @@ async function loadAssignments(){
       </details>
       ${isLocked ? `<div class="alert" style="display:block;background:#fef3e2;color:#92600a"><i data-lucide="lock" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> تم نشر النتائج — التعديل مقفل</div>` : ""}
       ${submission ? `
-        <div class="project-box">
-          <h4>${esc(submission.title)}</h4>
-          <p>${esc(submission.description||"")}</p>
-          ${submission.file_url ? `<a href="${esc(submission.file_url)}" target="_blank" style="color:var(--teal);font-size:12.5px;font-weight:600"><i data-lucide="paperclip" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> فتح الملف المرفق</a>` : ""}
+        <div class="project-card">
+          <div class="project-card-head">
+            <div class="project-card-icon"><i data-lucide="lightbulb"></i></div>
+            <div>
+              <div class="project-card-title">${esc(submission.title)}</div>
+              <div class="project-card-meta">إصدار ${submission.version} · آخر تحديث ${new Date(submission.submitted_at).toLocaleDateString('ar-SA')}</div>
+            </div>
+          </div>
+          <div class="project-card-desc">${esc(submission.description||"لا يوجد وصف بعد")}</div>
+          ${submission.file_url ? `<a href="${esc(submission.file_url)}" target="_blank" class="project-card-file"><i data-lucide="paperclip" style="width:13px;height:13px"></i> فتح الملف المرفق</a>` : ""}
         </div>
       ` : `<div class="project-box"><p>لم يقدّم الفريق فكرته بعد</p></div>`}
 
@@ -335,20 +385,90 @@ async function loadAssignments(){
           ${criteriaList.map(c => {
             const existing = teamScores.find(s => s.criteria_id === c.id);
             return `<div class="criteria-row">
-              <div><div class="c-name">${esc(c.name_ar)}</div><div class="c-hint">الوزن ${c.weight}% · من ${c.max_score}</div></div>
-              <input type="number" min="0" max="${c.max_score}" id="score-${a.team_id}-${c.id}" value="${existing?.score ?? ''}" ${isLocked ? 'disabled' : ''}>
+              <div><div class="c-name">${esc(c.name_ar)}</div><div class="c-hint">الوزن ${c.weight}% · من ${c.max_score}</div>${c.description ? `<div class="c-desc">${esc(c.description)}</div>` : ""}</div>
+              <div class="score-scale" data-team="${a.team_id}" data-criteria="${c.id}" data-max="${c.max_score}">
+                ${Array.from({length: c.max_score}, (_, i) => i+1).map(n => `
+                  <button type="button" class="score-btn ${existing?.score===n?'selected':''}" ${isLocked?'disabled':''}
+                    onclick="selectScore('${a.team_id}','${c.id}',${n})">${n}</button>
+                `).join("")}
+              </div>
+              <input type="hidden" id="score-${a.team_id}-${c.id}" value="${existing?.score ?? ''}">
             </div>`;
           }).join("")}
+          <div id="live-total-${a.team_id}"></div>
           <div class="field" style="margin-top:14px"><label>تغذية راجعة للفريق</label>
             <textarea id="comments-${a.team_id}" rows="3" placeholder="اكتب ملاحظاتك — راح تظهر للفريق بعد إعلان النتائج" ${isLocked ? 'disabled' : ''}>${esc(teamScores[0]?.comments||"")}</textarea>
           </div>
           <div id="submit-alert-${a.team_id}" class="alert"></div>
-          ${!isLocked ? `<button class="btn btn-primary" onclick="submitScores('${a.team_id}')">${alreadyScored ? "تحديث التقييم" : "إرسال التقييم"}</button>` : ""}
+          ${!isLocked ? `<button class="btn btn-primary" onclick='openConfirmSubmit("${a.team_id}", ${JSON.stringify(a.teams?.team_name||"")})'>${alreadyScored ? "تحديث التقييم" : "إرسال التقييم"}</button>` : ""}
         </div>
       ` : `<p style="color:var(--muted);font-size:13px">لم يتم تحديد معايير تقييم لهذه الجولة بعد</p>`}
     </div>`;
   }
   main.innerHTML = html;
+  if(window.lucide) lucide.createIcons();
+  assignments.forEach(a => { if(!a.has_conflict) updateLiveTotal(a.team_id); });
+}
+
+function selectScore(teamId, criteriaId, value){
+  document.getElementById(`score-${teamId}-${criteriaId}`).value = value;
+  const scale = document.querySelector(`.score-scale[data-team="${teamId}"][data-criteria="${criteriaId}"]`);
+  scale.querySelectorAll(".score-btn").forEach((btn, i) => btn.classList.toggle("selected", i+1 === value));
+  updateLiveTotal(teamId);
+}
+function updateLiveTotal(teamId){
+  const box = document.getElementById(`live-total-${teamId}`);
+  if(!box) return;
+  let sumWeighted = 0, sumWeight = 0, answeredCount = 0;
+  criteriaList.forEach(c => {
+    const input = document.getElementById(`score-${teamId}-${c.id}`);
+    const val = parseFloat(input?.value);
+    if(!isNaN(val)){
+      sumWeighted += val * c.weight;
+      sumWeight += c.weight;
+      answeredCount++;
+    }
+  });
+  const total = sumWeight > 0 ? (sumWeighted / sumWeight) : 0;
+  const complete = answeredCount === criteriaList.length;
+  box.innerHTML = `<div class="live-total-bar">
+    <span class="lbl">${complete ? "المجموع المرجّح الحالي" : `أدخلت ${answeredCount} من ${criteriaList.length} معايير`}</span>
+    <span class="val">${complete ? total.toFixed(2) : "—"} <small>/ ${Math.max(...criteriaList.map(c=>c.max_score))}</small></span>
+  </div>`;
+}
+
+/* ---------------- تأكيد الإرسال قبل الحفظ (لضمان العدالة) ---------------- */
+function openConfirmSubmit(teamId, teamName){
+  const rows = criteriaList.map(c => {
+    const val = document.getElementById(`score-${teamId}-${c.id}`)?.value;
+    return { name: c.name_ar, max: c.max_score, weight: c.weight, val: val === "" ? null : parseFloat(val) };
+  });
+  if(rows.some(r => r.val === null)){
+    const alertBox = document.getElementById(`submit-alert-${teamId}`);
+    alertBox.textContent = "أكمل تقييم كل المعايير قبل الإرسال";
+    alertBox.className = "alert error";
+    return;
+  }
+  const sumWeighted = rows.reduce((s,r) => s + r.val * r.weight, 0);
+  const sumWeight = rows.reduce((s,r) => s + r.weight, 0);
+  const total = sumWeight > 0 ? sumWeighted / sumWeight : 0;
+
+  const overlay = document.createElement("div");
+  overlay.className = "confirm-overlay";
+  overlay.id = "confirm-overlay";
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <h3>تأكيد إرسال التقييم</h3>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px">فريق ${esc(teamName)} — راجع درجاتك بعناية، لا يمكن التراجع بسهولة بعد الإرسال</p>
+      ${rows.map(r => `<div class="confirm-row"><span>${esc(r.name)}</span><strong>${r.val} / ${r.max}</strong></div>`).join("")}
+      <div class="confirm-total-row"><span>المجموع المرجّح</span><span>${total.toFixed(2)}</span></div>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button class="btn btn-outline" style="flex:1;background:none;border:1px solid var(--border)" onclick="document.getElementById('confirm-overlay').remove()">رجوع للتعديل</button>
+        <button class="btn btn-primary" style="flex:1" onclick="document.getElementById('confirm-overlay').remove(); submitScores('${teamId}')">تأكيد الإرسال</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 async function submitScores(teamId){
@@ -394,6 +514,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r63</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r103</div>
 </body>
 </html>
