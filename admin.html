@@ -88,8 +88,33 @@
   .brand{display:flex; align-items:center; gap:10px; margin-bottom:16px; padding:0 6px;}
   .nav-group-label{
     font-size:10.5px; color:#5f7299; text-transform:uppercase; letter-spacing:.06em;
-    margin:16px 6px 6px; font-weight:700;
+    margin:16px 6px 6px; font-weight:700; display:flex; align-items:center; justify-content:space-between;
+    cursor:pointer; padding:4px 6px; border-radius:6px; transition:.15s;
   }
+  .nav-group-label:hover{background:rgba(255,255,255,.04); color:#8fa0c4;}
+  .nav-group-label i{width:13px; height:13px; transition:transform .2s;}
+  .nav-group-label.collapsed i{transform:rotate(-90deg);}
+  .nav-group-body{overflow:hidden; max-height:800px; transition:max-height .25s ease;}
+  .nav-group-body.collapsed{max-height:0 !important;}
+
+  .nav-search-box{position:relative; margin-bottom:10px; padding:0 2px;}
+  .nav-search-box input{
+    width:100%; padding:9px 34px 9px 12px; border-radius:9px; border:1px solid rgba(255,255,255,.1);
+    background:rgba(255,255,255,.06); color:#fff; font-family:inherit; font-size:12px;
+  }
+  .nav-search-box input::placeholder{color:rgba(255,255,255,.4);}
+  .nav-search-box kbd{
+    position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.1);
+    padding:1px 6px; border-radius:5px; font-size:9.5px; color:rgba(255,255,255,.5); pointer-events:none;
+  }
+
+  .nav-pinned-row{display:flex; gap:5px; flex-wrap:wrap; margin-bottom:14px; padding:0 2px;}
+  .nav-pinned-item{
+    display:flex; align-items:center; gap:5px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08);
+    border-radius:7px; padding:5px 9px; font-size:10.5px; color:rgba(255,255,255,.85); cursor:pointer; transition:.15s;
+  }
+  .nav-pinned-item:hover{background:rgba(255,255,255,.1);}
+  .nav-pinned-item i{width:11px; height:11px; color:var(--gold);}
   .global-search-box{position:relative; margin-bottom:16px; padding:0 2px;}
   .global-search-box input{
     width:100%; padding:9px 12px; border-radius:9px; border:1px solid rgba(255,255,255,.15);
@@ -257,6 +282,12 @@
       </div>
       <button id="theme-toggle" onclick="toggleTheme()" title="تبديل الوضع الداكن/الفاتح" style="margin-right:auto;background:none;border:1px solid rgba(255,255,255,.2);border-radius:8px;width:32px;height:32px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center"><i data-lucide="moon" style="width:15px;height:15px"></i></button>
     </div>
+    <div class="nav-search-box">
+      <input type="text" id="nav-search-input" placeholder="بحث سريع بالصفحات..." oninput="filterNavItems()">
+      <kbd>Ctrl K</kbd>
+    </div>
+    <div class="nav-pinned-row" id="nav-pinned-row"></div>
+
     <div class="global-search-box">
       <i data-lucide="search" style="position:absolute;top:11px;right:12px;width:14px;height:14px;color:#7d8db3;pointer-events:none"></i>
       <input type="text" id="global-search-input" style="padding-right:34px" placeholder="بحث عام (فريق، مشارك، بريد...)" oninput="debouncedGlobalSearch()" onfocus="showGlobalSearchResults()">
@@ -266,34 +297,42 @@
       <a data-page="overview" class="active"><i data-lucide="layout-dashboard"></i> نظرة عامة</a>
       <a data-page="analytics"><i data-lucide="bar-chart-3"></i> التحليلات</a>
 
-      <div class="nav-group-label">المشاركون</div>
-      <a data-page="participants"><i data-lucide="users"></i> المشاركون</a>
-      <a data-page="teams"><i data-lucide="users-round"></i> الفرق</a>
-      <a data-page="projects"><i data-lucide="lightbulb"></i> المشاريع</a>
+      <div class="nav-group-label" data-group="participants-group" onclick="toggleNavGroup(this)"><span>المشاركون</span><i data-lucide="chevron-down"></i></div>
+      <div class="nav-group-body" id="participants-group">
+        <a data-page="participants"><i data-lucide="users"></i> المشاركون</a>
+        <a data-page="teams"><i data-lucide="users-round"></i> الفرق</a>
+        <a data-page="projects"><i data-lucide="lightbulb"></i> المشاريع</a>
+      </div>
 
-      <div class="nav-group-label">البرنامج</div>
-      <a data-page="prep"><i data-lucide="graduation-cap"></i> الجلسات والفعاليات</a>
-      <a data-page="mentorship"><i data-lucide="compass"></i> إدارة الإرشاد</a>
-      <a data-page="judging"><i data-lucide="scale"></i> التحكيم</a>
-      <a href="./scan.html" target="_blank" style="opacity:.9"><i data-lucide="qr-code"></i> تسجيل الحضور (مسح QR)</a>
-      <a data-page="certificates"><i data-lucide="award"></i> الشهادات</a>
-      <a data-page="surveys"><i data-lucide="clipboard-list"></i> الاستبيانات والرضا</a>
+      <div class="nav-group-label" data-group="program-group" onclick="toggleNavGroup(this)"><span>البرنامج</span><i data-lucide="chevron-down"></i></div>
+      <div class="nav-group-body" id="program-group">
+        <a data-page="prep"><i data-lucide="graduation-cap"></i> الجلسات والفعاليات</a>
+        <a data-page="mentorship"><i data-lucide="compass"></i> إدارة الإرشاد</a>
+        <a data-page="judging"><i data-lucide="scale"></i> التحكيم</a>
+        <a href="./scan.html" target="_blank" style="opacity:.9"><i data-lucide="qr-code"></i> تسجيل الحضور (مسح QR)</a>
+        <a data-page="certificates"><i data-lucide="award"></i> الشهادات</a>
+        <a data-page="surveys"><i data-lucide="clipboard-list"></i> الاستبيانات والرضا</a>
+      </div>
 
-      <div class="nav-group-label">التواصل</div>
-      <a data-page="announcements"><i data-lucide="megaphone"></i> التحديثات</a>
-      <a data-page="resourceFiles"><i data-lucide="folder-open"></i> الملفات</a>
+      <div class="nav-group-label collapsed" data-group="comm-group" onclick="toggleNavGroup(this)"><span>التواصل</span><i data-lucide="chevron-down"></i></div>
+      <div class="nav-group-body collapsed" id="comm-group">
+        <a data-page="announcements"><i data-lucide="megaphone"></i> التحديثات</a>
+        <a data-page="resourceFiles"><i data-lucide="folder-open"></i> الملفات</a>
+      </div>
 
-      <div class="nav-group-label">الإعدادات والإدارة</div>
-      <a data-page="tracks"><i data-lucide="signpost"></i> المسارات</a>
-      <a data-page="submissionFields"><i data-lucide="list-plus"></i> حقول نموذج المشروع</a>
-      <a data-page="journeyMilestones"><i data-lucide="route"></i> رحلة المشارك</a>
-      <a data-page="generalSettings"><i data-lucide="settings-2"></i> الإعدادات العامة</a>
-      <a data-page="users"><i data-lucide="shield-check"></i> المستخدمون والأدوار</a>
-      <a data-page="mentorApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمرشد <span id="badge-mentorApps" class="nav-badge" style="display:none"></span></a>
-      <a data-page="judgeApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمحكّم <span id="badge-judgeApps" class="nav-badge" style="display:none"></span></a>
-      <a data-page="systemCheck"><i data-lucide="stethoscope"></i> فحص النظام</a>
-      <a data-page="finalReport"><i data-lucide="file-bar-chart"></i> التقرير النهائي</a>
-      <a data-page="activity"><i data-lucide="history"></i> سجل النشاط</a>
+      <div class="nav-group-label collapsed" data-group="settings-group" onclick="toggleNavGroup(this)"><span>الإعدادات والإدارة</span><i data-lucide="chevron-down"></i></div>
+      <div class="nav-group-body collapsed" id="settings-group">
+        <a data-page="tracks"><i data-lucide="signpost"></i> المسارات</a>
+        <a data-page="submissionFields"><i data-lucide="list-plus"></i> حقول نموذج المشروع</a>
+        <a data-page="journeyMilestones"><i data-lucide="route"></i> رحلة المشارك</a>
+        <a data-page="generalSettings"><i data-lucide="settings-2"></i> الإعدادات العامة</a>
+        <a data-page="users"><i data-lucide="shield-check"></i> المستخدمون والأدوار</a>
+        <a data-page="mentorApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمرشد <span id="badge-mentorApps" class="nav-badge" style="display:none"></span></a>
+        <a data-page="judgeApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمحكّم <span id="badge-judgeApps" class="nav-badge" style="display:none"></span></a>
+        <a data-page="systemCheck"><i data-lucide="stethoscope"></i> فحص النظام</a>
+        <a data-page="finalReport"><i data-lucide="file-bar-chart"></i> التقرير النهائي</a>
+        <a data-page="activity"><i data-lucide="history"></i> سجل النشاط</a>
+      </div>
     </nav>
     <div class="logout-box">
       <div class="user-email" id="current-user-email"></div>
@@ -525,7 +564,13 @@ async function handleLogin(){
   if(window.lucide) lucide.createIcons();
   initLucideAutoRender();
   refreshNavBadges();
+  initNavSidebarExtras();
   setInterval(refreshNavBadges, 60000);
+}
+function initNavSidebarExtras(){
+  if(!localStorage.getItem("enfath-admin-nav-groups")) saveNavGroupState();
+  restoreNavGroupState();
+  renderNavPinned();
 }
 async function refreshNavBadges(){
   const [mentorApps, judgeApps] = await Promise.all([
@@ -576,6 +621,7 @@ async function restoreSession(){
       if(window.lucide) lucide.createIcons();
       initLucideAutoRender();
       refreshNavBadges();
+      initNavSidebarExtras();
       setInterval(refreshNavBadges, 60000);
     }
   }
@@ -588,11 +634,80 @@ document.getElementById("nav-menu").addEventListener("click", (e)=>{
   if(!link) return;
   navigateTo(link.dataset.page);
 });
+/* ---------------- القائمة الجانبية: طي المجموعات + بحث سريع + مثبّتات ---------------- */
+function toggleNavGroup(labelEl){
+  labelEl.classList.toggle("collapsed");
+  document.getElementById(labelEl.dataset.group).classList.toggle("collapsed");
+  saveNavGroupState();
+}
+function saveNavGroupState(){
+  const state = {};
+  document.querySelectorAll(".nav-group-label").forEach(l => { state[l.dataset.group] = l.classList.contains("collapsed"); });
+  localStorage.setItem("enfath-admin-nav-groups", JSON.stringify(state));
+}
+function restoreNavGroupState(){
+  const saved = localStorage.getItem("enfath-admin-nav-groups");
+  if(!saved) return;
+  try{
+    const state = JSON.parse(saved);
+    Object.entries(state).forEach(([groupId, collapsed]) => {
+      const body = document.getElementById(groupId);
+      const label = document.querySelector(`.nav-group-label[data-group="${groupId}"]`);
+      if(body && label){ body.classList.toggle("collapsed", collapsed); label.classList.toggle("collapsed", collapsed); }
+    });
+  } catch(e){}
+}
+function expandNavGroupFor(page){
+  const link = document.querySelector(`#nav-menu a[data-page="${page}"]`);
+  const parentBody = link?.closest(".nav-group-body");
+  if(!parentBody) return;
+  parentBody.classList.remove("collapsed");
+  const label = document.querySelector(`.nav-group-label[data-group="${parentBody.id}"]`);
+  if(label) label.classList.remove("collapsed");
+  saveNavGroupState();
+}
+function filterNavItems(){
+  const term = document.getElementById("nav-search-input").value.trim().toLowerCase();
+  document.querySelectorAll("#nav-menu a").forEach(a => {
+    const matches = !term || a.textContent.toLowerCase().includes(term);
+    a.style.display = matches ? "" : "none";
+  });
+  if(term){
+    // أثناء البحث: نفتح كل المجموعات مؤقتًا عشان النتائج تبان بغض النظر عن حالة الطي
+    document.querySelectorAll(".nav-group-body").forEach(b => b.classList.remove("collapsed"));
+    document.querySelectorAll(".nav-group-label").forEach(l => l.classList.remove("collapsed"));
+  } else {
+    // بعد مسح البحث: نرجّع حالة الطي المحفوظة
+    restoreNavGroupState();
+  }
+}
+document.addEventListener("keydown", (e) => {
+  if((e.ctrlKey || e.metaKey) && e.key === "k"){
+    e.preventDefault();
+    document.getElementById("nav-search-input")?.focus();
+  }
+});
+
+const NAV_PINNED_DEFAULT = [
+  { page:"teams", label:"الفرق", icon:"users-round" },
+  { page:"prep", label:"الجلسات", icon:"graduation-cap" },
+  { page:"certificates", label:"الشهادات", icon:"award" },
+];
+function renderNavPinned(){
+  const row = document.getElementById("nav-pinned-row");
+  if(!row) return;
+  row.innerHTML = NAV_PINNED_DEFAULT.map(p => `
+    <div class="nav-pinned-item" onclick="navigateTo('${p.page}')"><i data-lucide="${p.icon}"></i> ${p.label}</div>
+  `).join("");
+  if(window.lucide) lucide.createIcons();
+}
+
 function navigateTo(page){
   currentPage = page;
   document.querySelectorAll("#nav-menu a").forEach(a=>{
     a.classList.toggle("active", a.dataset.page === page);
   });
+  expandNavGroupFor(page);
   const renderers = {
     overview: renderOverview,
     analytics: renderAnalytics,
@@ -625,186 +740,230 @@ function navigateTo(page){
    ============================================================ */
 async function renderOverview(){
   const main = document.getElementById("main-content");
-  main.innerHTML = `<div class="page-header"><div><h1>نظرة عامة</h1><p>مؤشرات عامة عن سير البرنامج</p></div></div>
-    <div class="card" style="background:linear-gradient(135deg,#f2fbf9,#fdfdfb); border-color:var(--teal)">
-      <h3 style="margin:0 0 12px"><i data-lucide="pin" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> نظرة اليوم</h3>
-      <div class="grid-stats" id="today-stats">${skeletonCards(4)}</div>
-    </div>
-    <div class="grid-stats" id="stats-grid">${skeletonCards(4)}</div>
-    <div class="grid-stats" id="stats-grid-extra" style="margin-top:-6px"></div>
-    <div class="card">
-      <div class="toolbar">
-        <h3 style="margin:0"><i data-lucide="calendar" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> الجدول الزمني للبرنامج</h3>
-        <button class="btn btn-outline btn-sm" onclick="navigateTo('generalSettings')">تعديل من الإعدادات العامة →</button>
+  const { data: profile } = await sb.from("profiles").select("full_name").eq("id", currentUser.id).maybeSingle();
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "صباح الخير" : (hour < 17 ? "مساء الخير" : "مساء الخير");
+  const todayStr = new Date().toLocaleDateString('ar-SA', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+  main.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h1 style="font-size:21px;margin:0 0 4px">${greeting}، ${esc(profile?.full_name?.split(' ')[0] || '')} 👋</h1>
+        <p style="margin:0;color:var(--muted);font-size:12.5px">${todayStr} — إليك آخر مستجدات البرنامج</p>
       </div>
-      <div id="overview-schedule-glance" class="hint">${skeletonRows(2)}</div>
+      <div id="countdown-chip"></div>
     </div>
-    <div class="card" id="mentor-alert-card"></div>
-    <div class="card">
-      <h3>الرضا حسب المرحلة</h3>
-      <div id="satisfaction-table">${skeletonRows(4)}</div>
+
+    <div id="attention-zone"></div>
+
+    <div class="grid-stats" id="hero-metrics" style="grid-template-columns:repeat(4,1fr)">${skeletonCards(4)}</div>
+
+    <div class="card" style="margin-top:16px">
+      <h3 class="section-title" style="margin:0 0 4px"><i data-lucide="route" style="width:15px;height:15px;color:var(--gold);vertical-align:-3px;display:inline-block"></i> رحلة البرنامج</h3>
+      <div id="journey-bar-box">${skeletonRows(1)}</div>
+
+      <h3 class="section-title" style="margin:22px 0 12px"><i data-lucide="layout-grid" style="width:15px;height:15px;color:var(--muted);vertical-align:-3px;display:inline-block"></i> مقاييس تفصيلية</h3>
+      <div id="secondary-metrics" style="display:grid;grid-template-columns:repeat(6,1fr);gap:10px">${skeletonCards(6)}</div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h3 class="section-title"><i data-lucide="gauge" style="width:15px;height:15px;color:var(--teal);vertical-align:-3px;display:inline-block"></i> الرضا حسب المرحلة</h3>
+      <div id="satisfaction-gauges">${skeletonCards(3)}</div>
     </div>`;
 
   const scheduleKeys = ["hackathon_start_date","hackathon_end_date","mentorship_start_date","mentorship_end_date","judging_start_date","judging_end_date","submission_deadline"];
-  const scheduleLabels = {
-    hackathon_start_date:"بداية الهاكاثون", hackathon_end_date:"نهاية الهاكاثون",
-    mentorship_start_date:"بداية الإرشاد", mentorship_end_date:"نهاية الإرشاد",
-    judging_start_date:"بداية التحكيم", judging_end_date:"نهاية التحكيم",
-    submission_deadline:"الموعد النهائي للتقديم",
-  };
   const { data: scheduleRows } = await sb.from("platform_settings").select("key,value").in("key", scheduleKeys);
   const scheduleMap = {};
   (scheduleRows||[]).forEach(r => scheduleMap[r.key] = r.value);
-  const glanceBox = document.getElementById("overview-schedule-glance");
 
-  const phases = [
-    { icon:"rocket", label:"الهاكاثون", start:"hackathon_start_date", end:"hackathon_end_date", color:"var(--navy)" },
-    { icon:"graduation-cap", label:"الإرشاد", start:"mentorship_start_date", end:"mentorship_end_date", color:"var(--teal)" },
-    { icon:"scale", label:"التحكيم", start:"judging_start_date", end:"judging_end_date", color:"var(--gold)" },
-  ];
-  const anySet = Object.values(scheduleMap).some(Boolean);
+  renderCountdownChip(scheduleMap.hackathon_start_date);
+  await renderAttentionZone(scheduleMap);
+  await renderHeroMetrics();
+  renderJourneyBar(scheduleMap);
+  await renderSecondaryMetrics();
+  await renderSatisfactionGauges();
+  if(window.lucide) lucide.createIcons();
+}
 
-  if(!anySet){
-    glanceBox.innerHTML = `<div class="empty-state" style="padding:20px">لا توجد تواريخ محدَّدة بعد</div>`;
-  } else {
-    glanceBox.innerHTML = `
-      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:12px; margin-bottom:${scheduleMap.submission_deadline ? '12px' : '0'}">
-        ${phases.map(p => {
-          const s = scheduleMap[p.start], e = scheduleMap[p.end];
-          if(!s && !e) return "";
-          return `
-          <div style="border:1px solid var(--border-light); border-radius:12px; padding:14px 16px; background:var(--border-light)">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px">
-              <i data-lucide="${p.icon}" style="width:15px;height:15px;color:${p.color}"></i>
-              <strong style="font-size:13px">${p.label}</strong>
-            </div>
-            <div style="font-size:12px; color:var(--muted); line-height:1.9">
-              ${s ? `من <strong style="color:var(--ink)">${fmtDate(s)}</strong>` : ""}
-              ${e ? `<br>إلى <strong style="color:var(--ink)">${fmtDate(e)}</strong>` : ""}
-            </div>
-          </div>`;
-        }).join("")}
-      </div>
-      ${scheduleMap.submission_deadline ? `
-        <div style="border:1px solid #f0d9a8; background:#fef8ed; border-radius:12px; padding:12px 16px; display:flex; align-items:center; gap:8px">
-          <i data-lucide="alarm-clock" style="width:15px;height:15px;color:var(--gold)"></i>
-          <span style="font-size:12.5px">الموعد النهائي لتقديم المشاريع: <strong style="color:var(--ink)">${fmtDate(scheduleMap.submission_deadline)}</strong></span>
+function renderCountdownChip(hackathonStart){
+  const box = document.getElementById("countdown-chip");
+  if(!hackathonStart){ box.innerHTML = ""; return; }
+  const days = Math.ceil((new Date(hackathonStart) - new Date()) / 86400000);
+  if(days < 0){ box.innerHTML = ""; return; }
+  box.innerHTML = `<div style="background:var(--navy-dark);color:#fff;padding:10px 18px;border-radius:12px;text-align:center">
+    <div style="font-size:20px;font-weight:800;color:var(--gold)">${days}</div>
+    <div style="font-size:10.5px;color:#c8d3e8">يوم حتى الهاكاثون</div>
+  </div>`;
+}
+
+async function renderAttentionZone(scheduleMap){
+  const box = document.getElementById("attention-zone");
+  const [mentorApps, judgeApps, mentors, teams, subTeamIds] = await Promise.all([
+    sb.from("mentor_applications").select("id", {count:"exact", head:true}).eq("status","pending"),
+    sb.from("judge_applications").select("id", {count:"exact", head:true}).eq("status","pending"),
+    sb.from("user_roles").select("user_id, roles!inner(key)").eq("roles.key","mentor"),
+    sb.from("teams").select("id").eq("status","confirmed"),
+    sb.from("submissions").select("team_id"),
+  ]);
+
+  const { data: slots } = await sb.from("mentor_slots").select("mentor_user_id");
+  const slotCounts = {};
+  (slots||[]).forEach(s => { slotCounts[s.mentor_user_id] = (slotCounts[s.mentor_user_id]||0) + 1; });
+  const belowMinMentors = (mentors.data||[]).filter(m => (slotCounts[m.user_id]||0) < MIN_MENTOR_SLOTS).length;
+
+  const submittedIds = new Set((subTeamIds.data||[]).map(s => s.team_id));
+  const missingCount = (teams.data||[]).filter(t => !submittedIds.has(t.id)).length;
+
+  const items = [];
+  if((mentorApps.count||0) > 0) items.push({ color:"var(--danger)", text:"طلبات انضمام كمرشد بانتظار المراجعة", count:mentorApps.count, page:"mentorApps" });
+  if((judgeApps.count||0) > 0) items.push({ color:"var(--danger)", text:"طلبات انضمام كمحكّم بانتظار المراجعة", count:judgeApps.count, page:"judgeApps" });
+  if(belowMinMentors > 0) items.push({ color:"var(--gold)", text:`مرشدون لم يضيفوا ${MIN_MENTOR_SLOTS} مواعيد على الأقل`, count:belowMinMentors, page:"mentorship" });
+  if(missingCount > 0) items.push({ color:"var(--navy)", text:"فرق مؤكدة لم تقدّم مشاريعها بعد", count:missingCount, page:"projects" });
+
+  if(!items.length){
+    box.innerHTML = `<div class="card" style="background:#f2fbf9;border-color:var(--teal);margin-bottom:20px;text-align:center;padding:16px">
+      <span style="font-size:13px;color:var(--teal);font-weight:700">✅ لا شي يحتاج انتباهك الآن — كل شي على المسار الصحيح</span>
+    </div>`;
+    return;
+  }
+
+  box.innerHTML = `<div class="card" style="background:linear-gradient(135deg,#fef8ed,#fdfaf3);border-color:#f0d9a8;margin-bottom:20px">
+    <h3 style="margin:0 0 12px;font-size:13.5px;display:flex;align-items:center;gap:7px">
+      <i data-lucide="alert-circle" style="width:15px;height:15px;color:var(--gold)"></i> يحتاج انتباهك الآن
+    </h3>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${items.map(it => `
+        <div onclick="navigateTo('${it.page}')" style="display:flex;align-items:center;gap:10px;background:#fff;border-radius:10px;padding:10px 14px;font-size:12.5px;cursor:pointer">
+          <span style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${it.color}"></span>
+          <span style="flex:1">${it.text}</span>
+          <span style="font-weight:800;color:var(--danger)">${it.count}</span>
+          <i data-lucide="chevron-left" style="width:14px;height:14px;color:var(--muted)"></i>
         </div>
-      ` : ""}
-    `;
-    if(window.lucide) lucide.createIcons();
-  }
+      `).join("")}
+    </div>
+  </div>`;
+}
 
-  await renderTodayStats();
-  await renderMentorAlert();
+async function renderHeroMetrics(){
+  const box = document.getElementById("hero-metrics");
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const [stats, newParticipantsToday] = await Promise.all([
+    sb.from("dashboard_stats").select("*").single(),
+    sb.from("profiles").select("id", {count:"exact", head:true}).gte("created_at", todayStart.toISOString()),
+  ]);
+  if(stats.error){ box.innerHTML = `<div class="empty-state">تعذّر تحميل الإحصائيات</div>`; return; }
+  const s = stats.data;
+  const teamsPct = s.total_teams ? Math.round((s.confirmed_teams / s.total_teams) * 100) : 0;
 
-  const { data: stats, error } = await sb.from("dashboard_stats").select("*").single();
-  if(error){
-    document.getElementById("stats-grid").innerHTML = `<div class="empty-state">تعذّر تحميل الإحصائيات: ${esc(error.message)}</div>`;
-  } else {
-    document.getElementById("stats-grid").innerHTML = `
-      ${statCard(stats.total_users, "إجمالي المستخدمين")}
-      ${statCard(stats.total_participants, "المشاركون")}
-      ${statCard(stats.confirmed_teams + " / " + stats.total_teams, "الفرق المؤكدة")}
-      ${statCard(stats.active_tracks, "المسارات النشطة")}
-      ${statCard(stats.certificates_issued, "الشهادات الصادرة")}
-      ${statCard(stats.avg_nps ?? "—", "متوسط الرضا (NPS)", true)}
-    `;
-  }
+  box.innerHTML = `
+    ${heroCard("users-round", "var(--navy)", s.total_participants, (newParticipantsToday.count>0 ? `+${newParticipantsToday.count} اليوم` : null), "إجمالي المشاركين")}
+    ${heroCard("users", "var(--teal)", `${s.confirmed_teams} <span style="font-size:14px;color:var(--muted);font-weight:600">/ ${s.total_teams}</span>`, null, `الفرق المؤكدة (${teamsPct}%)`)}
+    ${heroCard("award", "var(--gold)", s.certificates_issued, null, "الشهادات الصادرة")}
+    ${heroCard("smile", "#7C6FE0", `${s.avg_nps ?? "—"}${s.avg_nps ? '<span style="font-size:14px;color:var(--muted);font-weight:600">/10</span>' : ''}`, null, "متوسط الرضا (NPS)")}
+  `;
+}
+function heroCard(icon, color, num, trend, label){
+  return `<div class="stat-card" style="position:relative;overflow:hidden;text-align:right;padding:18px">
+    <div style="position:absolute;top:0;right:0;left:0;height:3px;background:${color}"></div>
+    <div style="width:32px;height:32px;border-radius:9px;background:color-mix(in srgb, ${color} 14%, white);display:flex;align-items:center;justify-content:center;margin-bottom:10px">
+      <i data-lucide="${icon}" style="width:16px;height:16px;color:${color}"></i>
+    </div>
+    <div class="num" style="font-size:24px">${num}</div>
+    ${trend ? `<span style="font-size:10.5px;font-weight:700;color:var(--teal)">↑ ${trend}</span>` : ""}
+    <div class="label" style="margin-top:2px">${label}</div>
+  </div>`;
+}
 
-  await renderExtraStats();
+function renderJourneyBar(scheduleMap){
+  const box = document.getElementById("journey-bar-box");
+  const now = new Date();
+  const mStart = scheduleMap.mentorship_start_date ? new Date(scheduleMap.mentorship_start_date) : null;
+  const mEnd = scheduleMap.mentorship_end_date ? new Date(scheduleMap.mentorship_end_date) : null;
+  const jStart = scheduleMap.judging_start_date ? new Date(scheduleMap.judging_start_date) : null;
+  const jEnd = scheduleMap.judging_end_date ? new Date(scheduleMap.judging_end_date) : null;
 
+  const steps = ["التسجيل", "التحضير", "الإرشاد", "التحكيم", "النتائج"];
+  let activeIdx = 0, pct = 10;
+  if(jEnd && now > jEnd){ activeIdx = 4; pct = 100; }
+  else if((jStart && now >= jStart) || (jEnd && now <= jEnd)){ activeIdx = 3; pct = 80; }
+  else if((mStart && now >= mStart) && (!mEnd || now <= mEnd)){ activeIdx = 2; pct = 55; }
+  else if(mStart && now < mStart){ activeIdx = 1; pct = 30; }
+  else { activeIdx = 0; pct = 10; }
+
+  box.innerHTML = `
+    <div style="position:relative;height:6px;background:var(--border-light);border-radius:6px;margin:20px 0 4px">
+      <div style="position:absolute;top:0;right:0;height:100%;width:${pct}%;background:linear-gradient(90deg,var(--teal),var(--gold));border-radius:6px"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;position:relative;top:-26px">
+      ${steps.map((label, i) => `
+        <div style="text-align:center;font-size:11px;color:${i===activeIdx?'var(--navy)':'var(--muted)'};font-weight:${i===activeIdx?700:400}">
+          <div style="width:14px;height:14px;border-radius:50%;margin:0 auto 6px;
+            background:${i<activeIdx?'var(--teal)':(i===activeIdx?'var(--gold)':'#fff')};
+            border:2px solid ${i<activeIdx?'var(--teal)':(i===activeIdx?'var(--gold)':'var(--border)')};
+            ${i===activeIdx?'box-shadow:0 0 0 4px rgba(201,146,42,.15)':''}"></div>
+          ${label}
+        </div>
+      `).join("")}
+    </div>`;
+}
+
+async function renderSecondaryMetrics(){
+  const box = document.getElementById("secondary-metrics");
+  const [mentorsCount, judgesCount, prepCount, bookingsCount, roundsCount, tracksCount] = await Promise.all([
+    sb.from("user_roles").select("id, roles!inner(key)", {count:"exact", head:true}).eq("roles.key","mentor"),
+    sb.from("user_roles").select("id, roles!inner(key)", {count:"exact", head:true}).eq("roles.key","judge"),
+    sb.from("prep_sessions").select("id", {count:"exact", head:true}),
+    sb.from("mentor_bookings").select("id", {count:"exact", head:true}),
+    sb.from("judging_rounds").select("id", {count:"exact", head:true}),
+    sb.from("tracks").select("id", {count:"exact", head:true}).eq("is_active", true),
+  ]);
+  const miniStat = (num, label) => `<div style="background:var(--border-light);border-radius:10px;padding:12px;text-align:center">
+    <div style="font-size:16px;font-weight:700;color:var(--ink)">${num ?? "—"}</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:2px">${label}</div>
+  </div>`;
+  box.innerHTML = `
+    ${miniStat(mentorsCount.count, "مرشدون")}
+    ${miniStat(judgesCount.count, "محكّمون")}
+    ${miniStat(prepCount.count, "جلسات/فعاليات")}
+    ${miniStat(bookingsCount.count, "حجوزات إرشاد")}
+    ${miniStat(roundsCount.count, "جولات تحكيم")}
+    ${miniStat(tracksCount.count, "مسارات نشطة")}
+  `;
+}
+
+async function renderSatisfactionGauges(){
+  const box = document.getElementById("satisfaction-gauges");
   const { data: sat } = await sb.from("satisfaction_by_stage").select("*");
-  const satBox = document.getElementById("satisfaction-table");
-  if(!sat || sat.length === 0){
-    satBox.innerHTML = `<div class="empty-state">لا توجد استجابات استبيانات بعد</div>`;
-  } else {
-    satBox.innerHTML = `<table><thead><tr>
-      <th>الاستبيان</th><th>المرحلة</th><th>عدد الردود</th><th>متوسط NPS</th><th>نسبة المروّجين</th>
-      </tr></thead><tbody>
-      ${sat.map(s => `<tr>
-        <td>${esc(s.survey_title)}</td>
-        <td>${esc(s.target_stage)}</td>
-        <td>${s.responses_count}</td>
-        <td>${s.avg_nps ?? "—"}</td>
-        <td>${s.promoters_pct ?? "—"}%</td>
-      </tr>`).join("")}
-      </tbody></table>`;
-  }
+  if(!sat || !sat.length){ box.innerHTML = `<div class="empty-state">لا توجد استجابات استبيانات بعد</div>`; return; }
+
+  const stageLabels = {prep:"التحضير", mentorship:"الإرشاد", judging:"التحكيم", closing:"الختام", overall:"عام"};
+  const colors = ["#1F9E8E","#C9922A","#7C6FE0","#1A2E5A","#0D9488"];
+
+  box.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px">
+    ${sat.map((s, i) => {
+      const val = s.avg_nps;
+      const color = colors[i % colors.length];
+      const circumference = 213; // 2*pi*34
+      const offset = val ? circumference - (circumference * (val/10)) : circumference;
+      return `<div style="text-align:center">
+        <div style="width:80px;height:80px;margin:0 auto 8px;position:relative">
+          <svg width="80" height="80" style="transform:rotate(-90deg)">
+            <circle cx="40" cy="40" r="34" fill="none" stroke="var(--border-light)" stroke-width="8"/>
+            ${val ? `<circle cx="40" cy="40" r="34" fill="none" stroke="${color}" stroke-width="8" stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"/>` : ""}
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:${val?'var(--ink)':'var(--muted)'}">${val ?? "—"}</div>
+        </div>
+        <div style="font-size:12px;font-weight:600">${esc(stageLabels[s.target_stage] || s.target_stage)}</div>
+        <div style="font-size:10.5px;color:var(--muted)">${s.responses_count ? s.responses_count + ' ردًا' : 'لا بيانات بعد'}</div>
+      </div>`;
+    }).join("")}
+  </div>`;
 }
 function statCard(num, label, accent=false){
   return `<div class="stat-card ${accent ? 'accent' : ''}"><div class="num">${num ?? "—"}</div><div class="label">${label}</div></div>`;
 }
 
 const MIN_MENTOR_SLOTS = 3;
-async function renderTodayStats(){
-  const box = document.getElementById("today-stats");
-  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-  const todayIso = todayStart.toISOString();
-
-  const [newTeams, pendingMentorApps, pendingJudgeApps, todayBookings] = await Promise.all([
-    sb.from("teams").select("id", {count:"exact", head:true}).gte("created_at", todayIso),
-    sb.from("mentor_applications").select("id", {count:"exact", head:true}).eq("status","pending"),
-    sb.from("judge_applications").select("id", {count:"exact", head:true}).eq("status","pending"),
-    sb.from("mentor_bookings").select("id", {count:"exact", head:true}).gte("created_at", todayIso),
-  ]);
-
-  box.innerHTML = `
-    ${statCard(newTeams.count ?? 0, "فرق جديدة اليوم", true)}
-    ${statCard(todayBookings.count ?? 0, "حجوزات إرشاد اليوم")}
-    ${statCard(pendingMentorApps.count ?? 0, "طلبات مرشدين بانتظار المراجعة")}
-    ${statCard(pendingJudgeApps.count ?? 0, "طلبات محكّمين بانتظار المراجعة")}
-  `;
-}
-async function renderExtraStats(){
-  const box = document.getElementById("stats-grid-extra");
-  const [mentorsCount, judgesCount, prepCount, bookingsCount, roundsCount, eventsCount] = await Promise.all([
-    sb.from("user_roles").select("id, roles!inner(key)", {count:"exact", head:true}).eq("roles.key","mentor"),
-    sb.from("user_roles").select("id, roles!inner(key)", {count:"exact", head:true}).eq("roles.key","judge"),
-    sb.from("prep_sessions").select("id", {count:"exact", head:true}),
-    sb.from("mentor_bookings").select("id", {count:"exact", head:true}),
-    sb.from("judging_rounds").select("id", {count:"exact", head:true}),
-    sb.from("events").select("id", {count:"exact", head:true}),
-  ]);
-  box.innerHTML = `
-    ${statCard(mentorsCount.count ?? "—", "عدد المرشدين")}
-    ${statCard(judgesCount.count ?? "—", "عدد المحكّمين")}
-    ${statCard(prepCount.count ?? "—", "جلسات/ورش التحضير")}
-    ${statCard(bookingsCount.count ?? "—", "جلسات الإرشاد المحجوزة")}
-    ${statCard(roundsCount.count ?? "—", "جولات التحكيم")}
-    ${statCard(eventsCount.count ?? "—", "الفعاليات العامة")}
-  `;
-}
-async function renderMentorAlert(){
-  const card = document.getElementById("mentor-alert-card");
-  const { data: mentors } = await sb.from("user_roles")
-    .select("user_id, profiles!user_roles_user_id_fkey(full_name, email), roles!inner(key)")
-    .eq("roles.key", "mentor");
-
-  if(!mentors || !mentors.length){
-    card.innerHTML = `<h3>حالة المرشدين</h3><div class="empty-state">لا يوجد مرشدون مسجّلون بعد</div>`;
-    return;
-  }
-
-  const { data: slots } = await sb.from("mentor_slots").select("mentor_user_id");
-  const slotCounts = {};
-  (slots||[]).forEach(s => { slotCounts[s.mentor_user_id] = (slotCounts[s.mentor_user_id]||0) + 1; });
-
-  const below = mentors.filter(m => (slotCounts[m.user_id]||0) < MIN_MENTOR_SLOTS);
-
-  if(!below.length){
-    card.innerHTML = `<h3>حالة المرشدين</h3><div class="empty-state">كل المرشدين أضافوا ${MIN_MENTOR_SLOTS} مواعيد على الأقل ✓</div>`;
-    return;
-  }
-  card.innerHTML = `<h3>⚠ مرشدون بحاجة لإضافة مواعيد</h3>
-    <p class="hint" style="margin-bottom:10px">الحد الأدنى المقترح ${MIN_MENTOR_SLOTS} مواعيد لكل مرشد</p>
-    ${below.map(m => `
-      <div class="member-row">
-        <span>${esc(m.profiles?.full_name||"—")}</span>
-        <span class="badge badge-red">${slotCounts[m.user_id]||0} / ${MIN_MENTOR_SLOTS}</span>
-      </div>
-    `).join("")}`;
-}
 
 /* ============================================================
    2. المسارات
@@ -4733,6 +4892,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r92</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r93</div>
 </body>
 </html>
