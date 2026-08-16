@@ -251,7 +251,7 @@
     <!-- تسجيل جديد -->
     <div id="signup-form">
       <h2 id="su-heading">إنشاء حساب مشارك</h2>
-      <p class="sub" id="su-subheading">عبّي بياناتك ومعلومات فريقك — كل شي بخطوة وحدة</p>
+      <p class="sub" id="su-subheading">أدخل بياناتك ومعلومات فريقك — كل ذلك بخطوة واحدة</p>
 
       <h4 style="font-size:12.5px;color:var(--muted);margin:16px 0 10px">البيانات الأساسية</h4>
       <div class="field"><label>الاسم الثلاثي</label><input id="su-name" placeholder="مثال: عبدالله محمد العييدي"></div>
@@ -569,7 +569,7 @@ async function initJoinFlow(){
       <div style="text-align:center; padding:20px 10px">
         <div style="font-size:36px; margin-bottom:10px">⚠️</div>
         <h2 style="margin-bottom:8px">${data.is_full ? "عذرًا، هذا الفريق مكتمل العدد" : "التسجيل بهذا المسار مغلق حاليًا"}</h2>
-        <p class="sub" style="margin-bottom:20px">فريق "${esc(data.team_name)}" ما عاد يقبل أعضاء جدد. تقدر تنشئ فريقك الخاص بدلًا من ذلك.</p>
+        <p class="sub" style="margin-bottom:20px">فريق "${esc(data.team_name)}" لم يعد يقبل أعضاء جدد. تقدر تنشئ فريقك الخاص بدلًا من ذلك.</p>
         <button class="btn btn-primary" style="width:auto;padding:11px 26px" onclick="window.location.href='./registration.html'">إنشاء فريق جديد</button>
       </div>
     `;
@@ -579,7 +579,7 @@ async function initJoinFlow(){
   // فريق صالح ومتاح — نعرض شارة الانضمام ونخفي قسم اختيار الفريق كامل
   joinInviteCode = code;
   document.getElementById("su-heading").textContent = "الانضمام لفريق";
-  document.getElementById("su-subheading").textContent = "عبّي بياناتك الشخصية بس — فريقك محدَّد مسبقًا";
+  document.getElementById("su-subheading").textContent = "أدخل بياناتك الشخصية فقط — فريقك محدَّد مسبقًا";
   document.getElementById("su-join-banner").style.display = "block";
   document.getElementById("su-join-team-name").textContent = `أنت على وشك الانضمام لفريق "${data.team_name}"`;
   document.getElementById("su-join-track-name").textContent = `مسار: ${data.track_name} · ${data.current_count}/${data.max_count} أعضاء`;
@@ -967,7 +967,7 @@ async function loadHomeStats(membership){
       sb.from("prep_attendance").select("id",{count:"exact",head:true}).eq("user_id", currentUser.id),
     ]);
     setStat("mentorship", (bookingRes.count||0) > 0 ? `${bookingRes.count} موعد إرشاد` : "لم تحجزوا بعد");
-    setStat("prep", (prepRes.count||0) > 0 ? `حضرت ${prepRes.count} جلسة` : "لسا ما حضرت");
+    setStat("prep", (prepRes.count||0) > 0 ? `حضرت ${prepRes.count} جلسة` : "لم أحضر بعد");
   } else {
     setStat("mentorship", "كوّن فريقك أولًا");
     setStat("prep", "كوّن فريقك أولًا");
@@ -1116,7 +1116,7 @@ async function renderSurveysTab(){
         <span>${esc(s.title)}</span>
         ${answeredIds.has(s.id)
           ? '<span class="badge-gold" style="font-size:11px;padding:3px 10px;border-radius:12px;background:#e6f7f3;color:var(--teal)">✓ تم الإرسال</span>'
-          : `<button class="btn btn-primary btn-sm" style="width:auto" onclick='openSurveyForm(${JSON.stringify(s)})'>عبّئه الآن</button>`}
+          : `<button class="btn btn-primary btn-sm" style="width:auto" onclick='openSurveyForm(${JSON.stringify(s)})'>تعبئة الاستبيان</button>`}
       </div>
     `).join("")}
   </div>`;
@@ -1392,7 +1392,7 @@ async function renderJudgingCriteriaTab(){
   }
   const { data: criteria } = await sb.from("judging_criteria").select("*").eq("round_id", round.id).order("display_order");
 
-  let html = `<div class="card"><h2>معايير التحكيم</h2><p class="sub">هذي المعايير المعتمدة لتقييم الأفكار — اطّلع عليها قبل يوم الهاكاثون بوقت كافٍ</p>
+  let html = `<div class="card"><h2>معايير التحكيم</h2><p class="sub">هذه المعايير المعتمدة لتقييم الأفكار — اطّلع عليها قبل يوم الهاكاثون بوقت كافٍ</p>
     ${(criteria||[]).map(c => `
       <div class="member-row">
         <span>${esc(c.name_ar)}</span>
@@ -2286,6 +2286,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r86</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r88</div>
 </body>
 </html>
