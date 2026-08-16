@@ -374,6 +374,7 @@ function showToast(msg, isError=false){
 function openModal(html){
   document.getElementById("modal-box").innerHTML = html;
   document.getElementById("modal-overlay").classList.add("active");
+  if(window.lucide) lucide.createIcons();
 }
 function closeModal(){
   document.getElementById("modal-overlay").classList.remove("active");
@@ -3290,9 +3291,10 @@ async function renderCertificates(){
   if(error) box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`;
   else if(!types.length) box.innerHTML = `<div class="empty-state">لا توجد أنواع شهادات بعد</div>`;
   else box.innerHTML = `<table><thead><tr>
-      <th>النوع</th><th>الفئة</th><th>الحد الأدنى للحضور</th><th>يشترط استبيان</th><th>عدد الصادرة</th><th></th>
+      <th>الشعار</th><th>النوع</th><th>الفئة</th><th>الحد الأدنى للحضور</th><th>يشترط استبيان</th><th>عدد الصادرة</th><th></th>
       </tr></thead><tbody>
       ${types.map(c => `<tr>
+        <td><div style="width:34px;height:34px;border-radius:9px;background:color-mix(in srgb, ${c.badge_color||'#C9922A'} 16%, white);display:flex;align-items:center;justify-content:center"><i data-lucide="${c.badge_icon||'award'}" style="width:17px;height:17px;color:${c.badge_color||'#C9922A'}"></i></div></td>
         <td><strong>${esc(c.name_ar)}</strong></td>
         <td>${{participant:"المشاركون",mentor:"المرشدون",judge:"المحكّمون"}[c.role_key] || "عام للجميع"}</td>
         <td>${c.min_attendance_pct}%</td>
@@ -3304,6 +3306,7 @@ async function renderCertificates(){
         </td>
       </tr>`).join("")}
       </tbody></table>`;
+  if(window.lucide) lucide.createIcons();
 
   await loadCertMatrix();
 }
@@ -3346,7 +3349,7 @@ function renderCertMatrixTable(users){
           return `<td>
             <span class="badge badge-green">صادرة</span>
             <div style="margin-top:5px;display:flex;gap:4px">
-              <button class="btn-link" style="font-size:11px" onclick='previewCertificate(${JSON.stringify({name: u.full_name, typeName: c.cert_type_name, text: c.certificate_text, code: c.verification_code, date: c.issued_at})})'>معاينة</button>
+              <button class="btn-link" style="font-size:11px" onclick='previewCertificate(${JSON.stringify({name: u.full_name, typeName: c.cert_type_name, text: c.certificate_text, code: c.verification_code, date: c.issued_at, badgeIcon: c.badge_icon, badgeColor: c.badge_color})})'>معاينة</button>
               <button class="btn-link" style="font-size:11px;color:var(--danger)" onclick='deleteCertificate("${c.certificate_id}", ${JSON.stringify(u.full_name)})'>حذف</button>
             </div>
           </td>`;
@@ -3379,15 +3382,20 @@ async function deleteCertificate(certId, userName){
   showToast("تم حذف الشهادة");
   loadCertMatrix();
 }
-function previewCertificate({name, typeName, text, code, date}){
+function previewCertificate({name, typeName, text, code, date, badgeIcon, badgeColor}){
   const bodyText = (text || "نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ.")
     .replace(/\{\{name\}\}/g, name)
     .replace(/\{\{type\}\}/g, typeName)
     .replace(/\{\{date\}\}/g, date ? fmtDate(date) : "")
     .replace(/\{\{code\}\}/g, code || "");
+  const bColor = badgeColor || "#C9922A";
+  const bIcon = badgeIcon || "award";
 
   openModal(`
-    <div style="border:3px double var(--gold); border-radius:12px; padding:30px 24px; text-align:center; background:linear-gradient(180deg,#fdfdfb,#f7f5ef)">
+    <div style="border:3px double var(--gold); border-radius:12px; padding:30px 24px; text-align:center; background:linear-gradient(180deg,#fdfdfb,#f7f5ef); position:relative">
+      <div style="position:absolute; top:16px; left:16px; width:44px; height:44px; border-radius:50%; background:color-mix(in srgb, ${bColor} 16%, white); border:2px solid ${bColor}; display:flex; align-items:center; justify-content:center">
+        <i data-lucide="${bIcon}" style="width:20px;height:20px;color:${bColor}"></i>
+      </div>
       <div style="display:flex; justify-content:center; align-items:center; gap:14px; margin-bottom:18px">
         <img src="data:image/png;base64,${QASSIM_LOGO_B64}" style="height:26px">
         <div style="width:1px;height:20px;background:var(--border)"></div>
@@ -3407,7 +3415,8 @@ function previewCertificate({name, typeName, text, code, date}){
 }
 function openCertTypeModal(c=null){
   const isEdit = !!c;
-  c = c || {key:"",name_ar:"",min_attendance_pct:50,requires_survey:false,certificate_text:"",role_key:"participant"};
+  c = c || {key:"",name_ar:"",min_attendance_pct:50,requires_survey:false,certificate_text:"",role_key:"participant",badge_icon:"award",badge_color:"#C9922A"};
+  const BADGE_ICONS = ["award","medal","trophy","star","ribbon","shield-check","badge-check","crown"];
   openModal(`
     <h3>${isEdit ? "تعديل نوع شهادة" : "إضافة نوع شهادة"}</h3>
     <div class="field"><label>المفتاح (بالإنجليزي، بدون مسافات)</label><input id="f-cert-key" value="${esc(c.key)}" ${isEdit?'disabled style="opacity:.6"':''}></div>
@@ -3424,6 +3433,23 @@ function openCertTypeModal(c=null){
     <div class="field"><label>الحد الأدنى لنسبة الحضور (%)</label><input type="number" id="f-cert-attendance" value="${c.min_attendance_pct}"></div>
     <div class="field"><label><input type="checkbox" id="f-cert-survey" ${c.requires_survey?"checked":""}> يشترط تعبئة استبيان</label></div>
     <div class="field"><label><input type="checkbox" id="f-cert-active" ${c.is_active!==false?"checked":""}> نشط (يظهر ويمكن إصداره)</label></div>
+
+    <div class="field">
+      <label>الشعار المميّز</label>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;max-width:220px" id="badge-icon-picker">
+        ${BADGE_ICONS.map(icon => `
+          <button type="button" onclick="selectBadgeIcon('${icon}')" data-icon="${icon}"
+            class="badge-icon-option ${c.badge_icon===icon?'selected':''}"
+            style="width:44px;height:44px;border-radius:10px;border:2px solid ${c.badge_icon===icon?'var(--navy)':'var(--border)'};background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center">
+            <i data-lucide="${icon}" style="width:20px;height:20px;color:var(--gold)"></i>
+          </button>
+        `).join("")}
+      </div>
+      <input type="hidden" id="f-cert-badge-icon" value="${c.badge_icon||'award'}">
+      <label style="font-size:12px">لون الشعار</label>
+      <input type="color" id="f-cert-badge-color" value="${c.badge_color||'#C9922A'}" style="width:60px;height:36px;padding:2px;cursor:pointer">
+    </div>
+
     <div class="field"><label>نص الشهادة</label>
       <textarea id="f-cert-text" rows="4" placeholder="نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ بتاريخ {{date}}">${esc(c.certificate_text||"")}</textarea>
       <p class="hint" style="margin-top:4px">استخدم {{name}} للاسم، {{type}} لنوع الشهادة، {{date}} للتاريخ، {{code}} لرمز التحقق</p>
@@ -3449,6 +3475,14 @@ function applyCertTextSuggestion(kind){
   };
   document.getElementById("f-cert-text").value = suggestions[kind] || "";
 }
+function selectBadgeIcon(icon){
+  document.getElementById("f-cert-badge-icon").value = icon;
+  document.querySelectorAll(".badge-icon-option").forEach(btn => {
+    const selected = btn.dataset.icon === icon;
+    btn.classList.toggle("selected", selected);
+    btn.style.borderColor = selected ? "var(--navy)" : "var(--border)";
+  });
+}
 async function saveCertType(id){
   const key = document.getElementById("f-cert-key").value.trim();
   const name_ar = document.getElementById("f-cert-name").value.trim();
@@ -3457,9 +3491,11 @@ async function saveCertType(id){
   const requires_survey = document.getElementById("f-cert-survey").checked;
   const is_active = document.getElementById("f-cert-active").checked;
   const certificate_text = document.getElementById("f-cert-text").value.trim();
+  const badge_icon = document.getElementById("f-cert-badge-icon").value || "award";
+  const badge_color = document.getElementById("f-cert-badge-color").value || "#C9922A";
   if(!key || !name_ar){ showToast("المفتاح والاسم مطلوبان", true); return; }
 
-  const payload = { name_ar, role_key, min_attendance_pct, requires_survey, is_active, certificate_text };
+  const payload = { name_ar, role_key, min_attendance_pct, requires_survey, is_active, certificate_text, badge_icon, badge_color };
   if(!id) payload.key = key;
   const q = id ? sb.from("certificate_types").update(payload).eq("id", id) : sb.from("certificate_types").insert({...payload, key});
   const { error } = await q;
@@ -3784,7 +3820,7 @@ async function loadReportImages(){
       const { data: urlData } = sb.storage.from("report-images").getPublicUrl(f.name);
       return `<div style="position:relative">
         <img src="${urlData.publicUrl}" style="width:100%;height:110px;object-fit:cover;border-radius:10px;border:1px solid var(--border)">
-        <button class="btn btn-danger btn-sm" style="position:absolute;top:6px;left:6px;padding:2px 8px" onclick="deleteReportImage('${f.name}')">حذف</button>
+        <button class="btn btn-danger btn-sm" style="position:absolute;top:6px;left:6px;padding:2px 8px" onclick='deleteReportImage(${JSON.stringify(f.name)})'>حذف</button>
       </div>`;
     }).join("")}
   </div>`;
@@ -4228,6 +4264,90 @@ async function renderSystemCheck(){
     if(error) throw error;
     return true;
   });
+
+  // ============================================================
+  // القسم الثاني: فحص الواجهة الأمامية (أزرار، أيقونات، تبويبات، كفاءة)
+  // ============================================================
+  main.insertAdjacentHTML("beforeend", `
+    <div class="card" style="margin-top:16px">
+      <h3 style="margin:0 0 4px">فحص الواجهة الأمامية</h3>
+      <p class="hint" style="margin-bottom:14px">يفحص كل الأزرار والأيقونات وروابط التبويبات بكامل الكود — بنفس منهجية الفحص اليدوي</p>
+      <div id="frontend-check-results">جاري تحميل مصدر الصفحة...</div>
+    </div>
+  `);
+  await runFrontendCheck();
+}
+
+async function runFrontendCheck(){
+  const box = document.getElementById("frontend-check-results");
+  const fResults = [];
+  const t0 = performance.now();
+
+  let sourceHtml = "";
+  try {
+    const res = await fetch(window.location.href, { cache: "no-store" });
+    sourceHtml = await res.text();
+  } catch(err){
+    box.innerHTML = `<p class="hint" style="color:var(--danger)">تعذّر تحميل مصدر الصفحة لفحصها: ${esc(err.message)}</p>`;
+    return;
+  }
+
+  // 1) روابط التبويبات بالقائمة الجانبية — كل data-page لازم له دالة عرض مسجَّلة
+  const navPages = [...document.querySelectorAll("#nav-menu a[data-page]")].map(a => a.dataset.page);
+  const registryMatch = sourceHtml.match(/const renderers = \{([\s\S]*?)\};/);
+  const registeredPages = registryMatch ? [...registryMatch[1].matchAll(/(\w+):\s*render\w+/g)].map(m => m[1]) : [];
+  const missingPages = navPages.filter(p => !registeredPages.includes(p));
+  fResults.push({
+    label: `روابط التبويبات (${navPages.length} رابط)`,
+    ok: missingPages.length === 0,
+    detail: missingPages.length ? `تبويبات بلا دالة عرض مسجَّلة: ${missingPages.join(", ")}` : `كل التبويبات مرتبطة بدالة عرض صحيحة`
+  });
+
+  // 2) دوال الأزرار (onclick) — كل اسم دالة مستخدَم لازم يكون معرَّف فعليًا بالكود
+  const definedFns = new Set([...sourceHtml.matchAll(/(?:async\s+)?function\s+(\w+)\s*\(/g)].map(m => m[1]));
+  const calledFns = new Set([...sourceHtml.matchAll(/on(?:click|change|input|focus|submit)=['"]([a-zA-Z_][a-zA-Z0-9_]*)\(/g)].map(m => m[1]));
+  const missingFns = [...calledFns].filter(f => !definedFns.has(f) && typeof window[f] !== "function" && !["if","this","event"].includes(f));
+  fResults.push({
+    label: `دوال الأزرار والتفاعلات (${calledFns.size} دالة مستخدَمة)`,
+    ok: missingFns.length === 0,
+    detail: missingFns.length ? `دوال مستخدَمة بزر لكن غير معرَّفة: ${missingFns.join(", ")}` : `كل الأزرار مرتبطة بدوال موجودة فعليًا`
+  });
+
+  // 3) الأيقونات — كل data-lucide المعروضة حاليًا بالصفحة لازم تتحوّل SVG فعليًا
+  const iconsBefore = document.querySelectorAll("[data-lucide]").length;
+  if(window.lucide) lucide.createIcons();
+  const iconsRemaining = document.querySelectorAll("[data-lucide]").length;
+  fResults.push({
+    label: `الأيقونات بالصفحة الحالية (${iconsBefore} أيقونة)`,
+    ok: iconsRemaining === 0,
+    detail: iconsRemaining > 0 ? `${iconsRemaining} أيقونة ما انعرضت (اسم غير صحيح أو مكتبة ما حمّلت)` : `كل الأيقونات ظاهرة بنجاح`
+  });
+
+  // 4) تعارض تنصيص شائع (سبب رئيسي لتعطّل أزرار بصمت)
+  const quoteConflicts = [...sourceHtml.matchAll(/onclick="[^"]*JSON\.stringify/g)].length;
+  fResults.push({
+    label: "تعارض علامات تنصيص بالأزرار",
+    ok: quoteConflicts === 0,
+    detail: quoteConflicts > 0 ? `${quoteConflicts} زر معرَّض لخطر التعطّل بسبب تعارض تنصيص` : "لا يوجد تعارض تنصيص"
+  });
+
+  // 5) كفاءة الأداء — زمن تحميل المصدر وفحصه بالكامل
+  const totalMs = Math.round(performance.now() - t0);
+  const sourceSizeKb = Math.round(sourceHtml.length / 1024);
+  fResults.push({
+    label: "كفاءة الفحص",
+    ok: totalMs < 3000,
+    detail: `حجم الكود: ${sourceSizeKb} كيلوبايت — زمن الفحص الكامل: ${totalMs} ms`
+  });
+
+  box.innerHTML = `<table><thead><tr><th>الفحص</th><th>النتيجة</th><th>تفاصيل</th></tr></thead><tbody>
+    ${fResults.map(c => `<tr>
+      <td>${esc(c.label)}</td>
+      <td>${c.ok ? '<span class="badge badge-green">✓ سليم</span>' : '<span class="badge badge-red">✗ يحتاج مراجعة</span>'}</td>
+      <td style="color:var(--muted);font-size:12px">${esc(c.detail||"")}</td>
+    </tr>`).join("")}
+  </tbody></table>
+  <p class="hint" style="margin-top:14px">${fResults.filter(c=>!c.ok).length ? `⚠ ${fResults.filter(c=>!c.ok).length} فحص يحتاج مراجعة` : "✅ الواجهة الأمامية سليمة بالكامل"}</p>`;
 }
 
 async function renderUsers(){
@@ -4893,6 +5013,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r93</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r98</div>
 </body>
 </html>
