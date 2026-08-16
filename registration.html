@@ -1471,14 +1471,33 @@ async function renderJudgingCriteriaTab(){
       .eq("round_id", round.id);
 
     if(myScores && myScores.length){
+      // تجميع الدرجات حسب المعيار (معدّل لو أكثر من محكّم قيّم نفس المعيار)
+      const byCriteria = {};
+      myScores.forEach(s => {
+        const key = s.judging_criteria?.name_ar || "";
+        if(!byCriteria[key]) byCriteria[key] = { scores: [], max: s.judging_criteria?.max_score };
+        byCriteria[key].scores.push(s.score);
+      });
+      // كل ملاحظات المحكّمين (مو بس أول وحدة)
+      const allComments = [...new Set(myScores.map(s => s.comments).filter(Boolean))];
+
       html += `<div class="card"><h2>نتيجتك والتغذية الراجعة</h2>
-        ${myScores.map(s => `
+        <p class="hint" style="margin-bottom:10px">المعدّل المجمَّع من كل المحكّمين اللي قيّموا فريقكم بهذه الجولة</p>
+        ${Object.entries(byCriteria).map(([name, data]) => {
+          const avg = data.scores.reduce((a,b)=>a+b,0) / data.scores.length;
+          return `
           <div class="member-row">
-            <span>${esc(s.judging_criteria?.name_ar||"")}</span>
-            <span class="hint">${s.score} / ${s.judging_criteria?.max_score}</span>
+            <span>${esc(name)}</span>
+            <span class="hint">${avg.toFixed(1)} / ${data.max}${data.scores.length > 1 ? ` (معدّل ${data.scores.length} محكّمين)` : ""}</span>
           </div>
-        `).join("")}
-        ${myScores[0]?.comments ? `<p style="margin-top:12px;font-size:13.5px;background:#f8f9fb;padding:12px;border-radius:9px">💬 ${esc(myScores[0].comments)}</p>` : ""}
+        `;
+        }).join("")}
+        ${allComments.length ? `
+          <div style="margin-top:14px">
+            <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">ملاحظات المحكّمين (${allComments.length})</div>
+            ${allComments.map(c => `<p style="font-size:13.5px;background:#f8f9fb;padding:12px;border-radius:9px;margin-bottom:8px">💬 ${esc(c)}</p>`).join("")}
+          </div>
+        ` : ""}
       </div>`;
     }
   }
@@ -2428,6 +2447,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r96</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r100</div>
 </body>
 </html>
