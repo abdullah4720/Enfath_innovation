@@ -330,7 +330,7 @@
         <a data-page="mentorApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمرشد <span id="badge-mentorApps" class="nav-badge" style="display:none"></span></a>
         <a data-page="judgeApps"><i data-lucide="user-plus"></i> طلبات الانضمام كمحكّم <span id="badge-judgeApps" class="nav-badge" style="display:none"></span></a>
         <a data-page="systemCheck"><i data-lucide="stethoscope"></i> فحص النظام</a>
-        <a data-page="finalReport"><i data-lucide="file-bar-chart"></i> التقرير النهائي</a>
+        <a data-page="finalReport"><i data-lucide="file-text"></i> التقرير النهائي</a>
         <a data-page="activity"><i data-lucide="history"></i> سجل النشاط</a>
       </div>
     </nav>
@@ -4313,15 +4313,23 @@ async function runFrontendCheck(){
     detail: missingFns.length ? `دوال مستخدَمة بزر لكن غير معرَّفة: ${missingFns.join(", ")}` : `كل الأزرار مرتبطة بدوال موجودة فعليًا`
   });
 
-  // 3) الأيقونات — كل data-lucide المعروضة حاليًا بالصفحة لازم تتحوّل SVG فعليًا
-  const iconsBefore = document.querySelectorAll("[data-lucide]").length;
-  if(window.lucide) lucide.createIcons();
-  const iconsRemaining = document.querySelectorAll("[data-lucide]").length;
-  fResults.push({
-    label: `الأيقونات بالصفحة الحالية (${iconsBefore} أيقونة)`,
-    ok: iconsRemaining === 0,
-    detail: iconsRemaining > 0 ? `${iconsRemaining} أيقونة ما انعرضت (اسم غير صحيح أو مكتبة ما حمّلت)` : `كل الأيقونات ظاهرة بنجاح`
-  });
+  // 3) الأيقونات — أول نتحقق هل المكتبة نفسها محمّلة أصلًا
+  if(!window.lucide){
+    fResults.push({
+      label: "مكتبة الأيقونات (Lucide)",
+      ok: false,
+      detail: "المكتبة لم تُحمَّل من الشبكة بعد — أعد تحميل الصفحة وجرّب الفحص مرة أخرى. لو تكرر، تحقق من اتصال الإنترنت أو حجب إعلانات يمنع unpkg.com"
+    });
+  } else {
+    const iconsBefore = document.querySelectorAll("[data-lucide]").length;
+    lucide.createIcons();
+    const iconsRemaining = document.querySelectorAll("[data-lucide]").length;
+    fResults.push({
+      label: `الأيقونات بالصفحة الحالية (${iconsBefore} أيقونة)`,
+      ok: iconsRemaining === 0,
+      detail: iconsRemaining > 0 ? `${iconsRemaining} أيقونة باسم غير موجود بمكتبة Lucide (تحقق من الأسماء يدويًا)` : `كل الأيقونات ظاهرة بنجاح`
+    });
+  }
 
   // 4) تعارض تنصيص شائع (سبب رئيسي لتعطّل أزرار بصمت)
   const quoteConflicts = [...sourceHtml.matchAll(/onclick="[^"]*JSON\.stringify/g)].length;
@@ -5013,6 +5021,6 @@ async function renderActivityLog(){
   if(window.lucide) lucide.createIcons();
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r98</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r99</div>
 </body>
 </html>
