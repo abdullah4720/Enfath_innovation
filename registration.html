@@ -160,6 +160,39 @@
   .member-row:last-child{border-bottom:none;}
   .leader-tag{font-size:11px; background:var(--purple); color:#fff; padding:2px 9px; border-radius:12px; margin-right:6px;}
 
+  /* ---------------- تبويب التحضير: بطاقة الجلسة القادمة + الخط الزمني ---------------- */
+  .next-session{
+    background:linear-gradient(135deg,var(--navy),var(--navy-light)); border-radius:18px; padding:24px; color:#fff;
+    position:relative; overflow:hidden;
+  }
+  .next-session::before{content:"";position:absolute;top:-40px;left:-40px;width:140px;height:140px;background:rgba(201,146,42,.15);border-radius:50%;}
+  .next-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:14px;position:relative}
+  .next-session h2{margin:0 0 6px;font-size:18px;position:relative;color:#fff}
+  .next-session .meta{color:#c8d3e8;font-size:12.5px;margin-bottom:16px;position:relative}
+  .qr-toggle-btn{
+    background:var(--gold);color:#1A1300;border:none;border-radius:10px;padding:11px 20px;font-weight:700;
+    font-family:inherit;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;position:relative;
+  }
+  .qr-inline-box{
+    background:#fff;border-radius:14px;padding:20px;margin-top:16px;text-align:center;display:none;position:relative;
+  }
+  .qr-inline-box.open{display:block;}
+
+  .timeline{position:relative;padding-right:28px;margin-top:12px;}
+  .timeline::before{content:"";position:absolute;right:9px;top:6px;bottom:6px;width:2px;background:var(--border);}
+  .tl-item{position:relative;padding-bottom:22px;}
+  .tl-item:last-child{padding-bottom:0;}
+  .tl-dot{position:absolute;right:-28px;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;}
+  .tl-dot.done{background:var(--teal);border-color:var(--teal);}
+  .tl-dot.done i{width:11px;height:11px;color:#fff;}
+  .tl-title{font-size:13.5px;font-weight:700;color:var(--ink);}
+  .tl-title.past{color:var(--muted);}
+  .tl-meta{font-size:11.5px;color:var(--muted);margin-top:2px;}
+  .tl-status{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:4px;display:inline-block;}
+  .tl-status.done{background:#e6f7f3;color:var(--teal);}
+  .tl-status.upcoming{background:var(--border-light);color:var(--muted);}
+  .tl-status.missed{background:#fdf5f4;color:var(--danger);}
+
   .invite-box{background:#f2fbf9; border:1px dashed var(--teal); border-radius:12px; padding:16px; text-align:center; margin-bottom:20px;}
   .invite-code{font-size:22px; font-weight:800; letter-spacing:3px; color:var(--navy); margin:8px 0;}
 
@@ -1446,39 +1479,75 @@ async function renderPrepTab(membership){
   const relevant = (sessions||[]).filter(s => !s.track_id || s.track_id === trackId);
 
   if(!relevant.length){
-    body.innerHTML = `<div class="card"><h2>جلسات التحضير</h2><p class="sub">لا توجد جلسات مجدولة حاليًا لمسارك، تابع هذه الصفحة لاحقًا</p></div>` + qrCardHtml();
+    body.innerHTML = `<div class="card" style="text-align:center;padding:36px 20px">
+      <div style="width:52px;height:52px;border-radius:50%;background:var(--border-light);display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+        <i data-lucide="calendar-clock" style="width:24px;height:24px;color:var(--muted)"></i>
+      </div>
+      <h2 style="margin-bottom:4px">لا توجد جلسات مجدولة بعد</h2>
+      <p class="sub">تابع هذه الصفحة — جلسات التحضير الخاصة بمسارك ستظهر هنا فور إضافتها</p>
+    </div>` + qrCardHtml();
     renderMyQr();
+    if(window.lucide) lucide.createIcons();
     return;
   }
 
-  body.innerHTML = qrCardHtml() + `<div class="card"><h2>جلسات التحضير</h2><p class="sub">الورش والتدريبات المتاحة قبل يوم الهاكاثون</p>
-    ${relevant.map(s => `
-      <div class="member-row" style="align-items:flex-start">
-        <div>
-          <strong>${esc(s.title)}</strong><br>
-          <span class="hint">${fmtDate(s.session_date)} · ${esc(s.location || (s.is_online ? "عبر الإنترنت" : ""))}</span>
-        </div>
-        <span class="status-badge ${attendedIds.has(s.id) ? 'status-confirmed' : 'status-pending'}">
-          ${attendedIds.has(s.id) ? "تم الحضور" : "لم يُسجَّل حضور"}
-        </span>
-      </div>
-    `).join("")}
+  const now = new Date();
+  const nextSession = relevant.find(s => new Date(s.session_date) >= now);
+
+  let html = nextSession ? nextSessionHeroHtml(nextSession) : qrCardHtml();
+
+  html += `<div class="card" style="margin-top:16px">
+    <h3 style="margin:0 0 4px;font-size:15px">مسار جلساتك</h3>
+    <p class="hint" style="margin-bottom:6px">تتبّع حضورك لكل الجلسات بنظرة واحدة</p>
+    <div class="timeline">
+      ${relevant.map(s => {
+        const isPast = new Date(s.session_date) < now;
+        const attended = attendedIds.has(s.id);
+        return `
+        <div class="tl-item">
+          <div class="tl-dot ${attended ? 'done' : ''}">${attended ? '<i data-lucide="check"></i>' : ''}</div>
+          <div class="tl-title ${isPast ? 'past' : ''}">${esc(s.title)}</div>
+          <div class="tl-meta">${fmtDate(s.session_date)}${s.location || s.is_online ? ' · ' + esc(s.location || 'عبر الإنترنت') : ''}</div>
+          <span class="tl-status ${attended ? 'done' : (isPast ? 'missed' : 'upcoming')}">
+            ${attended ? '✓ تم الحضور' : (isPast ? 'لم يُسجَّل حضور' : 'قادمة')}
+          </span>
+        </div>`;
+      }).join("")}
+    </div>
   </div>`;
+
+  body.innerHTML = html;
   renderMyQr();
+  const toggleBtn = document.getElementById("qr-toggle-btn");
+  if(toggleBtn) toggleBtn.onclick = () => document.getElementById("qr-inline-box").classList.toggle("open");
+  if(window.lucide) lucide.createIcons();
+}
+function nextSessionHeroHtml(s){
+  return `<div class="next-session">
+    <span class="next-badge">⏰ الجلسة القادمة</span>
+    <h2>${esc(s.title)}</h2>
+    <div class="meta"><i data-lucide="calendar" style="width:13px;height:13px;vertical-align:-2px;display:inline-block"></i> ${fmtDate(s.session_date)}${s.location || s.is_online ? ' · <i data-lucide="map-pin" style="width:13px;height:13px;vertical-align:-2px;display:inline-block"></i> ' + esc(s.location || 'عبر الإنترنت') : ''}</div>
+    ${s.description ? `<p style="font-size:12.5px;color:#c8d3e8;line-height:1.7;position:relative;margin:0 0 16px">${esc(s.description)}</p>` : ""}
+    <button class="qr-toggle-btn" id="qr-toggle-btn"><i data-lucide="qr-code" style="width:15px;height:15px"></i> عرض رمز الحضور</button>
+    <div class="qr-inline-box" id="qr-inline-box">
+      <div id="my-qr-code" style="display:flex; justify-content:center; margin-bottom:10px"></div>
+      <p style="font-size:11.5px;color:var(--muted);margin:0">أظهر هذا الرمز لفريق التنسيق عند الدخول لتسجيل حضورك تلقائيًا</p>
+    </div>
+  </div>`;
 }
 function qrCardHtml(){
   return `<div class="card">
     <div style="text-align:center">
       <h2 style="margin-bottom:4px">رمز حضورك الشخصي</h2>
-      <p class="sub" style="margin-bottom:16px">هذا الرمز يعرّفك أنت بالذات — يُستخدم لتسجيل حضورك الفعلي بسرعة، بدون توقيع ورقي</p>
+      <p class="sub" style="margin-bottom:16px">هذا الرمز يميّزك شخصيًا، ويُستخدم لتسجيل حضورك الفعلي بسرعة، دون الحاجة لتوقيع ورقي</p>
       <div id="my-qr-code" style="display:flex; justify-content:center; margin:14px 0"></div>
     </div>
     <div style="background:var(--bg); border-radius:12px; padding:14px 16px; margin-top:8px">
-      <div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px">كيف يشتغل؟</div>
+      <div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px">آلية العمل</div>
       <div style="display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:var(--muted)">
-        <div>1️⃣ لما توصل أي جلسة تحضير أو فعالية بالهاكاثون، تفتح هذا الرمز من جوالك</div>
-        <div>2️⃣ فريق التنسيق يمسحه بجهازهم عند الباب</div>
-        <div>3️⃣ حضورك يتسجّل فورًا بالنظام — تلقائيًا، بدون ما تكتب اسمك بورقة</div>
+        <div>1️⃣ عند حضورك أي جلسة تحضير أو فعالية بالهاكاثون، افتح هذا الرمز من جوالك</div>
+        <div>2️⃣ يقوم فريق التنسيق بمسحه عبر جهازهم عند الباب</div>
+        <div>3️⃣ يُسجَّل حضورك فورًا في النظام تلقائيًا، دون الحاجة لكتابة اسمك على ورقة</div>
       </div>
     </div>
   </div>`;
@@ -2286,6 +2355,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r88</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r89</div>
 </body>
 </html>
