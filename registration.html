@@ -157,6 +157,12 @@
     width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
     font-size:14px; font-weight:700; color:#fff; flex-shrink:0;
   }
+  .rating-num-btn{
+    width:38px; height:38px; border-radius:10px; border:1.5px solid var(--border); background:#fff;
+    font-family:inherit; font-size:14px; font-weight:700; color:var(--muted); cursor:pointer; transition:.15s;
+  }
+  .rating-num-btn:hover{border-color:var(--gold);}
+  .rating-num-btn.selected{background:var(--navy); border-color:var(--navy); color:#fff;}
   .member-row:last-child{border-bottom:none;}
   .leader-tag{font-size:11px; background:var(--purple); color:#fff; padding:2px 9px; border-radius:12px; margin-right:6px;}
 
@@ -425,6 +431,15 @@
           🔔<span id="notif-badge" style="display:none; position:absolute; top:-4px; left:-6px; background:var(--danger); color:#fff; border-radius:50%; width:16px; height:16px; font-size:9.5px; align-items:center; justify-content:center"></span>
         </button>
         <div id="notif-panel" style="display:none; position:absolute; left:0; top:32px; width:300px; max-height:360px; overflow-y:auto; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 32px rgba(11,31,58,.15); z-index:50;"></div>
+      </div>
+      <div style="position:relative">
+        <button onclick="toggleAccountMenu()" title="حسابي" style="background:none;border:1px solid var(--border);border-radius:8px;width:32px;height:32px;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center">
+          <i data-lucide="circle-user" style="width:16px;height:16px"></i>
+        </button>
+        <div id="account-menu" style="display:none; position:absolute; left:0; top:38px; width:190px; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:0 12px 32px rgba(11,31,58,.15); z-index:50; padding:6px; overflow:hidden">
+          <button onclick="openAccountTab('profile')" style="width:100%;text-align:right;padding:9px 12px;background:none;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:8px"><i data-lucide="user-round" style="width:14px;height:14px;color:var(--muted)"></i> ملفي الشخصي</button>
+          <button onclick="openAccountTab('surveys')" style="width:100%;text-align:right;padding:9px 12px;background:none;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;color:var(--ink);display:flex;align-items:center;gap:8px"><i data-lucide="clipboard-list" style="width:14px;height:14px;color:var(--muted)"></i> الاستبيانات</button>
+        </div>
       </div>
       <button id="theme-toggle" onclick="toggleTheme()" title="تبديل الوضع الداكن/الفاتح" style="background:none;border:1px solid var(--border);border-radius:8px;width:32px;height:32px;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center"><i data-lucide="moon" style="width:15px;height:15px"></i></button>
       <button class="btn-link" onclick="handleLogout()">تسجيل الخروج</button>
@@ -880,10 +895,24 @@ function toggleNotifPanel(){
   const panel = document.getElementById("notif-panel");
   panel.style.display = panel.style.display === "none" ? "block" : "none";
 }
+function toggleAccountMenu(){
+  const menu = document.getElementById("account-menu");
+  menu.style.display = menu.style.display === "none" ? "block" : "none";
+}
+function openAccountTab(tab){
+  document.getElementById("account-menu").style.display = "none";
+  dashSection = "account";
+  dashTab = tab;
+  renderDashboard();
+}
 document.addEventListener("click", (e) => {
   const panel = document.getElementById("notif-panel");
   if(panel && !e.target.closest("#notif-panel") && !e.target.closest('[onclick="toggleNotifPanel()"]')){
     panel.style.display = "none";
+  }
+  const accMenu = document.getElementById("account-menu");
+  if(accMenu && !e.target.closest("#account-menu") && !e.target.closest('[onclick="toggleAccountMenu()"]')){
+    accMenu.style.display = "none";
   }
 });
 async function markNotifRead(id){
@@ -965,7 +994,7 @@ async function renderDashHome(membership){
 
   box.innerHTML = `
     <div class="home-grid">
-      ${Object.entries(DASH_SECTIONS).map(([key, s]) => `
+      ${Object.entries(DASH_SECTIONS).filter(([key]) => key !== 'account').map(([key, s]) => `
         <button class="home-card" data-section="${key}" style="--accent:${s.color}">
           <div class="home-card-icon"><i data-lucide="${s.icon}"></i></div>
           <div class="home-card-label">${s.label}</div>
@@ -1636,8 +1665,8 @@ async function renderMentorshipTab(membership){
   const unratedCompleted = cachedTeamBookings.filter(b => b.status === "completed" && !ratedBookingIds.has(b.id));
   if(unratedCompleted.length){
     body.innerHTML = bookingHtml + `<div class="card" style="background:#fef8ed;border-color:#f0d9a8">
-      <h2 style="margin-bottom:6px">⏸ قيّموا جلستكم الأخيرة أولًا</h2>
-      <p class="sub" style="margin-bottom:0">لازم تقيّموا جلسة الإرشاد المكتملة أعلاه قبل ما تقدروا تحجزوا موعد جديد — يساعدنا نحسّن جودة الإرشاد المقدَّم</p>
+      <h2 style="margin-bottom:6px">⏸ يرجى تقييم جلستكم الأخيرة أولًا</h2>
+      <p class="sub" style="margin-bottom:0">يجب تقييم جلسة الإرشاد المكتملة أعلاه قبل التمكّن من حجز موعد جديد — يساعدنا ذلك على تحسين جودة الإرشاد المقدَّم</p>
     </div>`;
     return;
   }
@@ -1790,19 +1819,58 @@ async function markMentorNoShow(bookingId){
 }
 function renderRatingPrompt(bookingId, mentorId, teamId){
   return `
-    <div style="margin-top:8px;padding:10px;background:#f8f9fb;border-radius:9px">
-      <p class="hint" style="margin:0 0 6px">قيّموا هذه الجلسة</p>
-      <div id="stars-${bookingId}" style="display:flex;gap:4px;font-size:20px;cursor:pointer">
-        ${[1,2,3,4,5].map(n => `<span onclick="submitMentorRating('${bookingId}','${mentorId}','${teamId}',${n})" style="opacity:.35">⭐</span>`).join("")}
+    <div style="margin-top:10px;padding:16px;background:var(--bg);border-radius:12px;border:1px solid var(--border)">
+      <p style="margin:0 0 12px;font-weight:700;font-size:13px;color:var(--ink)">يرجى تقييم هذه الجلسة</p>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12.5px;color:var(--muted);display:block;margin-bottom:6px">ما مدى استفادتكم من الجلسة؟</label>
+        <div id="benefit-scale-${bookingId}" style="display:flex;gap:6px">
+          ${[1,2,3,4,5].map(n => `<button type="button" onclick="selectRatingValue('${bookingId}','benefit',${n})" data-val="${n}" class="rating-num-btn">${n}</button>`).join("")}
+        </div>
       </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12.5px;color:var(--muted);display:block;margin-bottom:6px">ما مدى ملاءمة تخصص المرشد لاحتياج فريقكم؟</label>
+        <div id="fit-scale-${bookingId}" style="display:flex;gap:6px">
+          ${[1,2,3,4,5].map(n => `<button type="button" onclick="selectRatingValue('${bookingId}','fit',${n})" data-val="${n}" class="rating-num-btn">${n}</button>`).join("")}
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:12.5px;color:var(--muted);display:block;margin-bottom:6px">ملاحظات إضافية (اختياري)</label>
+        <textarea id="comment-${bookingId}" rows="2" placeholder="أي ملاحظة تساعدنا على تحسين تجربة الإرشاد..." style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:9px;font-family:inherit;font-size:13px;resize:vertical"></textarea>
+      </div>
+
+      <div id="rating-alert-${bookingId}" style="font-size:12px;color:var(--danger);margin-bottom:8px;display:none"></div>
+      <button type="button" class="btn btn-primary" style="width:auto;padding:10px 22px" onclick="submitMentorRating('${bookingId}','${mentorId}','${teamId}')">إرسال التقييم</button>
     </div>
   `;
 }
-async function submitMentorRating(bookingId, mentorId, teamId, rating){
-  const { error } = await sb.from("mentor_ratings").insert({
-    booking_id: bookingId, mentor_user_id: mentorId, team_id: teamId, rating
+const ratingSelections = {};
+function selectRatingValue(bookingId, criterion, value){
+  if(!ratingSelections[bookingId]) ratingSelections[bookingId] = {};
+  ratingSelections[bookingId][criterion] = value;
+  const container = document.getElementById(`${criterion === 'benefit' ? 'benefit' : 'fit'}-scale-${bookingId}`);
+  container.querySelectorAll(".rating-num-btn").forEach(btn => {
+    btn.classList.toggle("selected", parseInt(btn.dataset.val) === value);
   });
-  if(error){ alert("تعذّر إرسال التقييم: " + error.message); return; }
+}
+async function submitMentorRating(bookingId, mentorId, teamId){
+  const sel = ratingSelections[bookingId] || {};
+  const alertBox = document.getElementById(`rating-alert-${bookingId}`);
+  if(!sel.benefit || !sel.fit){
+    alertBox.textContent = "يرجى تقييم المعيارين قبل الإرسال";
+    alertBox.style.display = "block";
+    return;
+  }
+  const comment = document.getElementById(`comment-${bookingId}`).value.trim();
+
+  const { error } = await sb.from("mentor_ratings").insert({
+    booking_id: bookingId, mentor_user_id: mentorId, team_id: teamId,
+    rating: sel.benefit, specialty_fit_rating: sel.fit, comment: comment || null
+  });
+  if(error){ alertBox.textContent = "تعذّر إرسال التقييم: " + error.message; alertBox.style.display = "block"; return; }
+  delete ratingSelections[bookingId];
   renderMentorshipTab(cachedMembership);
 }
 async function bookFollowUpWithMentor(mentorId, mentorName){
@@ -1851,7 +1919,7 @@ async function renderCertsTab(){
           ${issued ? `<span class="meta eligible-yes">صادرة بتاريخ ${fmtDate(issued.issued_at)} · رمز التحقق: ${esc(issued.verification_code)}</span>` : eligibilityHtml}
         </div>
         ${issued
-          ? `<button class="btn btn-primary" style="width:auto;padding:9px 16px" onclick='openCertificatePreview(${JSON.stringify({name: myFullName, typeName: t.name_ar, text: t.certificate_text, code: issued.verification_code, date: issued.issued_at})})'>عرض الشهادة</button>`
+          ? `<button class="btn btn-primary" style="width:auto;padding:9px 16px" onclick='openCertificatePreview(${JSON.stringify({name: myFullName, typeName: t.name_ar, text: t.certificate_text, code: issued.verification_code, date: issued.issued_at, badgeIcon: t.badge_icon, badgeColor: t.badge_color})})'>عرض الشهادة</button>`
           : `<button class="btn btn-outline" style="width:auto;padding:9px 16px" onclick="issueCertificate('${t.key}')">إصدار الشهادة</button>`
         }
       </div>
@@ -1862,12 +1930,14 @@ async function renderCertsTab(){
 }
 
 /* ---------------- معاينة الشهادة الكاملة + تحميل PDF ---------------- */
-function openCertificatePreview({name, typeName, text, code, date}){
+function openCertificatePreview({name, typeName, text, code, date, badgeIcon, badgeColor}){
   const bodyText = (text || "نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ بتاريخ {{date}}.")
     .replace(/\{\{name\}\}/g, name)
     .replace(/\{\{type\}\}/g, typeName)
     .replace(/\{\{date\}\}/g, date ? fmtDate(date) : "")
     .replace(/\{\{code\}\}/g, code || "");
+  const bColor = badgeColor || "#C9922A";
+  const bIcon = badgeIcon || "award";
 
   const overlay = document.createElement("div");
   overlay.id = "cert-overlay";
@@ -1876,6 +1946,9 @@ function openCertificatePreview({name, typeName, text, code, date}){
     <div style="max-width:920px;width:100%">
       <div id="cert-canvas" style="background:linear-gradient(180deg,#fdfdfb,#f7f5ef); border:10px solid var(--navy); border-radius:4px; padding:50px 60px; aspect-ratio:1.414/1; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; position:relative;">
         <div style="position:absolute; inset:14px; border:2px solid var(--gold); border-radius:2px; pointer-events:none"></div>
+        <div style="position:absolute; top:34px; left:34px; width:56px; height:56px; border-radius:50%; background:color-mix(in srgb, ${bColor} 16%, white); border:2.5px solid ${bColor}; display:flex; align-items:center; justify-content:center">
+          <i data-lucide="${bIcon}" style="width:26px;height:26px;color:${bColor}"></i>
+        </div>
         <div style="display:flex; align-items:center; gap:20px; margin-bottom:24px">
           <img src="data:image/png;base64,${QASSIM_LOGO_B64}" style="height:42px">
           <div style="width:1px;height:34px;background:var(--border)"></div>
@@ -2355,6 +2428,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r89</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r96</div>
 </body>
 </html>

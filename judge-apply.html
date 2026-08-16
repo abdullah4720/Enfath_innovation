@@ -150,6 +150,13 @@ async function handleApply(){
     userId = data.user.id;
   }
 
+  // منع تعارض المصالح: لا يقدر مشارك حالي (عضو بفريق) يسجّل كمحكّم بنفس حسابه
+  const { data: existingMembership } = await sb.from("team_members").select("id").eq("user_id", userId).limit(1);
+  if(existingMembership && existingMembership.length){
+    showAlert("هذا الحساب مسجَّل حاليًا كعضو بأحد الفرق المشاركة. لمنع تعارض المصالح، لا يمكن التسجيل كمحكّم بنفس الحساب — يرجى استخدام بريد إلكتروني مختلف");
+    return;
+  }
+
   if(position){
     await sb.from("profiles").update({ current_position: position }).eq("id", userId);
   }
