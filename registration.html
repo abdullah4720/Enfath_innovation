@@ -1688,8 +1688,8 @@ async function renderMentorshipTab(membership){
     return;
   }
 
-  const { data: slots, error } = await sb.from("mentor_slots")
-    .select("id, start_time, end_time, is_online, location, is_booked, track_id, mentor_user_id, profiles(full_name, specialization, current_position, bio)")
+  const { data: rawSlots, error } = await sb.from("mentor_slots")
+    .select("id, start_time, end_time, is_online, location, is_booked, track_id, mentor_user_id, profiles(full_name, specialization, current_position, bio, is_active)")
     .eq("is_booked", false)
     .or(`track_id.is.null,track_id.eq.${team.track_id}`)
     .gte("start_time", new Date().toISOString())
@@ -1699,6 +1699,10 @@ async function renderMentorshipTab(membership){
     body.innerHTML = bookingHtml + `<div class="card"><p class="hint">تعذّر تحميل المواعيد المتاحة</p></div>`;
     return;
   }
+
+  // إخفاء مواعيد المرشدين المعطَّلين — القاعدة ترفض حجزها أصلًا (ملف 67)،
+  // فإظهارها هنا يعني ضغطة تنتهي برسالة خطأ غامضة
+  const slots = (rawSlots||[]).filter(s => s.profiles?.is_active !== false);
 
   // ترشيح: نطابق تخصص المرشد مع مسار الفريق لإبراز الأنسب
   // (القيم مطابقة تمامًا لقائمة التخصصات الفعلية بنموذج التقديم كمرشد)
@@ -2445,6 +2449,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r103</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r104</div>
 </body>
 </html>

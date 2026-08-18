@@ -2045,47 +2045,160 @@ async function renderMentorshipOverview(){
 }
 
 /* ---------------- المرشدون ---------------- */
+let mentorsStatusFilter = "";   // "" = الكل | "active" | "inactive"
+let mentorsCache = null;        // نحتفظ بآخر جلب لإعادة الفلترة بلا استعلام جديد
+
 async function renderMentorshipMentorsList(){
   const body = document.getElementById("mentorship-body");
   body.innerHTML = `<div class="card">
       <div class="toolbar" style="margin-bottom:14px">
-        <div></div>
+        <div class="field" style="margin:0;min-width:190px">
+          <select id="mentors-status-filter" onchange="applyMentorsStatusFilter()">
+            <option value="">كل المرشدين</option>
+            <option value="active">النشطون فقط</option>
+            <option value="inactive">المعطَّلون فقط</option>
+          </select>
+        </div>
         <button class="btn btn-primary btn-sm" onclick="openAddMentorModal()">+ إضافة مرشد</button>
       </div>
       <div id="mentors-mgmt-table">${skeletonRows(4)}</div>
     </div>`;
+  const sel = document.getElementById("mentors-status-filter");
+  if(sel) sel.value = mentorsStatusFilter;
 
   const { data: mentorRoles } = await sb.from("user_roles")
-    .select("id, user_id, profiles!user_roles_user_id_fkey(full_name, email, specialization, current_position, bio), roles!inner(key)")
+    .select("id, user_id, profiles!user_roles_user_id_fkey(full_name, email, specialization, current_position, bio, is_active, deactivation_reason, deactivated_at), roles!inner(key)")
     .eq("roles.key", "mentor");
 
   const { data: slots } = await sb.from("mentor_slots").select("id, mentor_user_id, is_booked, start_time");
   const { data: bookings } = await sb.from("mentor_bookings").select("id, status, slot_id, mentor_slots(mentor_user_id)");
 
+  mentorsCache = { mentorRoles: mentorRoles||[], slots: slots||[], bookings: bookings||[] };
+  drawMentorsTable();
+}
+
+function applyMentorsStatusFilter(){
+  mentorsStatusFilter = document.getElementById("mentors-status-filter").value;
+  drawMentorsTable();
+}
+
+function drawMentorsTable(){
   const box = document.getElementById("mentors-mgmt-table");
-  if(!mentorRoles || !mentorRoles.length){ box.innerHTML = emptyIllustration("graduation-cap", "لا يوجد مرشدون بعد", "أضف أول مرشد بالزر أعلاه ليبدأ بدعم الفرق"); return; }
+  if(!box || !mentorsCache) return;
+  const { mentorRoles, slots, bookings } = mentorsCache;
+
+  if(!mentorRoles.length){
+    box.innerHTML = emptyIllustration("graduation-cap", "لا يوجد مرشدون بعد", "أضف أول مرشد بالزر أعلاه ليبدأ بدعم الفرق");
+    return;
+  }
+
+  const rows = mentorRoles.filter(m => {
+    const active = m.profiles?.is_active !== false;
+    if(mentorsStatusFilter === "active")   return active;
+    if(mentorsStatusFilter === "inactive") return !active;
+    return true;
+  });
+
+  if(!rows.length){
+    box.innerHTML = `<div style="text-align:center;padding:26px;color:var(--muted);font-size:13px">لا يوجد مرشدون بهذه الحالة</div>`;
+    return;
+  }
 
   box.innerHTML = `<table><thead><tr>
-    <th>المرشد</th><th>التخصص / المسمى الوظيفي</th><th>إجمالي المواعيد</th><th>المحجوزة</th><th>الجلسات المغلقة</th><th></th>
+    <th>المرشد</th><th>الحالة</th><th>التخصص / المسمى الوظيفي</th><th>إجمالي المواعيد</th><th>المحجوزة</th><th>الجلسات المغلقة</th><th></th>
     </tr></thead><tbody>
-    ${mentorRoles.map(m => {
-      const mySlots = (slots||[]).filter(s => s.mentor_user_id === m.user_id);
+    ${rows.map(m => {
+      const mySlots = slots.filter(s => s.mentor_user_id === m.user_id);
       const myBooked = mySlots.filter(s => s.is_booked).length;
-      const myClosed = (bookings||[]).filter(b => b.mentor_slots?.mentor_user_id === m.user_id && b.status === "completed").length;
+      const myClosed = bookings.filter(b => b.mentor_slots?.mentor_user_id === m.user_id && b.status === "completed").length;
       const hasFutureSlots = mySlots.some(s => new Date(s.start_time) > new Date() && s.is_booked);
-      return `<tr>
-        <td><strong>${esc(m.profiles?.full_name||"—")}</strong><br><span style="color:var(--muted);font-size:12px">${esc(m.profiles?.email||"")}</span></td>
+      const active = m.profiles?.is_active !== false;
+      const name = m.profiles?.full_name || "";
+      const reason = m.profiles?.deactivation_reason || "";
+      return `<tr${active ? "" : ` style="opacity:.62"`}>
+        <td><strong>${esc(name||"—")}</strong><br><span style="color:var(--muted);font-size:12px">${esc(m.profiles?.email||"")}</span></td>
+        <td>
+          ${active
+            ? `<span class="badge badge-green">نشط</span>`
+            : `<span class="badge badge-gray">معطَّل</span>${reason ? `<br><span style="color:var(--muted);font-size:11.5px" title="${esc(reason)}">${esc(reason.length > 34 ? reason.slice(0,34)+"…" : reason)}</span>` : ""}`}
+        </td>
         <td>${esc(m.profiles?.specialization||"—")}<br><span style="color:var(--muted);font-size:12px">${esc(m.profiles?.current_position||"")}</span></td>
         <td>${mySlots.length}</td>
         <td>${myBooked}</td>
         <td><span class="badge badge-green">${myClosed}</span></td>
         <td class="row-actions">
-          ${hasFutureSlots ? `<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick='markMentorUnavailable("${m.user_id}", ${JSON.stringify(m.profiles?.full_name||"")})'>⏸ تعطيل مؤقت</button>` : ""}
-          <button class="btn btn-danger btn-sm" onclick='removeMentorRole("${m.id}", ${JSON.stringify(m.profiles?.full_name||"")})'>حذف من المرشدين</button>
+          ${active
+            ? `<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick='openDeactivateMentorModal("${m.user_id}", ${JSON.stringify(name)})'>تعطيل</button>`
+            : `<button class="btn btn-outline btn-sm" onclick='reactivateMentor("${m.user_id}", ${JSON.stringify(name)})'>إعادة تفعيل</button>`}
+          ${active && hasFutureSlots ? `<button class="btn btn-outline btn-sm" onclick='markMentorUnavailable("${m.user_id}", ${JSON.stringify(name)})'>إلغاء مواعيده القادمة</button>` : ""}
+          <button class="btn btn-danger btn-sm" onclick='removeMentorRole("${m.id}", ${JSON.stringify(name)})'>حذف من المرشدين</button>
         </td>
       </tr>`;
     }).join("")}
     </tbody></table>`;
+}
+
+/* ---- تعطيل / إعادة تفعيل المرشد ---- */
+async function openDeactivateMentorModal(mentorId, mentorName){
+  openModal(`
+    <h3>تعطيل المرشد</h3>
+    <p class="hint" style="margin:-8px 0 14px">${esc(mentorName)}</p>
+    <div id="deact-impact" style="font-size:12.5px;color:var(--muted);margin-bottom:12px">جاري حساب الأثر...</div>
+    <div class="field">
+      <label>سبب التعطيل <span style="color:var(--danger)">*</span></label>
+      <textarea id="deact-reason" rows="3" placeholder="مثال: اعتذر عن المشاركة لظرف طارئ"></textarea>
+    </div>
+    <div class="alert" style="font-size:12.5px">التعطيل يمنعه من دخول لوحة الإرشاد ومن إضافة مواعيد جديدة، ويمنع الفرق من حجز مواعيده. مواعيده المحجوزة الحالية تبقى كما هي — ألغِها يدويًا إذا لزم.</div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-danger" onclick='confirmDeactivateMentor("${mentorId}", ${JSON.stringify(mentorName)})'>تعطيل</button>
+    </div>
+  `);
+
+  // عرض عدد الجلسات القادمة المتأثرة قبل اتخاذ القرار
+  const { data: slots } = await sb.from("mentor_slots")
+    .select("id, start_time, mentor_bookings(status)")
+    .eq("mentor_user_id", mentorId)
+    .gt("start_time", new Date().toISOString());
+  const upcoming = (slots||[]).filter(s => (s.mentor_bookings||[]).some(b => ["pending","confirmed"].includes(b.status))).length;
+  const el = document.getElementById("deact-impact");
+  if(el) el.innerHTML = upcoming > 0
+    ? `<span style="color:var(--danger)">تنبيه: لديه <strong>${upcoming}</strong> جلسة قادمة محجوزة — لن تُلغى تلقائيًا.</span>`
+    : `لا توجد جلسات قادمة محجوزة له.`;
+}
+
+async function confirmDeactivateMentor(mentorId, mentorName){
+  const reason = document.getElementById("deact-reason").value.trim();
+  if(!reason){ showToast("سبب التعطيل إلزامي", true); return; }
+
+  const { error } = await sb.from("profiles").update({
+    is_active: false,
+    deactivated_at: new Date().toISOString(),
+    deactivation_reason: reason,
+    deactivated_by: currentUser?.id || null
+  }).eq("id", mentorId);
+
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("تعطيل مرشد", "user", mentorId, { name: mentorName, reason });
+  showToast(`تم تعطيل ${mentorName}`);
+  closeModal();
+  renderMentorshipMentorsList();
+}
+
+async function reactivateMentor(mentorId, mentorName){
+  if(!confirm(`إعادة تفعيل ${mentorName}؟ راح يقدر يدخل لوحة الإرشاد ويضيف مواعيد، وتقدر الفرق تحجز معه.`)) return;
+
+  const { error } = await sb.from("profiles").update({
+    is_active: true,
+    deactivated_at: null,
+    deactivation_reason: null,
+    deactivated_by: null
+  }).eq("id", mentorId);
+
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("إعادة تفعيل مرشد", "user", mentorId, { name: mentorName });
+  showToast(`تم تفعيل ${mentorName}`);
+  renderMentorshipMentorsList();
 }
 
 async function openAddMentorModal(){
@@ -2153,7 +2266,7 @@ async function markMentorUnavailable(mentorId, mentorName){
   if(!confirm(`متأكد إن ${mentorName} غير متاح؟ راح تُلغى كل مواعيده القادمة المحجوزة تلقائيًا، وتوصل الفرق المتأثرة إشعار فوري.`)) return;
   const { data, error } = await sb.rpc("cancel_mentor_future_bookings", { p_mentor_id: mentorId });
   if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
-  logActivity("تعطيل مرشد مؤقتًا", "user", mentorId, {cancelled_bookings: data.cancelled_count});
+  logActivity("إلغاء مواعيد مرشد القادمة", "user", mentorId, {name: mentorName, cancelled_bookings: data.cancelled_count});
   showToast(`تم إلغاء ${data.cancelled_count} موعد وإشعار الفرق المتأثرة`);
   renderMentorshipMentorsList();
 }
@@ -5118,6 +5231,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r103</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r104</div>
 </body>
 </html>
