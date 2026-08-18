@@ -270,8 +270,6 @@
 <div class="hero">
   <div class="aurora"><div class="blob blob1"></div><div class="blob blob2"></div></div>
   <div class="hero-content">
-    <a href="./index.html" style="display:inline-block;color:#9db3d6;font-size:12.5px;margin-bottom:14px;text-decoration:none">← الصفحة الرئيسية</a>
-    <span class="eyebrow">جامعة القصيم × إنفاذ</span>
     <h1>هاكاثون إنفاذ</h1>
     <p>سجّل فريقك أو انضم لفريق قائم، واختر مسارك، وابدأ رحلتك في تطوير حلول رقمية تخدم القطاع القضائي.</p>
   </div>
@@ -1227,7 +1225,7 @@ function resetStarsPreview(qid){
   previewStars(qid, savedVal / 2);
 }
 function previewStars(qid, count){
-  document.querySelectorAll(`i[data-qid="${qid}"]`).forEach(star => {
+  document.querySelectorAll(`[data-qid="${qid}"][data-star-value]`).forEach(star => {
     const val = parseInt(star.dataset.starValue) / 2;
     star.style.color = val <= count ? "var(--gold)" : "#d8dbe4";
   });
@@ -1235,7 +1233,7 @@ function previewStars(qid, count){
 function selectStars(qid, count){
   const input = document.getElementById(`star-value-${qid}`);
   input.value = count * 2;
-  document.querySelectorAll(`i[data-qid="${qid}"]`).forEach(star => {
+  document.querySelectorAll(`[data-qid="${qid}"][data-star-value]`).forEach(star => {
     const val = parseInt(star.dataset.starValue) / 2;
     star.style.color = val <= count ? "var(--gold)" : "#d8dbe4";
     star.dataset.locked = val <= count ? "1" : "0";
@@ -2447,6 +2445,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r101</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r103</div>
 </body>
 </html>
