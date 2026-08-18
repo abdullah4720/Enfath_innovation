@@ -680,13 +680,31 @@ async function renderAddSlot(){
 let cachedMentorshipWindow = null;
 async function getMentorshipWindow(){
   if(cachedMentorshipWindow) return cachedMentorshipWindow;
-  const { data } = await sb.from("platform_settings").select("key,value").in("key",["mentorship_start_date","mentorship_end_date"]);
+  const [setRes, daysRes] = await Promise.all([
+    sb.from("platform_settings").select("key,value").in("key",["mentorship_start_date","mentorship_end_date"]),
+    sb.from("program_days").select("day_number, starts_at, ends_at").eq("phase","mentorship").order("day_number")
+  ]);
   const map = {};
-  (data||[]).forEach(r => map[r.key] = r.value);
-  cachedMentorshipWindow = { start: map.mentorship_start_date || null, end: map.mentorship_end_date || null };
+  (setRes.data||[]).forEach(r => map[r.key] = r.value);
+  cachedMentorshipWindow = {
+    start: map.mentorship_start_date || null,
+    end: map.mentorship_end_date || null,
+    days: daysRes.data || []
+  };
   return cachedMentorshipWindow;
 }
 function validateWithinMentorshipWindow(startDate, endDate, win){
+  // لو عُرِّفت أيام، الموعد لازم يقع بالكامل داخل يوم واحد منها
+  if(win.days && win.days.length){
+    const fits = win.days.some(d => startDate >= new Date(d.starts_at) && endDate <= new Date(d.ends_at));
+    if(!fits){
+      const list = win.days
+        .map(d => `اليوم ${d.day_number}: ${fmtDate(d.starts_at)} → ${new Date(d.ends_at).toLocaleTimeString('ar-SA',{hour:'2-digit',minute:'2-digit'})}`)
+        .join(" · ");
+      return `الموعد خارج أيام الإرشاد المحددة (${list})`;
+    }
+    return null;
+  }
   if(win.start && startDate < new Date(win.start)){
     return `الموعد قبل بداية فترة الإرشاد المحددة (${fmtDate(win.start)})`;
   }
@@ -852,6 +870,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r89</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r90</div>
 </body>
 </html>

@@ -1097,21 +1097,15 @@ async function renderGeneralSettings(){
 
     <div class="card">
       <h3 style="margin:0 0 4px">📅 الجدول الزمني للبرنامج</h3>
-      <p class="hint" style="margin-bottom:16px">هذه التواريخ تتحكم بالعدّاد التنازلي وموعد إغلاق التقديم بصفحة المشارك</p>
-      <div class="form-row-2">
-        <div class="field"><label>بداية الهاكاثون</label><input type="datetime-local" id="gs-date-hackathon-start"></div>
-        <div class="field"><label>نهاية الهاكاثون</label><input type="datetime-local" id="gs-date-hackathon-end"></div>
+      <p class="hint" style="margin-bottom:16px">حدّد عدد أيام كل مرحلة وساعات كل يوم. خارج هذه الساعات يُمنع إنشاء مواعيد الإرشاد وحفظ درجات التحكيم.</p>
+      <div id="gs-days-hackathon" style="margin-bottom:18px">${skeletonRows(2)}</div>
+      <div id="gs-days-mentorship" style="margin-bottom:18px"></div>
+      <div id="gs-days-judging" style="margin-bottom:18px"></div>
+      <div class="field" style="border-top:1px solid var(--border);padding-top:14px">
+        <label>الموعد النهائي لتقديم المشاريع</label>
+        <input type="datetime-local" id="gs-date-submission-deadline">
       </div>
-      <div class="form-row-2">
-        <div class="field"><label>بداية الإرشاد</label><input type="datetime-local" id="gs-date-mentorship-start"></div>
-        <div class="field"><label>نهاية الإرشاد</label><input type="datetime-local" id="gs-date-mentorship-end"></div>
-      </div>
-      <div class="form-row-2">
-        <div class="field"><label>بداية التحكيم</label><input type="datetime-local" id="gs-date-judging-start"></div>
-        <div class="field"><label>نهاية التحكيم</label><input type="datetime-local" id="gs-date-judging-end"></div>
-      </div>
-      <div class="field"><label>الموعد النهائي لتقديم المشاريع</label><input type="datetime-local" id="gs-date-submission-deadline"></div>
-      <button class="btn btn-primary" onclick="saveGeneralSchedule()">حفظ الجدول الزمني</button>
+      <button class="btn btn-primary" onclick="saveSubmissionDeadline()">حفظ الموعد النهائي</button>
       <span id="gs-schedule-alert" style="font-size:12.5px;color:var(--teal);display:none;margin-right:10px">تم الحفظ ✓</span>
     </div>
 
@@ -1127,34 +1121,175 @@ async function renderGeneralSettings(){
       <div id="gs-email-template-box">${skeletonRows(3)}</div>
     </div>`;
 
-  // تعبئة الجدول الزمني
-  const scheduleKeys = ["hackathon_start_date","hackathon_end_date","mentorship_start_date","mentorship_end_date","judging_start_date","judging_end_date","submission_deadline"];
-  const { data: scheduleRows } = await sb.from("platform_settings").select("key,value").in("key", scheduleKeys);
-  (scheduleRows||[]).forEach(row => {
-    if(row.value){
-      const el = document.getElementById(`gs-date-${row.key.replace(/_date$/,'').replace(/_/g,'-')}`);
-      if(el) el.value = row.value.substring(0,16);
-    }
-  });
+  // الموعد النهائي للتقديم يبقى مفتاحًا مفردًا (ليس مرحلة بأيام)
+  const { data: deadlineRow } = await sb.from("platform_settings").select("value").eq("key","submission_deadline").maybeSingle();
+  if(deadlineRow?.value){
+    const el = document.getElementById("gs-date-submission-deadline");
+    if(el) el.value = deadlineRow.value.substring(0,16);
+  }
 
+  await renderProgramDays();
   await renderGsMentorshipMode();
   await renderGsEmailTemplate();
 }
-async function saveGeneralSchedule(){
-  const map = {
-    hackathon_start_date: "gs-date-hackathon-start", hackathon_end_date: "gs-date-hackathon-end",
-    mentorship_start_date: "gs-date-mentorship-start", mentorship_end_date: "gs-date-mentorship-end",
-    judging_start_date: "gs-date-judging-start", judging_end_date: "gs-date-judging-end",
-    submission_deadline: "gs-date-submission-deadline",
-  };
-  const rows = Object.entries(map).map(([key, inputId]) => {
-    const val = document.getElementById(inputId).value;
-    return { key, value: val ? new Date(val).toISOString() : null };
+
+/* ---------------- أيام البرنامج ---------------- */
+const PHASE_META = {
+  hackathon:  { label: "الهاكاثون", icon: "rocket" },
+  mentorship: { label: "الإرشاد",   icon: "compass" },
+  judging:    { label: "التحكيم",   icon: "gavel" },
+};
+let programDays = { hackathon: [], mentorship: [], judging: [] };
+
+async function renderProgramDays(){
+  const { data, error } = await sb.from("program_days").select("*").order("phase").order("day_number");
+  if(error){
+    const box = document.getElementById("gs-days-hackathon");
+    if(box) box.innerHTML = `<div class="alert error" style="display:block">تعذّر تحميل أيام البرنامج — تأكد من تطبيق ملف 70_program_days.sql</div>`;
+    return;
+  }
+  programDays = { hackathon: [], mentorship: [], judging: [] };
+  (data||[]).forEach(d => { if(programDays[d.phase]) programDays[d.phase].push(d); });
+  Object.keys(PHASE_META).forEach(drawPhaseDays);
+}
+
+// تحويل ISO إلى القيمة التي يقبلها datetime-local بالتوقيت المحلي
+function toLocalInput(iso){
+  if(!iso) return "";
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function drawPhaseDays(phase){
+  const box = document.getElementById(`gs-days-${phase}`);
+  if(!box) return;
+  const meta = PHASE_META[phase];
+  const days = programDays[phase] || [];
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <h4 style="margin:0;font-size:13.5px">
+        <i data-lucide="${meta.icon}" style="width:15px;height:15px;vertical-align:-3px;display:inline-block"></i>
+        ${meta.label}
+        <span style="color:var(--muted);font-weight:400">· ${days.length ? `${days.length} ${days.length === 1 ? "يوم" : "أيام"}` : "بلا أيام محددة"}</span>
+      </h4>
+      <button class="btn btn-outline btn-sm" onclick="addProgramDay('${phase}')">+ إضافة يوم</button>
+    </div>
+    ${days.length ? days.map((d, i) => `
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="min-width:56px;font-size:12.5px;font-weight:600;padding-bottom:9px">اليوم ${d.day_number}</span>
+        <div class="field" style="margin:0;flex:1;min-width:190px">
+          <label style="font-size:11.5px">البداية</label>
+          <input type="datetime-local" id="pd-start-${d.id}" value="${toLocalInput(d.starts_at)}">
+        </div>
+        <div class="field" style="margin:0;flex:1;min-width:190px">
+          <label style="font-size:11.5px">النهاية</label>
+          <input type="datetime-local" id="pd-end-${d.id}" value="${toLocalInput(d.ends_at)}">
+        </div>
+        ${i === 0 && days.length > 1 ? `<button class="btn btn-outline btn-sm" title="طبّق ساعات هذا اليوم على باقي الأيام" onclick="copyHoursToAllDays('${phase}')">نسخ الساعات</button>` : ""}
+        <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="deleteProgramDay('${d.id}','${phase}',${d.day_number})">حذف</button>
+      </div>
+    `).join("") : `<p class="hint" style="margin:0">لم تُحدَّد أيام — تُطبَّق نافذة واحدة مفتوحة كما كان سابقًا</p>`}
+    ${days.length ? `<button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="savePhaseDays('${phase}')">حفظ أيام ${meta.label}</button>` : ""}
+  `;
+  if(window.lucide) lucide.createIcons();
+}
+
+async function addProgramDay(phase){
+  const days = programDays[phase] || [];
+  const nextNum = days.length ? Math.max(...days.map(d => d.day_number)) + 1 : 1;
+
+  // اليوم الجديد يرث ساعات آخر يوم، مزاحًا 24 ساعة — أسرع من إدخال يدوي
+  let start, end;
+  if(days.length){
+    const last = days[days.length - 1];
+    start = new Date(new Date(last.starts_at).getTime() + 86400000);
+    end   = new Date(new Date(last.ends_at).getTime()   + 86400000);
+  } else {
+    start = new Date(); start.setHours(9,0,0,0);
+    end   = new Date(); end.setHours(17,0,0,0);
+  }
+
+  const { error } = await sb.from("program_days").insert({
+    phase, day_number: nextNum,
+    starts_at: start.toISOString(), ends_at: end.toISOString()
   });
-  const { error } = await sb.from("platform_settings").upsert(rows);
-  const alertEl = document.getElementById("gs-schedule-alert");
+  if(error) return showToast("خطأ: " + error.message, true);
+  logActivity("إضافة يوم للبرنامج", "program_days", null, { phase, day: nextNum });
+  await renderProgramDays();
+}
+
+function copyHoursToAllDays(phase){
+  const days = programDays[phase] || [];
+  if(days.length < 2) return;
+  const first = days[0];
+  const s = document.getElementById(`pd-start-${first.id}`).value;
+  const e = document.getElementById(`pd-end-${first.id}`).value;
+  if(!s || !e){ showToast("أدخل ساعات اليوم الأول أولًا", true); return; }
+
+  const sh = s.substring(11), eh = e.substring(11);   // HH:MM فقط
+  days.slice(1).forEach(d => {
+    const si = document.getElementById(`pd-start-${d.id}`);
+    const ei = document.getElementById(`pd-end-${d.id}`);
+    if(si?.value) si.value = si.value.substring(0,11) + sh;
+    if(ei?.value) ei.value = ei.value.substring(0,11) + eh;
+  });
+  showToast("طُبّقت الساعات — اضغط حفظ للتثبيت");
+}
+
+async function savePhaseDays(phase){
+  const days = programDays[phase] || [];
+  const rows = [];
+
+  for(const d of days){
+    const s = document.getElementById(`pd-start-${d.id}`).value;
+    const e = document.getElementById(`pd-end-${d.id}`).value;
+    if(!s || !e){ showToast(`اليوم ${d.day_number}: أكمل البداية والنهاية`, true); return; }
+    const sd = new Date(s), ed = new Date(e);
+    if(ed <= sd){ showToast(`اليوم ${d.day_number}: النهاية يجب أن تكون بعد البداية`, true); return; }
+    rows.push({ id: d.id, phase, day_number: d.day_number, starts_at: sd.toISOString(), ends_at: ed.toISOString() });
+  }
+
+  // تداخل الأيام يعني ساعات مزدوجة — نمنعه قبل الحفظ
+  const sorted = [...rows].sort((a,b) => new Date(a.starts_at) - new Date(b.starts_at));
+  for(let i = 1; i < sorted.length; i++){
+    if(new Date(sorted[i].starts_at) < new Date(sorted[i-1].ends_at)){
+      showToast("يوجد تداخل بين يومين — راجع الأوقات", true);
+      return;
+    }
+  }
+
+  const { error } = await sb.from("program_days").upsert(rows);
+  if(error) return showToast("خطأ: " + error.message, true);
+  logActivity("تحديث أيام البرنامج", "program_days", null, { phase, days: rows.length });
+  showToast(`تم حفظ أيام ${PHASE_META[phase].label}`);
+  await renderProgramDays();
+}
+
+async function deleteProgramDay(id, phase, dayNumber){
+  if(!confirm(`حذف اليوم ${dayNumber} من ${PHASE_META[phase].label}؟`)) return;
+  const { error } = await sb.from("program_days").delete().eq("id", id);
+  if(error) return showToast("خطأ: " + error.message, true);
+
+  // إعادة ترقيم الأيام المتبقية حتى تبقى 1..n بلا فجوات
+  const remaining = (programDays[phase] || []).filter(d => d.id !== id);
+  const renum = remaining.map((d, i) => ({ id: d.id, phase, day_number: i + 1, starts_at: d.starts_at, ends_at: d.ends_at }));
+  if(renum.length) await sb.from("program_days").upsert(renum);
+
+  logActivity("حذف يوم من البرنامج", "program_days", null, { phase, day: dayNumber });
+  showToast("تم الحذف");
+  await renderProgramDays();
+}
+
+async function saveSubmissionDeadline(){
+  const val = document.getElementById("gs-date-submission-deadline").value;
+  const { error } = await sb.from("platform_settings").upsert({
+    key: "submission_deadline", value: val ? new Date(val).toISOString() : null
+  });
   if(error){ showToast("خطأ: " + error.message, true); return; }
-  logActivity("تحديث الجدول الزمني للبرنامج", "platform_settings");
+  logActivity("تحديث الموعد النهائي للتقديم", "platform_settings");
+  const alertEl = document.getElementById("gs-schedule-alert");
   alertEl.style.display = "inline";
   setTimeout(() => alertEl.style.display = "none", 2500);
 }
@@ -5556,6 +5691,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r106</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r107</div>
 </body>
 </html>

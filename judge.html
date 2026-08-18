@@ -624,6 +624,23 @@ async function submitScores(teamId){
     return;
   }
 
+  // فحص أيام التحكيم — الفرض الفعلي بالقاعدة (ملف 70)، وهذا
+  // لعرض سبب واضح بدل رسالة خطأ عامة
+  const { data: jDays } = await sb.from("program_days")
+    .select("day_number, starts_at, ends_at").eq("phase","judging").order("day_number");
+  if(jDays && jDays.length){
+    const now2 = new Date();
+    const inside = jDays.some(d => now2 >= new Date(d.starts_at) && now2 <= new Date(d.ends_at));
+    if(!inside){
+      const next = jDays.find(d => new Date(d.starts_at) > now2);
+      alertBox.textContent = next
+        ? `التحكيم مغلق حاليًا — يفتح اليوم ${next.day_number} بتاريخ ${new Date(next.starts_at).toLocaleString('ar-SA')}`
+        : "انتهت أيام التحكيم المحددة";
+      alertBox.className = "alert error";
+      return;
+    }
+  }
+
   const rows = [];
   for(const c of criteriaList){
     const input = document.getElementById(`score-${teamId}-${c.id}`);
@@ -646,6 +663,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r107</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r108</div>
 </body>
 </html>
