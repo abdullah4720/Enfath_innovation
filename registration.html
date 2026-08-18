@@ -1999,6 +1999,9 @@ async function downloadCertificatePDF(personName){
   btn.textContent = "جاري التحضير...";
   btn.disabled = true;
   try{
+    if(typeof html2canvas === "undefined" || !window.jspdf){
+      throw new Error("لم تُحمَّل مكتبة التحويل — تحقق من اتصال الإنترنت وأعد المحاولة");
+    }
     const el = document.getElementById("cert-canvas");
     const canvas = await html2canvas(el, { scale: 2, backgroundColor: "#ffffff" });
     const imgData = canvas.toDataURL("image/png");
@@ -2449,6 +2452,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r104</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r105</div>
 </body>
 </html>
