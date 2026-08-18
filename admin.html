@@ -2830,6 +2830,7 @@ async function renderJudging(){
       <div class="tab ${judgingTab==='assignments'?'active':''}" data-t="assignments">تعيين المحكّمين</div>
       <div class="tab ${judgingTab==='judges'?'active':''}" data-t="judges">المحكّمون</div>
       <div class="tab ${judgingTab==='results'?'active':''}" data-t="results">النتائج المجمّعة</div>
+      <div class="tab ${judgingTab==='summary'?'active':''}" data-t="summary">موجز التحكيم</div>
     </div>
     <div id="judging-body"></div>`;
 
@@ -2843,6 +2844,7 @@ async function renderJudging(){
   if(judgingTab === "rounds") renderJudgingRounds();
   else if(judgingTab === "assignments") renderJudgingAssignments();
   else if(judgingTab === "judges") renderJudgesManagement();
+  else if(judgingTab === "summary") renderJudgingSummary();
   else renderJudgingResults();
 }
 
@@ -3458,6 +3460,299 @@ async function renderJudgingConsistencyCheck(){
     </div>
   `;
   if(window.lucide) lucide.createIcons();
+}
+
+/* ============================================================
+   6-ب. موجز التحكيم — الاعتماد الفردي والجماعي + الحذف المُدقَّق
+   ============================================================ */
+let summaryRows = [];
+let summarySelected = new Set();
+let summaryRoundFilter = "";
+let summaryStatusFilter = "";
+
+async function renderJudgingSummary(){
+  const body = document.getElementById("judging-body");
+  body.innerHTML = `<div id="summary-stats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px"></div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div class="field" style="margin:0;min-width:190px"><label>الجولة</label>
+          <select id="summary-round-filter" onchange="applySummaryFilters()"><option value="">كل الجولات</option></select>
+        </div>
+        <div class="field" style="margin:0;min-width:190px"><label>حالة الاعتماد</label>
+          <select id="summary-status-filter" onchange="applySummaryFilters()">
+            <option value="">الكل</option>
+            <option value="approved">معتمدة</option>
+            <option value="pending">غير معتمدة</option>
+            <option value="incomplete">تحكيم ناقص</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="summary-bulk-bar"></div>
+    <div class="card"><div id="summary-table">${skeletonRows(5)}</div></div>`;
+
+  const { data, error } = await sb.from("judging_summary").select("*").order("round_order").order("weighted_average", {ascending:false, nullsFirst:false});
+  if(error){
+    document.getElementById("summary-table").innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}<br><span class="hint">تأكد من تطبيق ملف 69_judging_approvals.sql</span></div>`;
+    return;
+  }
+  summaryRows = data || [];
+  summarySelected.clear();
+
+  // تعبئة فلتر الجولات من البيانات نفسها
+  const rounds = [...new Map(summaryRows.map(r => [r.round_id, r.round_name])).entries()];
+  const sel = document.getElementById("summary-round-filter");
+  rounds.forEach(([id, name]) => sel.insertAdjacentHTML("beforeend", `<option value="${id}">${esc(name)}</option>`));
+  sel.value = summaryRoundFilter;
+  document.getElementById("summary-status-filter").value = summaryStatusFilter;
+
+  drawSummaryStats();
+  drawSummaryTable();
+}
+
+function summaryFiltered(){
+  return summaryRows.filter(r => {
+    if(summaryRoundFilter && r.round_id !== summaryRoundFilter) return false;
+    const incomplete = (r.submitted_judges||0) < (r.assigned_judges||0);
+    if(summaryStatusFilter === "approved")   return r.approval_status === "approved";
+    if(summaryStatusFilter === "pending")    return r.approval_status !== "approved";
+    if(summaryStatusFilter === "incomplete") return incomplete;
+    return true;
+  });
+}
+
+function applySummaryFilters(){
+  summaryRoundFilter  = document.getElementById("summary-round-filter").value;
+  summaryStatusFilter = document.getElementById("summary-status-filter").value;
+  summarySelected.clear();
+  drawSummaryTable();
+}
+
+function drawSummaryStats(){
+  const box = document.getElementById("summary-stats");
+  if(!box) return;
+  const total      = summaryRows.length;
+  const approved   = summaryRows.filter(r => r.approval_status === "approved").length;
+  const incomplete = summaryRows.filter(r => (r.submitted_judges||0) < (r.assigned_judges||0)).length;
+  const scored     = summaryRows.filter(r => r.weighted_average !== null);
+  const avg        = scored.length ? (scored.reduce((a,r)=>a+Number(r.weighted_average),0)/scored.length) : null;
+  box.innerHTML = `
+    ${statCard(total, "نتائج (فريق × جولة)")}
+    ${statCard(approved, "معتمدة")}
+    ${statCard(incomplete, "تحكيم ناقص")}
+    ${statCard(avg !== null ? avg.toFixed(2) : "—", "متوسط عام")}
+  `;
+}
+
+function drawSummaryTable(){
+  const box = document.getElementById("summary-table");
+  if(!box) return;
+  const rows = summaryFiltered();
+
+  if(!rows.length){
+    box.innerHTML = `<div class="empty-state">لا توجد نتائج بهذه الفلاتر</div>`;
+    drawSummaryBulkBar();
+    return;
+  }
+
+  box.innerHTML = `<table><thead><tr>
+      <th style="width:34px"><input type="checkbox" id="summary-check-all" onchange="toggleAllSummary(this.checked)"></th>
+      <th>الفريق</th><th>المسار</th><th>الجولة</th><th>التحكيم</th><th>المعدل</th><th>التفاوت</th><th>الاعتماد</th><th></th>
+    </tr></thead><tbody>
+    ${rows.map(r => {
+      const key = `${r.team_id}|${r.round_id}`;
+      const submitted = r.submitted_judges || 0;
+      const assigned  = r.assigned_judges || 0;
+      const incomplete = submitted < assigned;
+      const isApproved = r.approval_status === "approved";
+      const spread = r.judges_spread !== null ? Number(r.judges_spread) : null;
+      return `<tr${isApproved ? ` style="background:rgba(16,185,129,.05)"` : ""}>
+        <td><input type="checkbox" class="summary-check" data-key="${key}" ${summarySelected.has(key)?"checked":""} onchange="toggleSummaryRow('${key}', this.checked)"></td>
+        <td><strong>${esc(r.team_name)}</strong></td>
+        <td>${esc(r.track_name||"—")}</td>
+        <td>${esc(r.round_name)}</td>
+        <td>${submitted} / ${assigned}${incomplete ? ` <span class="badge badge-gold">ناقص</span>` : ""}</td>
+        <td><strong>${r.weighted_average !== null ? Number(r.weighted_average).toFixed(2) : "—"}</strong></td>
+        <td>${spread !== null ? (spread > 1.2 ? `<span class="badge badge-gold">${spread.toFixed(2)}</span>` : spread.toFixed(2)) : "—"}</td>
+        <td>${isApproved
+              ? `<span class="badge badge-green">معتمدة</span>`
+              : `<span class="badge badge-gray">غير معتمدة</span>`}</td>
+        <td class="row-actions">
+          <button class="btn btn-outline btn-sm" onclick='openSummaryDetail("${r.team_id}","${r.round_id}", ${JSON.stringify(r.team_name)})'>تفاصيل</button>
+          ${isApproved
+            ? `<button class="btn btn-outline btn-sm" onclick='unapproveResults("${r.team_id}","${r.round_id}", ${JSON.stringify(r.team_name)})'>إلغاء الاعتماد</button>`
+            : `<button class="btn btn-primary btn-sm" onclick='approveResults(["${key}"])'>اعتماد</button>`}
+        </td>
+      </tr>`;
+    }).join("")}
+    </tbody></table>`;
+  drawSummaryBulkBar();
+}
+
+function toggleSummaryRow(key, checked){
+  checked ? summarySelected.add(key) : summarySelected.delete(key);
+  drawSummaryBulkBar();
+}
+function toggleAllSummary(checked){
+  summaryFiltered().forEach(r => {
+    const key = `${r.team_id}|${r.round_id}`;
+    checked ? summarySelected.add(key) : summarySelected.delete(key);
+  });
+  document.querySelectorAll(".summary-check").forEach(c => c.checked = checked);
+  drawSummaryBulkBar();
+}
+function drawSummaryBulkBar(){
+  const box = document.getElementById("summary-bulk-bar");
+  if(!box) return;
+  const n = summarySelected.size;
+  if(!n){ box.innerHTML = ""; return; }
+  const keys = [...summarySelected];
+  const pendingCount = keys.filter(k => {
+    const r = summaryRows.find(x => `${x.team_id}|${x.round_id}` === k);
+    return r && r.approval_status !== "approved";
+  }).length;
+  box.innerHTML = `<div class="card" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:600">محدَّد: ${n}${pendingCount !== n ? ` <span style="color:var(--muted);font-weight:400">(${pendingCount} غير معتمدة)</span>` : ""}</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="clearSummarySelection()">إلغاء التحديد</button>
+        <button class="btn btn-primary btn-sm" onclick='approveResults(${JSON.stringify(keys)})' ${pendingCount?"":"disabled"}>اعتماد المحدد (${pendingCount})</button>
+      </div>
+    </div>`;
+}
+function clearSummarySelection(){
+  summarySelected.clear();
+  document.querySelectorAll(".summary-check").forEach(c => c.checked = false);
+  const all = document.getElementById("summary-check-all");
+  if(all) all.checked = false;
+  drawSummaryBulkBar();
+}
+
+/* ---- الاعتماد ---- */
+async function approveResults(keys){
+  const targets = keys
+    .map(k => summaryRows.find(x => `${x.team_id}|${x.round_id}` === k))
+    .filter(r => r && r.approval_status !== "approved");
+
+  if(!targets.length){ showToast("كل المحدد معتمد مسبقًا", true); return; }
+
+  const incomplete = targets.filter(r => (r.submitted_judges||0) < (r.assigned_judges||0));
+  const noScores   = targets.filter(r => r.weighted_average === null);
+
+  let warn = "";
+  if(noScores.length)   warn += `\n• ${noScores.length} نتيجة بلا أي درجات مُدخلة`;
+  if(incomplete.length) warn += `\n• ${incomplete.length} نتيجة تحكيمها ناقص (لم يسلّم كل المحكّمين)`;
+
+  const msg = `اعتماد ${targets.length} نتيجة؟${warn ? "\n\nتنبيه:" + warn : ""}\n\nبعد الاعتماد لن يتمكن المحكّمون من تعديل درجاتهم لهذه الفرق.`;
+  if(!confirm(msg)) return;
+
+  const payload = targets.map(r => ({
+    team_id: r.team_id,
+    round_id: r.round_id,
+    status: "approved",
+    approved_by: currentUser?.id || null,
+    approved_at: new Date().toISOString()
+  }));
+
+  const { error } = await sb.from("judging_approvals").upsert(payload, { onConflict: "team_id,round_id" });
+  if(error) return showToast("خطأ: " + error.message, true);
+
+  logActivity("اعتماد نتائج تحكيم", "judging", null, {
+    count: targets.length,
+    teams: targets.map(r => r.team_name),
+    incomplete: incomplete.length
+  });
+  showToast(`تم اعتماد ${targets.length} نتيجة`);
+  clearSummarySelection();
+  renderJudgingSummary();
+}
+
+async function unapproveResults(teamId, roundId, teamName){
+  if(!confirm(`إلغاء اعتماد نتيجة ${teamName}؟ راح يقدر المحكّمون يعدّلون درجاتهم مرة أخرى.`)) return;
+  const { error } = await sb.from("judging_approvals").delete().eq("team_id", teamId).eq("round_id", roundId);
+  if(error) return showToast("خطأ: " + error.message, true);
+  logActivity("إلغاء اعتماد نتيجة", "judging", teamId, {team: teamName});
+  showToast("تم إلغاء الاعتماد");
+  renderJudgingSummary();
+}
+
+/* ---- التفاصيل + حذف تقييم محكّم ---- */
+async function openSummaryDetail(teamId, roundId, teamName){
+  openModal(`<h3>تفاصيل تحكيم ${esc(teamName)}</h3>
+    <div id="summary-detail-body" style="max-height:420px;overflow-y:auto">${skeletonRows(3)}</div>
+    <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>`);
+
+  const [scoresRes, critRes] = await Promise.all([
+    sb.from("scores").select("judge_user_id, criteria_id, score, comments, submitted_at, profiles!scores_judge_user_id_fkey(full_name)")
+      .eq("team_id", teamId).eq("round_id", roundId),
+    sb.from("judging_criteria").select("id, name_ar, weight, max_score").eq("round_id", roundId).order("display_order")
+  ]);
+
+  const box = document.getElementById("summary-detail-body");
+  if(!box) return;
+  const scores = scoresRes.data || [];
+  const crit   = critRes.data || [];
+
+  if(!scores.length){ box.innerHTML = `<div class="empty-state">لم يسلّم أي محكّم تقييمه بعد</div>`; return; }
+
+  // تجميع حسب المحكّم
+  const byJudge = {};
+  scores.forEach(s => {
+    if(!byJudge[s.judge_user_id]) byJudge[s.judge_user_id] = { name: s.profiles?.full_name || "محكّم", rows: {}, comments: "", at: s.submitted_at };
+    byJudge[s.judge_user_id].rows[s.criteria_id] = s.score;
+    if(s.comments) byJudge[s.judge_user_id].comments = s.comments;
+  });
+
+  const row = summaryRows.find(r => r.team_id === teamId && r.round_id === roundId);
+  const isApproved = row?.approval_status === "approved";
+
+  box.innerHTML = Object.entries(byJudge).map(([jid, j]) => {
+    let sw = 0, ww = 0;
+    crit.forEach(c => { const v = j.rows[c.id]; if(v !== undefined){ sw += Number(v) * Number(c.weight); ww += Number(c.weight); } });
+    const avg = ww ? (sw/ww) : null;
+    return `<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <div><strong style="font-size:13.5px">${esc(j.name)}</strong>
+          <span style="color:var(--muted);font-size:11.5px"> · ${fmtDate(j.at)}</span></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge badge-green">${avg !== null ? avg.toFixed(2) : "—"}</span>
+          ${isApproved ? "" : `<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick='openDeleteEvaluationModal("${jid}","${teamId}","${roundId}", ${JSON.stringify(j.name)}, ${JSON.stringify(teamName)})'>حذف التقييم</button>`}
+        </div>
+      </div>
+      <table style="font-size:12.5px"><tbody>
+        ${crit.map(c => `<tr><td>${esc(c.name_ar)} <span style="color:var(--muted)">(${c.weight}%)</span></td>
+          <td style="text-align:left;font-weight:700">${j.rows[c.id] !== undefined ? `${j.rows[c.id]} / ${c.max_score}` : "—"}</td></tr>`).join("")}
+      </tbody></table>
+      ${j.comments ? `<p class="hint" style="margin-top:8px">${esc(j.comments)}</p>` : ""}
+    </div>`;
+  }).join("") + (isApproved ? `<div class="alert" style="font-size:12.5px">النتيجة معتمدة — ألغِ الاعتماد أولًا لتتمكن من حذف أي تقييم.</div>` : "");
+}
+
+function openDeleteEvaluationModal(judgeId, teamId, roundId, judgeName, teamName){
+  openModal(`<h3>حذف تقييم محكّم</h3>
+    <p class="hint" style="margin:-8px 0 14px">${esc(judgeName)} — فريق ${esc(teamName)}</p>
+    <div class="alert" style="font-size:12.5px">سيُحذف تقييم هذا المحكّم لهذا الفريق بالكامل ليتمكن من إعادة إدخاله. تُحفظ نسخة مؤرشفة من الدرجات الأصلية للتدقيق.</div>
+    <div class="field"><label>سبب الحذف <span style="color:var(--danger)">*</span></label>
+      <textarea id="del-eval-reason" rows="3" placeholder="مثال: أدخل الدرجات على الفريق الخطأ"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-danger" onclick='confirmDeleteEvaluation("${judgeId}","${teamId}","${roundId}", ${JSON.stringify(judgeName)}, ${JSON.stringify(teamName)})'>حذف</button>
+    </div>`);
+}
+
+async function confirmDeleteEvaluation(judgeId, teamId, roundId, judgeName, teamName){
+  const reason = document.getElementById("del-eval-reason").value.trim();
+  if(!reason){ showToast("سبب الحذف إلزامي", true); return; }
+
+  const { data, error } = await sb.rpc("admin_delete_judge_evaluation", {
+    p_judge_id: judgeId, p_team_id: teamId, p_round_id: roundId, p_reason: reason
+  });
+  if(error || !data?.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+
+  logActivity("حذف تقييم محكّم", "judging", teamId, { judge: judgeName, team: teamName, reason, deleted_rows: data.deleted_count });
+  showToast(`تم حذف تقييم ${judgeName}`);
+  closeModal();
+  renderJudgingSummary();
 }
 
 /* ============================================================
@@ -5261,6 +5556,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r104</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r106</div>
 </body>
 </html>

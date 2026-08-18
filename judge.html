@@ -333,6 +333,12 @@ async function loadAssignments(){
 
   const { data: myScores } = await sb.from("scores").select("*").eq("judge_user_id", currentUser.id).eq("round_id", round.id);
 
+  // الفرق المعتمدة إداريًا — درجاتها مقفلة بالقاعدة (ملف 69).
+  // نقرأها هنا لنعرض السبب بوضوح بدل رسالة خطأ عند محاولة الحفظ.
+  const { data: approvals } = await sb.from("judging_approvals")
+    .select("team_id, status").eq("round_id", round.id);
+  const approvedTeams = new Set((approvals||[]).filter(a => a.status === "approved").map(a => a.team_id));
+
   let html = "";
   for(const a of assignments){
     if(a.has_conflict){
@@ -347,7 +353,8 @@ async function loadAssignments(){
     const { data: teamMembers } = await sb.from("team_members").select("is_leader, profiles(full_name, email, phone)").eq("team_id", a.team_id);
     const teamScores = (myScores||[]).filter(s => s.team_id === a.team_id);
     const alreadyScored = teamScores.length === criteriaList.length && criteriaList.length > 0;
-    const isLocked = round.results_published;
+    const isApproved = approvedTeams.has(a.team_id);
+    const isLocked = round.results_published || isApproved;
 
     html += `<div class="card">
       <div class="team-header">
@@ -365,7 +372,7 @@ async function loadAssignments(){
           `).join("")}
         </div>
       </details>
-      ${isLocked ? `<div class="alert" style="display:block;background:#fef3e2;color:#92600a"><i data-lucide="lock" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> تم نشر النتائج — التعديل مقفل</div>` : ""}
+      ${isLocked ? `<div class="alert" style="display:block;background:#fef3e2;color:#92600a"><i data-lucide="lock" style="width:14px;height:14px;vertical-align:-2px;display:inline-block"></i> ${isApproved ? "اعتمدت الإدارة نتيجة هذا الفريق — التعديل مقفل" : "تم نشر النتائج — التعديل مقفل"}</div>` : ""}
       ${submission ? `
         <div class="project-card">
           <div class="project-card-head">
@@ -514,6 +521,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r105</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r106</div>
 </body>
 </html>
