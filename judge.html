@@ -388,7 +388,7 @@ async function loadAssignments(){
               <div><div class="c-name">${esc(c.name_ar)}</div><div class="c-hint">الوزن ${c.weight}% · من ${c.max_score}</div>${c.description ? `<div class="c-desc">${esc(c.description)}</div>` : ""}</div>
               <div class="score-scale" data-team="${a.team_id}" data-criteria="${c.id}" data-max="${c.max_score}">
                 ${Array.from({length: c.max_score}, (_, i) => i+1).map(n => `
-                  <button type="button" class="score-btn ${existing?.score===n?'selected':''}" ${isLocked?'disabled':''}
+                  <button type="button" class="score-btn ${Number(existing?.score)===n?'selected':''}" ${isLocked?'disabled':''}
                     onclick="selectScore('${a.team_id}','${c.id}',${n})">${n}</button>
                 `).join("")}
               </div>
@@ -514,6 +514,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r104</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r105</div>
 </body>
 </html>

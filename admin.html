@@ -3315,7 +3315,7 @@ async function togglePublishResults(id, value){
 }
 function openCriteriaModal(roundId, c=null){
   const isEdit = !!c;
-  c = c || {name_ar:"",description:"",weight:25,max_score:10};
+  c = c || {name_ar:"",description:"",weight:25,max_score:5};
   openModal(`
     <h3>${isEdit ? "تعديل معيار" : "إضافة معيار تقييم"}</h3>
     <div class="field"><label>اسم المعيار</label><input id="f-crit-name" value="${esc(c.name_ar)}" placeholder="مثال: الابتكار وجدة الفكرة"></div>
@@ -3325,20 +3325,49 @@ function openCriteriaModal(roundId, c=null){
     </div>
     <div class="form-row-2">
       <div class="field"><label>الوزن (%)</label><input type="number" id="f-crit-weight" value="${c.weight}"></div>
-      <div class="field"><label>أقصى درجة</label><input type="number" id="f-crit-max" value="${c.max_score}"></div>
+      <div class="field"><label>أقصى درجة</label><input type="number" id="f-crit-max" min="1" max="10" value="${c.max_score}">
+        <p class="hint" style="margin-top:4px">المقياس المعتمد للبرنامج: 5</p>
+      </div>
     </div>
+    <div id="crit-scored-warning" style="margin-top:2px"></div>
     <div class="modal-actions">
       <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
-      <button class="btn btn-primary" onclick="saveCriteria('${roundId}','${c.id||""}')">حفظ</button>
+      <button class="btn btn-primary" onclick="saveCriteria('${roundId}','${c.id||""}', ${c.max_score})">حفظ</button>
     </div>
   `);
+
+  // تنبيه مبكر: معيار عليه درجات مُدخلة فعلًا — تغيير سقفه يمسّ التحكيم
+  if(isEdit && c.id) flagScoredCriteria(c.id);
 }
-async function saveCriteria(roundId, id){
+
+async function flagScoredCriteria(criteriaId){
+  const { count } = await sb.from("scores").select("id", {count:"exact", head:true}).eq("criteria_id", criteriaId);
+  const box = document.getElementById("crit-scored-warning");
+  if(!box || !count) return;
+  box.innerHTML = `<div class="alert" style="font-size:12.5px">هذا المعيار عليه <strong>${count}</strong> درجة مُدخلة. تغيير "أقصى درجة" لن يُعيد احتساب الدرجات القائمة، وأي درجة أعلى من السقف الجديد سترفضها قاعدة البيانات عند أول تعديل.</div>`;
+}
+
+async function saveCriteria(roundId, id, oldMax){
   const name_ar = document.getElementById("f-crit-name").value.trim();
   const description = document.getElementById("f-crit-desc").value.trim();
   const weight = parseFloat(document.getElementById("f-crit-weight").value) || 1;
-  const max_score = parseInt(document.getElementById("f-crit-max").value) || 10;
+  const max_score = parseInt(document.getElementById("f-crit-max").value) || 5;
   if(!name_ar){ showToast("اسم المعيار مطلوب", true); return; }
+  if(max_score < 1){ showToast("أقصى درجة لازم تكون 1 فأكثر", true); return; }
+
+  // خفض السقف على معيار مُقيَّم: تأكيد صريح قبل المتابعة
+  if(id && oldMax && max_score < oldMax){
+    const { count } = await sb.from("scores").select("id", {count:"exact", head:true}).eq("criteria_id", id);
+    if(count){
+      const over = await sb.from("scores").select("id", {count:"exact", head:true}).eq("criteria_id", id).gt("score", max_score);
+      const overCount = over.count || 0;
+      const msg = overCount
+        ? `تحذير: ${overCount} من أصل ${count} درجة مُدخلة تتجاوز السقف الجديد (${max_score}). ستبقى كما هي بالقاعدة لكنها ستظهر خارج النطاق بواجهة المحكّم. متابعة؟`
+        : `هذا المعيار عليه ${count} درجة مُدخلة. متأكد من خفض السقف إلى ${max_score}؟`;
+      if(!confirm(msg)) return;
+    }
+  }
+
   const payload = { name_ar, description: description || null, weight, max_score };
 
   let q;
@@ -3351,6 +3380,7 @@ async function saveCriteria(roundId, id){
   }
   const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
+  if(id && oldMax && max_score !== oldMax) logActivity("تغيير سقف معيار تحكيم", "criteria", id, {name: name_ar, from: oldMax, to: max_score});
   showToast(id ? "تم التحديث" : "تمت الإضافة");
   closeModal();
   renderJudgingRounds();
