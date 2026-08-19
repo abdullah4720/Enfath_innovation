@@ -323,7 +323,7 @@ async function renderJudgeCertsTab(){
         <span>${esc(t.name_ar)}${issued ? `<br><span style="font-size:11.5px;color:var(--muted)">صادرة ${fmtDate(issued.issued_at)} · رمز التحقق: ${esc(issued.verification_code)}</span>` : ""}</span>
         <span style="display:flex;align-items:center;gap:8px">
           ${issued
-            ? `<button class="btn btn-primary btn-sm" style="width:auto;padding:8px 16px" onclick='openCertOverlay(${JSON.stringify({name: myFullName, typeName: t.name_ar, text: t.certificate_text, introText: t.intro_text, code: issued.verification_code, date: issued.issued_at, badgeIcon: t.badge_icon, badgeColor: t.badge_color}).replace(/'/g,"&#39;")})'>عرض الشهادة</button>`
+            ? `<button class="btn btn-primary btn-sm" style="width:auto;padding:8px 16px" onclick='openCertOverlay(${JSON.stringify({name: myFullName, typeName: t.name_ar, text: t.certificate_text, introText: t.intro_text, sigLabelOverride: t.signature_label, sigNameOverride: t.signature_name, code: issued.verification_code, date: issued.issued_at}).replace(/'/g,"&#39;")})'>عرض الشهادة</button>`
             : `<button class="btn btn-outline btn-sm" style="width:auto" onclick="issueJudgeCertificate('${t.key}')">إصدار الشهادة</button>`}
         </span>
       </div>`;
@@ -398,12 +398,12 @@ function certLine(raw){
   return certRich(isolateNums(esc(raw)));
 }
 
-function certMarkup({name, typeName, text, introText, code, date, badgeIcon, badgeColor}){
+function certMarkup({name, typeName, text, introText, sigLabelOverride, sigNameOverride, code, date}){
   const S = certSharedTexts || {};
   const brandAr = S.cert_brand_ar        || "ابتكار إنفاذ";
   const brandEn = S.cert_brand_en        || "Infath Innovation";
-  const sigLabel= S.cert_signature_label || "مع خالص الشكر والتقدير،";
-  const sigName = S.cert_signature_name  || "فريق هاكاثون ابتكار إنفاذ";
+  const sigLabel= sigLabelOverride || S.cert_signature_label || "مع خالص الشكر والتقدير،";
+  const sigName = sigNameOverride  || S.cert_signature_name  || "فريق هاكاثون ابتكار إنفاذ";
   const scale   = parseFloat(S.cert_body_scale) || 1;
   const fill = (t) => String(t||"")
     .replace(/\{\{name\}\}/g, name)
@@ -420,8 +420,6 @@ function certMarkup({name, typeName, text, introText, code, date, badgeIcon, bad
 
   // نص الشهادة قد يكون عدة أسطر — كل سطر فقرة مستقلة
   const lines = bodyText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  const bColor = badgeColor || "#00BDC4";
-  const bIcon  = badgeIcon || "award";
 
   // الشعارات موجودة أصلًا برأس الصفحة — نأخذ مصدرها بدل تكرار base64
   const qassimSrc = document.querySelector('img[alt="جامعة القصيم"]')?.src || "";
@@ -446,10 +444,7 @@ function certMarkup({name, typeName, text, introText, code, date, badgeIcon, bad
       </div>
     </div>
 
-    <div style="flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; padding:2.5em 6.875em 1.5em;">
-      <div style="flex-shrink:0; width:3.125em; height:3.125em; border-radius:50%; border:0.15em solid ${bColor}; display:flex; align-items:center; justify-content:center; margin-bottom:1em;">
-        <i data-lucide="${bIcon}" style="width:1.6em;height:1.6em;color:${bColor}"></i>
-      </div>
+    <div style="flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; padding:3.4em 6.875em 1.5em;">
       <div style="flex-shrink:0; font-size:2.7em; font-weight:800; color:#001938; margin-bottom:.9em; line-height:1.3;">${certLine(typeName)}</div>
       <div style="flex-shrink:0; width:7.375em; height:0.3125em; background:#00BDC4; border-radius:3px; margin-bottom:2em;"></div>
 
@@ -842,6 +837,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r112</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r114</div>
 </body>
 </html>
