@@ -3901,6 +3901,11 @@ async function renderCertificates(){
     </div>
     <div class="card"><div id="cert-types-table">${skeletonRows(4)}</div></div>
     <div class="card">
+      <h3 style="margin:0 0 4px">نصوص عامة لكل الشهادات</h3>
+      <p class="hint" style="margin-bottom:16px">تظهر بكل الشهادات مهما اختلفت الفئة — اسم البرنامج بالشريط العلوي وسطرا التوقيع بالأسفل</p>
+      <div id="cert-shared-texts">${skeletonRows(2)}</div>
+    </div>
+    <div class="card">
       <div class="toolbar" style="margin-bottom:12px">
         <h3 style="margin:0">حالة الشهادات لكل مشارك</h3>
         <div class="field" style="margin:0"><input id="cert-matrix-search" placeholder="بحث بالاسم..." oninput="filterCertMatrix()"></div>
@@ -3930,7 +3935,67 @@ async function renderCertificates(){
       </tbody></table>`;
   if(window.lucide) lucide.createIcons();
 
+  await renderCertSharedTexts();
   await loadCertMatrix();
+}
+
+/* ---------------- نصوص عامة لكل الشهادات ---------------- */
+const CERT_SHARED_FIELDS = [
+  { key:"cert_brand_ar",        label:"اسم البرنامج (عربي)",   ph:"ابتكار إنفاذ" },
+  { key:"cert_brand_en",        label:"اسم البرنامج (إنجليزي)", ph:"Infath Innovation" },
+  { key:"cert_signature_label", label:"سطر التوقيع",            ph:"مع خالص الشكر والتقدير،" },
+  { key:"cert_signature_name",  label:"الجهة الموقّعة",          ph:"فريق هاكاثون ابتكار إنفاذ" },
+];
+const CERT_SCALE_OPTIONS = [
+  { v:"0.9",  label:"صغير" },
+  { v:"1",    label:"عادي" },
+  { v:"1.12", label:"كبير" },
+  { v:"1.25", label:"أكبر" },
+];
+
+async function renderCertSharedTexts(){
+  const box = document.getElementById("cert-shared-texts");
+  if(!box) return;
+  const keys = CERT_SHARED_FIELDS.map(f => f.key).concat("cert_body_scale");
+  const { data, error } = await sb.from("platform_settings").select("key,value").in("key", keys);
+  if(error){
+    box.innerHTML = `<div class="alert error" style="display:block">تعذّر التحميل — تأكد من تطبيق ملف 71_certificate_texts.sql</div>`;
+    return;
+  }
+  const map = {};
+  (data||[]).forEach(r => map[r.key] = r.value);
+
+  box.innerHTML = `
+    <div class="form-row-2">
+      ${CERT_SHARED_FIELDS.map(f => `
+        <div class="field">
+          <label>${f.label}</label>
+          <input id="cst-${f.key}" value="${esc(map[f.key] ?? "")}" placeholder="${esc(f.ph)}">
+        </div>`).join("")}
+    </div>
+    <div class="field" style="max-width:230px">
+      <label>حجم نص الشهادة</label>
+      <select id="cst-cert_body_scale">
+        ${CERT_SCALE_OPTIONS.map(o => `<option value="${o.v}" ${String(map.cert_body_scale||"1")===o.v?"selected":""}>${o.label}</option>`).join("")}
+      </select>
+      <p class="hint" style="margin-top:4px">يكبّر أو يصغّر متن الشهادة والاسم معًا</p>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="saveCertSharedTexts()">حفظ النصوص العامة</button>
+    <span id="cert-shared-alert" style="font-size:12.5px;color:var(--teal);display:none;margin-right:10px">تم الحفظ ✓</span>`;
+}
+
+async function saveCertSharedTexts(){
+  const rows = CERT_SHARED_FIELDS.map(f => ({
+    key: f.key,
+    value: document.getElementById(`cst-${f.key}`).value.trim() || null
+  }));
+  rows.push({ key: "cert_body_scale", value: document.getElementById("cst-cert_body_scale").value });
+  const { error } = await sb.from("platform_settings").upsert(rows);
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  logActivity("تحديث النصوص العامة للشهادات", "platform_settings");
+  const el = document.getElementById("cert-shared-alert");
+  el.style.display = "inline";
+  setTimeout(() => el.style.display = "none", 2500);
 }
 let certMatrixCache = [];
 async function loadCertMatrix(){
@@ -4035,9 +4100,72 @@ function previewCertificate({name, typeName, text, code, date, badgeIcon, badgeC
     <div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
   `);
 }
+/* ---------------- تنسيق نص الشهادة ---------------- */
+// نفس رموز التنسيق المستخدمة بصفحات العرض؛ آمنة لأنها تُحوَّل
+// بعد الهروب الأمني ولا تسمح بوسوم HTML مباشرة
+const CERT_FORMAT_BTNS = [
+  { m:"**", label:"عريض",      style:"font-weight:800" },
+  { m:"//", label:"مائل",      style:"font-style:italic" },
+  { m:"__", label:"تحته خط",   style:"text-decoration:underline" },
+  { m:"++", label:"أكبر",      style:"font-size:15px" },
+  { m:"~~", label:"أصغر",      style:"font-size:11px" },
+  { m:"%%", label:"لون الهوية", style:"color:#00BDC4" },
+];
+
+function certToolbarHtml(targetId){
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+    ${CERT_FORMAT_BTNS.map(b => `
+      <button type="button" onclick="wrapCertText('${targetId}','${b.m}')"
+        style="padding:5px 11px;border:1px solid var(--border);border-radius:7px;background:#fff;cursor:pointer;font-family:inherit;font-size:12px;${b.style}">${b.label}</button>
+    `).join("")}
+  </div>`;
+}
+
+// يلفّ النص المحدَّد بالرمز، أو يزيله لو كان ملفوفًا أصلًا
+function wrapCertText(id, marker){
+  const el = document.getElementById(id);
+  if(!el) return;
+  const s = el.selectionStart, e = el.selectionEnd;
+  const val = el.value;
+  const sel = val.slice(s, e);
+  if(!sel){ showToast("حدّد النص المراد تنسيقه أولًا", true); el.focus(); return; }
+
+  const wrapped = sel.startsWith(marker) && sel.endsWith(marker) && sel.length > marker.length*2;
+  const next = wrapped
+    ? sel.slice(marker.length, -marker.length)
+    : marker + sel + marker;
+
+  el.value = val.slice(0, s) + next + val.slice(e);
+  el.focus();
+  el.setSelectionRange(s, s + next.length);
+  updateCertTextPreview();
+}
+
+// تحويل الرموز لعرض المعاينة — نسخة مطابقة لمنطق صفحات العرض
+function certRichPreview(escaped){
+  return String(escaped)
+    .replace(/\*\*([\s\S]+?)\*\*/g, '<b style="font-weight:800">$1</b>')
+    .replace(/\/\/([\s\S]+?)\/\//g, '<i>$1</i>')
+    .replace(/__([\s\S]+?)__/g,     '<u>$1</u>')
+    .replace(/\+\+([\s\S]+?)\+\+/g, '<span style="font-size:1.28em">$1</span>')
+    .replace(/~~([\s\S]+?)~~/g,     '<span style="font-size:.82em">$1</span>')
+    .replace(/%%([\s\S]+?)%%/g,     '<span style="color:#00BDC4">$1</span>');
+}
+
+function updateCertTextPreview(){
+  const box = document.getElementById("cert-text-preview");
+  if(!box) return;
+  const intro = document.getElementById("f-cert-intro")?.value || "";
+  const body  = document.getElementById("f-cert-text")?.value || "";
+  const lines = (intro + "\n" + body).split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if(!lines.length){ box.innerHTML = `<span style="color:var(--muted)">اكتب نصًا لتظهر المعاينة</span>`; return; }
+  // esc أولًا ثم التحويل — نفس ترتيب صفحات العرض
+  box.innerHTML = lines.map(l => `<div style="margin-bottom:4px">${certRichPreview(esc(l))}</div>`).join("");
+}
+
 function openCertTypeModal(c=null){
   const isEdit = !!c;
-  c = c || {key:"",name_ar:"",min_attendance_pct:50,requires_survey:false,certificate_text:"",role_key:"participant",badge_icon:"award",badge_color:"#C9922A"};
+  c = c || {key:"",name_ar:"",min_attendance_pct:50,requires_survey:false,certificate_text:"",intro_text:"يتقدّم مركز الابتكار والملكية الفكرية بجامعة القصيم بالشكر والتقدير إلى",role_key:"participant",badge_icon:"award",badge_color:"#00BDC4"};
   const BADGE_ICONS = ["award","medal","trophy","star","ribbon","shield-check","badge-check","crown"];
   openModal(`
     <h3>${isEdit ? "تعديل نوع شهادة" : "إضافة نوع شهادة"}</h3>
@@ -4072,9 +4200,20 @@ function openCertTypeModal(c=null){
       <input type="color" id="f-cert-badge-color" value="${c.badge_color||'#C9922A'}" style="width:60px;height:36px;padding:2px;cursor:pointer">
     </div>
 
+    <div class="field"><label>سطر التقديم (فوق الاسم)</label>
+      ${certToolbarHtml("f-cert-intro")}
+      <textarea id="f-cert-intro" rows="2" oninput="updateCertTextPreview()" placeholder="يتقدّم مركز الابتكار والملكية الفكرية بجامعة القصيم بالشكر والتقدير إلى">${esc(c.intro_text||"")}</textarea>
+      <p class="hint" style="margin-top:4px">يظهر مباشرة قبل اسم صاحب الشهادة — اتركه فارغًا لإخفائه</p>
+    </div>
+
     <div class="field"><label>نص الشهادة</label>
-      <textarea id="f-cert-text" rows="4" placeholder="نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ بتاريخ {{date}}">${esc(c.certificate_text||"")}</textarea>
-      <p class="hint" style="margin-top:4px">استخدم {{name}} للاسم، {{type}} لنوع الشهادة، {{date}} للتاريخ، {{code}} لرمز التحقق</p>
+      ${certToolbarHtml("f-cert-text")}
+      <textarea id="f-cert-text" rows="5" oninput="updateCertTextPreview()" placeholder="نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون إنفاذ بتاريخ {{date}}">${esc(c.certificate_text||"")}</textarea>
+      <p class="hint" style="margin-top:4px">كل سطر تكتبه يظهر كفقرة مستقلة بالشهادة. المتغيرات: {{name}} للاسم، {{type}} لنوع الشهادة، {{date}} للتاريخ، {{code}} لرمز التحقق</p>
+      <div style="margin-top:10px;padding:12px 14px;background:#f8f9fb;border:1px solid var(--border);border-radius:10px">
+        <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">معاينة التنسيق</div>
+        <div id="cert-text-preview" style="font-size:14px;line-height:1.9;color:var(--ink)"></div>
+      </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <button type="button" class="btn-link" style="font-size:11.5px" onclick="applyCertTextSuggestion('participant')">صيغة مقترحة: مشارك</button>
         <button type="button" class="btn-link" style="font-size:11.5px" onclick="applyCertTextSuggestion('mentor')">صيغة مقترحة: مرشد</button>
@@ -4087,6 +4226,7 @@ function openCertTypeModal(c=null){
       <button class="btn btn-primary" onclick="saveCertType('${c.id||""}')">حفظ</button>
     </div>
   `);
+  updateCertTextPreview();
 }
 function applyCertTextSuggestion(kind){
   const suggestions = {
@@ -4113,11 +4253,12 @@ async function saveCertType(id){
   const requires_survey = document.getElementById("f-cert-survey").checked;
   const is_active = document.getElementById("f-cert-active").checked;
   const certificate_text = document.getElementById("f-cert-text").value.trim();
+  const intro_text = document.getElementById("f-cert-intro").value.trim();
   const badge_icon = document.getElementById("f-cert-badge-icon").value || "award";
   const badge_color = document.getElementById("f-cert-badge-color").value || "#C9922A";
   if(!key || !name_ar){ showToast("المفتاح والاسم مطلوبان", true); return; }
 
-  const payload = { name_ar, role_key, min_attendance_pct, requires_survey, is_active, certificate_text, badge_icon, badge_color };
+  const payload = { name_ar, role_key, min_attendance_pct, requires_survey, is_active, certificate_text, intro_text: intro_text || null, badge_icon, badge_color };
   if(!id) payload.key = key;
   const q = id ? sb.from("certificate_types").update(payload).eq("id", id) : sb.from("certificate_types").insert({...payload, key});
   const { error } = await q;
@@ -5691,6 +5832,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r107</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r109</div>
 </body>
 </html>

@@ -323,7 +323,7 @@ async function renderJudgeCertsTab(){
         <span>${esc(t.name_ar)}${issued ? `<br><span style="font-size:11.5px;color:var(--muted)">صادرة ${fmtDate(issued.issued_at)} · رمز التحقق: ${esc(issued.verification_code)}</span>` : ""}</span>
         <span style="display:flex;align-items:center;gap:8px">
           ${issued
-            ? `<button class="btn btn-primary btn-sm" style="width:auto;padding:8px 16px" onclick='openCertOverlay(${JSON.stringify({name: myFullName, typeName: t.name_ar, text: t.certificate_text, code: issued.verification_code, date: issued.issued_at, badgeIcon: t.badge_icon, badgeColor: t.badge_color}).replace(/'/g,"&#39;")})'>عرض الشهادة</button>`
+            ? `<button class="btn btn-primary btn-sm" style="width:auto;padding:8px 16px" onclick='openCertOverlay(${JSON.stringify({name: myFullName, typeName: t.name_ar, text: t.certificate_text, introText: t.intro_text, code: issued.verification_code, date: issued.issued_at, badgeIcon: t.badge_icon, badgeColor: t.badge_color}).replace(/'/g,"&#39;")})'>عرض الشهادة</button>`
             : `<button class="btn btn-outline btn-sm" style="width:auto" onclick="issueJudgeCertificate('${t.key}')">إصدار الشهادة</button>`}
         </span>
       </div>`;
@@ -361,7 +361,57 @@ function isolateNums(escaped){
   return String(escaped).replace(/(\d+(?:[\-\/:.]\d+)*)/g, '<bdi>$1</bdi>');
 }
 
-function certMarkup({name, typeName, text, code, date, badgeIcon, badgeColor}){
+// النصوص العامة تُقرأ مرة واحدة من لوحة التحكم وتُخزَّن محليًا
+let certSharedTexts = null;
+async function loadCertSharedTexts(){
+  if(certSharedTexts) return certSharedTexts;
+  const keys = ["cert_brand_ar","cert_brand_en","cert_signature_label","cert_signature_name","cert_body_scale"];
+  try{
+    const { data } = await sb.from("platform_settings").select("key,value").in("key", keys);
+    const m = {};
+    (data||[]).forEach(r => { if(r.value) m[r.key] = r.value; });
+    certSharedTexts = m;
+  }catch(e){ certSharedTexts = {}; }
+  return certSharedTexts;
+}
+
+
+// ---- تنسيق النص ----
+// لا نسمح بوسوم HTML مباشرة (ثغرة حقن)، بل برموز آمنة تُحوَّل
+// بعد الهروب الأمني. الترتيب مهم: العزل الرقمي أولًا لأن أنماط
+// التنسيق تحتوي أرقامًا (مثل 1.25em) قد يلتقطها العازل.
+const CERT_RICH_RULES = [
+  { re: /\*\*([\s\S]+?)\*\*/g, wrap: '<b style="font-weight:800">$1</b>' },
+  { re: /\/\/([\s\S]+?)\/\//g,  wrap: '<i>$1</i>' },
+  { re: /__([\s\S]+?)__/g,       wrap: '<u>$1</u>' },
+  { re: /\+\+([\s\S]+?)\+\+/g, wrap: '<span style="font-size:1.28em">$1</span>' },
+  { re: /~~([\s\S]+?)~~/g,       wrap: '<span style="font-size:.82em">$1</span>' },
+  { re: /%%([\s\S]+?)%%/g,       wrap: '<span style="color:#00BDC4">$1</span>' },
+];
+function certRich(escaped){
+  let out = String(escaped);
+  CERT_RICH_RULES.forEach(r => { out = out.replace(r.re, r.wrap); });
+  return out;
+}
+// السطر الجاهز للعرض: هروب ثم عزل رقمي ثم تنسيق
+function certLine(raw){
+  return certRich(isolateNums(esc(raw)));
+}
+
+function certMarkup({name, typeName, text, introText, code, date, badgeIcon, badgeColor}){
+  const S = certSharedTexts || {};
+  const brandAr = S.cert_brand_ar        || "ابتكار إنفاذ";
+  const brandEn = S.cert_brand_en        || "Infath Innovation";
+  const sigLabel= S.cert_signature_label || "مع خالص الشكر والتقدير،";
+  const sigName = S.cert_signature_name  || "فريق هاكاثون ابتكار إنفاذ";
+  const scale   = parseFloat(S.cert_body_scale) || 1;
+  const fill = (t) => String(t||"")
+    .replace(/\{\{name\}\}/g, name)
+    .replace(/\{\{type\}\}/g, typeName)
+    .replace(/\{\{date\}\}/g, certDate(date))
+    .replace(/\{\{code\}\}/g, code || "");
+  const intro = fill(introText);
+
   const bodyText = (text || "نشهد بأن {{name}} قد أتمّ متطلبات {{type}} بنجاح ضمن فعاليات هاكاثون ابتكار إنفاذ بتاريخ {{date}}.")
     .replace(/\{\{name\}\}/g, name)
     .replace(/\{\{type\}\}/g, typeName)
@@ -386,13 +436,13 @@ function certMarkup({name, typeName, text, code, date, badgeIcon, badgeColor}){
       ${qassimSrc ? `<img src="${qassimSrc}" alt="" style="height:3.875em; width:auto; max-width:20em; object-fit:contain; margin:0 2em;">` : ""}
     </div>
 
-    <div style="height:11.5625em; background:#001938; position:relative; overflow:hidden; display:flex; align-items:center; padding:0 4.375em; flex-shrink:0;">
+    <div style="height:11.5625em; background:#001938; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:flex-start; padding:0 4.375em; flex-shrink:0;">
       <div style="position:absolute; top:-120%; height:340%; width:0.4375em; left:4.625em; background:#00BDC4; opacity:.3; transform:rotate(24deg);"></div>
       <div style="position:absolute; top:-120%; height:340%; width:1.625em;  left:8.125em; background:#00BDC4; opacity:.95; transform:rotate(24deg);"></div>
       <div style="position:absolute; top:-120%; height:340%; width:0.8125em; left:11.625em; background:#00BDC4; opacity:.45; transform:rotate(24deg);"></div>
-      <div style="position:relative; z-index:2; text-align:right;">
-        <div style="font-size:3.125em; font-weight:800; color:#00BDC4; line-height:1.15;">ابتكار إنفاذ</div>
-        <div style="font-size:1.5em; font-weight:600; color:#5FE8EC; letter-spacing:.02em;">Infath Innovation</div>
+      <div style="position:relative; z-index:2; text-align:right; max-width:60%; overflow:hidden;">
+        <div style="font-size:3.125em; font-weight:800; color:#00BDC4; line-height:1.15;">${certLine(brandAr)}</div>
+        <div style="font-size:1.5em; font-weight:600; color:#5FE8EC; letter-spacing:.02em;">${certLine(brandEn)}</div>
       </div>
     </div>
 
@@ -400,25 +450,26 @@ function certMarkup({name, typeName, text, code, date, badgeIcon, badgeColor}){
       <div style="flex-shrink:0; width:3.125em; height:3.125em; border-radius:50%; border:0.15em solid ${bColor}; display:flex; align-items:center; justify-content:center; margin-bottom:1em;">
         <i data-lucide="${bIcon}" style="width:1.6em;height:1.6em;color:${bColor}"></i>
       </div>
-      <div style="flex-shrink:0; font-size:2.7em; font-weight:800; color:#001938; margin-bottom:.9em; line-height:1.3;">${esc(typeName)}</div>
+      <div style="flex-shrink:0; font-size:2.7em; font-weight:800; color:#001938; margin-bottom:.9em; line-height:1.3;">${certLine(typeName)}</div>
       <div style="flex-shrink:0; width:7.375em; height:0.3125em; background:#00BDC4; border-radius:3px; margin-bottom:2em;"></div>
 
-      <div style="flex-shrink:0; font-size:1.34em; color:#334155; line-height:1.9; margin-bottom:.5em;">يتقدّم مركز الابتكار والملكية الفكرية بجامعة القصيم بالشكر والتقدير إلى</div>
-      <div style="flex-shrink:0; font-size:1.95em; font-weight:800; color:#001938; margin:.85em 0 1.1em;">${esc(name)}</div>
-      ${lines.map(l => `<div style="flex-shrink:0; font-size:1.34em; color:#334155; line-height:1.9; margin-bottom:.5em;">${isolateNums(esc(l))}</div>`).join("")}
+      ${intro ? `<div style="flex-shrink:0; font-size:${(1.34*scale).toFixed(3)}em; color:#334155; line-height:1.9; margin-bottom:.5em;">${certLine(intro)}</div>` : ""}
+      <div style="flex-shrink:0; font-size:${(1.95*scale).toFixed(3)}em; font-weight:800; color:#001938; margin:.85em 0 1.1em;">${certLine(name)}</div>
+      ${lines.map(l => `<div style="flex-shrink:0; font-size:${(1.34*scale).toFixed(3)}em; color:#334155; line-height:1.9; margin-bottom:.5em;">${certLine(l)}</div>`).join("")}
 
       <div style="flex-shrink:0; width:100%; height:2px; background:#00BDC4; opacity:.55; margin:2em 0 0;"></div>
     </div>
 
     <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-shrink:0; padding:1.9em 6.875em 2.4em; font-size:1em; color:#64748B;">
       <div style="min-width:15.625em;">رمز التحقق: <bdi>${esc(code||"—")}</bdi></div>
-      <div style="text-align:center; line-height:1.85;">مع خالص الشكر والتقدير،<b style="display:block; font-size:1.25em; color:#001938; font-weight:700; margin-top:.25em;">فريق هاكاثون ابتكار إنفاذ</b></div>
+      <div style="text-align:center; line-height:1.85;">${certLine(sigLabel)}<b style="display:block; font-size:1.25em; color:#001938; font-weight:700; margin-top:.25em;">${certLine(sigName)}</b></div>
       <div style="min-width:15.625em; text-align:left;">${isolateNums(esc(certDate(date)))}</div>
     </div>
   </div>`;
 }
 
-function openCertOverlay(data){
+async function openCertOverlay(data){
+  await loadCertSharedTexts();
   const overlay = document.createElement("div");
   overlay.id = "cert-overlay";
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,25,56,.82);z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;overflow:auto";
@@ -791,6 +842,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r110</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r112</div>
 </body>
 </html>
