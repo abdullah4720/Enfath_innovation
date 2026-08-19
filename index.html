@@ -293,25 +293,37 @@ const TRACK_GLOWS = ["var(--gold)","var(--teal)","var(--violet)"];
 })();
 
 (async function initCountdown(){
-  const { data } = await sb.from("platform_settings").select("value").eq("key","hackathon_start_date").maybeSingle();
+  const { data } = await sb.from("platform_settings").select("value")
+    .eq("key","hackathon_start_date").maybeSingle();
   if(!data?.value) return;
-  const target = new Date(data.value).getTime();
+
+  const start = new Date(data.value).getTime();
   const box = document.getElementById("countdown-box");
+  let timer = null;
+
   function tick(){
-    const diff = target - Date.now();
-    if(diff <= 0){ box.innerHTML = '<div class="cd-item"><div class="cd-num">🎉</div><div class="cd-label">بدأ الآن</div></div>'; return; }
-    document.getElementById("cd-days").textContent = Math.floor(diff / 86400000);
+    const diff = start - Date.now();
+
+    // انتهى العد: إخفاء تام، لا شارة ولا بديل
+    if(diff <= 0){
+      box.style.display = "none";
+      if(timer) clearInterval(timer);
+      return;
+    }
+
+    document.getElementById("cd-days").textContent  = Math.floor(diff / 86400000);
     document.getElementById("cd-hours").textContent = Math.floor((diff % 86400000) / 3600000);
-    document.getElementById("cd-mins").textContent = Math.floor((diff % 3600000) / 60000);
+    document.getElementById("cd-mins").textContent  = Math.floor((diff % 3600000) / 60000);
+    box.style.display = "inline-flex";
   }
-  box.style.display = "inline-flex";
+
   tick();
-  setInterval(tick, 60000);
+  timer = setInterval(tick, 60000);
 })();
 
 }catch(err){ console.error("تعذّر تحميل بيانات Supabase:", err); }
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r78</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r80</div>
 </body>
 </html>

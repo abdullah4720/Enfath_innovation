@@ -1356,26 +1356,32 @@ async function saveMyProfileInfo(){
 /* ---------------- العداد التنازلي ---------------- */
 let countdownTimer = null;
 async function initCountdown(){
-  const { data } = await sb.from("platform_settings").select("value").eq("key","hackathon_start_date").maybeSingle();
+  const { data } = await sb.from("platform_settings").select("value")
+    .eq("key","hackathon_start_date").maybeSingle();
+
   const box = document.getElementById("countdown-box");
   const valueEl = document.getElementById("countdown-value");
   if(!data?.value){ box.style.display = "none"; return; }
-  const target = new Date(data.value).getTime();
+
+  const start = new Date(data.value).getTime();
 
   function tick(){
-    const now = Date.now();
-    const diff = target - now;
+    const diff = start - Date.now();
+
+    // انتهى العد: إخفاء تام، لا رسالة ولا بديل
     if(diff <= 0){
-      valueEl.textContent = "بدأ الهاكاثون! 🎉";
+      box.style.display = "none";
       clearInterval(countdownTimer);
       return;
     }
+
     const d = Math.floor(diff / 86400000);
     const h = Math.floor((diff % 86400000) / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     valueEl.textContent = `${d} يوم · ${h} ساعة · ${m} دقيقة`;
+    box.style.display = "block";
   }
-  box.style.display = "block";
+
   tick();
   clearInterval(countdownTimer);
   countdownTimer = setInterval(tick, 60000);
@@ -2567,6 +2573,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r110</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r112</div>
 </body>
 </html>
