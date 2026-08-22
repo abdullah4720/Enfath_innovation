@@ -6398,26 +6398,110 @@ async function toggleUserRole(userId, roleId, isChecked){
 /* ---------------- حذف مشارك ---------------- */
 function openDeleteParticipantModal(userId, userName){
   openModal(`
-    <h3>حذف ${esc(userName)}</h3>
-    <p class="hint" style="margin:-8px 0 16px">حذف حساب مستخدم فعلي عملية حسّاسة — اختر المستوى المناسب</p>
+    <h3>${esc(userName)}</h3>
+    <p class="hint" style="margin:-8px 0 16px">اختر الإجراء المناسب — الثلاثة مختلفة في الأثر</p>
+
+    <div id="del-impact" style="background:#f8f9fb;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12.5px">
+      جاري حساب ما سيتأثر...
+    </div>
+
+    <div style="background:#eef1f6;border-radius:10px;padding:14px;margin-bottom:12px">
+      <strong style="font-size:13.5px">🔵 تعطيل الحساب</strong>
+      <p class="hint" style="margin:6px 0 10px">يمنعه من الدخول ويُبقي كل بياناته — درجاته وحضوره وشهاداته. <strong>الخيار الموصى به</strong> في معظم الحالات، وقابل للتراجع.</p>
+      <button class="btn btn-outline btn-sm" onclick='deactivateParticipant("${userId}", ${JSON.stringify(userName)})'>تعطيل</button>
+    </div>
+
     <div style="background:#fef3e2;border-radius:10px;padding:14px;margin-bottom:12px">
-      <strong style="font-size:13.5px">🟡 إزالة آمنة (فورية)</strong>
-      <p class="hint" style="margin:6px 0 10px">يخرجه من فريقه الحالي ويلغي كل أدواره (مرشد/محكّم/إداري) — حسابه وبياناته التاريخية تبقى محفوظة، فقط يفقد الوصول</p>
-      <button class="btn btn-outline btn-sm" onclick='safeRemoveParticipant("${userId}", ${JSON.stringify(userName)})'>إزالة آمنة</button>
+      <strong style="font-size:13.5px">🟡 إزالة من الفريق والأدوار</strong>
+      <p class="hint" style="margin:6px 0 10px">يخرجه من فريقه ويلغي أدواره — الحساب يبقى ويستطيع الدخول، لكن بلا صلاحيات.</p>
+      <button class="btn btn-outline btn-sm" onclick='safeRemoveParticipant("${userId}", ${JSON.stringify(userName)})'>إزالة</button>
     </div>
+
     <div style="background:#fdf5f4;border-radius:10px;padding:14px">
-      <strong style="font-size:13.5px;color:var(--danger)">🔴 حذف الحساب نهائيًا</strong>
-      <p class="hint" style="margin:6px 0 10px">حذف حقيقي للحساب من نظام المصادقة — يحتاج صلاحية خاصة غير متاحة من المتصفح مباشرة لأسباب أمنية. راجع دليل <code>DELETE_USER_GUIDE.md</code> المرفق بالحزمة (دالة جاهزة تنشرها مرة وحدة).</p>
+      <strong style="font-size:13.5px;color:var(--danger)">🔴 حذف نهائي</strong>
+      <p class="hint" style="margin:6px 0 10px">يمحو الحساب وكل بياناته من النظام — <strong>لا رجعة فيه إطلاقًا</strong>. تنقص أعداد الحضور والتحكيم في تقاريرك ولن تعرف السبب لاحقًا.</p>
+      <button class="btn btn-danger btn-sm" onclick='openHardDeleteModal("${userId}", ${JSON.stringify(userName)})'>حذف نهائي</button>
     </div>
+
     <div class="modal-actions"><button class="btn btn-outline" onclick="closeModal()">إغلاق</button></div>
   `);
+  loadDeletionImpact(userId);
 }
+
+// نعرض ما سيُمحى فعليًا قبل القرار، لا بعده
+async function loadDeletionImpact(userId){
+  const { data, error } = await sb.rpc("preview_user_deletion", { p_user_id: userId });
+  const box = document.getElementById("del-impact");
+  if(!box) return;
+  if(error){
+    box.innerHTML = `<span style="color:var(--muted)">تعذّر حساب الأثر — تأكد من تطبيق ملف 88</span>`;
+    return;
+  }
+  const rows = (data||[]).filter(r => Number(r.العدد) > 0);
+  box.innerHTML = rows.length
+    ? `<strong>سيتأثر بالحذف النهائي:</strong><br>` +
+      rows.map(r => `${esc(r.البند)}: <strong>${r.العدد}</strong>`).join(" · ")
+    : `<span style="color:var(--muted)">لا توجد بيانات مرتبطة بهذا الحساب</span>`;
+}
+
+async function deactivateParticipant(userId, userName){
+  const reason = prompt(`سبب تعطيل ${userName}؟ (إلزامي)`);
+  if(reason === null) return;
+  if(!reason.trim()){ showToast("السبب إلزامي", true); return; }
+
+  const { data, error } = await sb.rpc("deactivate_user", { p_user_id: userId, p_reason: reason.trim() });
+  if(error || !data?.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+
+  logActivity("تعطيل حساب", "user", userId, { name: userName, reason: reason.trim() });
+  showToast(`تم تعطيل ${userName}`);
+  closeModal();
+  renderParticipants();
+}
+
+// الحذف النهائي يتطلب كتابة الاسم — حاجز يمنع الضغط بالخطأ
+function openHardDeleteModal(userId, userName){
+  openModal(`
+    <h3 style="color:var(--danger)">حذف نهائي</h3>
+    <div class="alert" style="display:block;background:#fdf5f4;color:var(--danger);font-size:12.5px">
+      سيُمحى حساب <strong>${esc(userName)}</strong> وكل بياناته نهائيًا: الدرجات، الحضور، الشهادات، عضوية الفريق، الإشعارات.
+      <br><strong>لا يمكن التراجع.</strong>
+    </div>
+    <div class="field">
+      <label>اكتب اسم المستخدم للتأكيد</label>
+      <input id="f-hard-confirm" placeholder="${esc(userName)}" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>سبب الحذف <span style="color:var(--danger)">*</span></label>
+      <textarea id="f-hard-reason" rows="2" placeholder="مثال: حساب مكرر أُنشئ بالخطأ"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick='openDeleteParticipantModal("${userId}", ${JSON.stringify(userName)})'>رجوع</button>
+      <button class="btn btn-danger" onclick='confirmHardDelete("${userId}", ${JSON.stringify(userName)})'>حذف نهائيًا</button>
+    </div>
+  `);
+}
+
+async function confirmHardDelete(userId, userName){
+  const typed  = document.getElementById("f-hard-confirm").value.trim();
+  const reason = document.getElementById("f-hard-reason").value.trim();
+
+  if(typed !== userName){ showToast("الاسم غير مطابق", true); return; }
+  if(!reason){ showToast("سبب الحذف إلزامي", true); return; }
+
+  const { data, error } = await sb.rpc("delete_user_completely", { p_user_id: userId, p_reason: reason });
+  if(error || !data?.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
+
+  showToast(`حُذف ${userName} نهائيًا`);
+  closeModal();
+  renderParticipants();
+}
+
 async function safeRemoveParticipant(userId, userName){
-  if(!confirm(`هل أنت متأكد من إزالة ${userName} من فريقه وإلغاء كل أدواره؟`)) return;
+  if(!confirm(`إزالة ${userName} من فريقه وإلغاء كل أدواره؟`)) return;
   await sb.from("team_members").delete().eq("user_id", userId);
   await sb.from("user_roles").delete().eq("user_id", userId);
-  logActivity("إزالة آمنة لمشارك", "user", userId, {name: userName});
-  showToast("تمت الإزالة — الحساب موجود لكن بدون فريق أو أدوار");
+  logActivity("إزالة مشارك من الفريق والأدوار", "user", userId, {name: userName});
+  showToast("تمت الإزالة — الحساب موجود بلا فريق أو أدوار");
   closeModal();
   renderParticipants();
 }
@@ -6508,6 +6592,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r118</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r119</div>
 </body>
 </html>
