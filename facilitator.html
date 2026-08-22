@@ -294,7 +294,7 @@ async function renderAttendanceMatrix(){
   box.innerHTML = mainModeSwitcherHtml() + `
     <div class="card" style="padding:14px 16px;margin-bottom:14px">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-        <input id="matrix-search" placeholder="بحث بالاسم أو البريد..." style="flex:1;min-width:180px" oninput="renderMatrixTable()">
+        <input id="matrix-search" placeholder="بحث بالاسم أو المشروع أو الجوال..." style="flex:1;min-width:180px" oninput="renderMatrixTable()">
         <select id="matrix-track-filter" style="max-width:220px" onchange="loadAttendanceMatrix()"><option value="">كل المسارات</option></select>
       </div>
     </div>
@@ -328,7 +328,7 @@ async function loadAttendanceMatrix(){
     : (sessions||[]);
 
   let membersQuery = sb.from("team_members")
-    .select("user_id, profiles(full_name, email, phone), teams!inner(status, track_id, tracks(name_ar))")
+    .select("user_id, is_leader, profiles(full_name, email, phone), teams!inner(id, team_name, status, track_id, tracks(name_ar))")
     .eq("teams.status", "confirmed");
   if(matrixTrackFilter) membersQuery = membersQuery.eq("teams.track_id", matrixTrackFilter);
   const { data: members } = await membersQuery;
@@ -392,15 +392,31 @@ function renderMatrixTable(){
 
   const term = (document.getElementById("matrix-search")?.value || "").trim().toLowerCase();
   const filtered = !term ? matrixParticipants : matrixParticipants.filter(m =>
-    (m.profiles?.full_name||"").toLowerCase().includes(term) || (m.profiles?.email||"").toLowerCase().includes(term)
+    (m.profiles?.full_name||"").toLowerCase().includes(term)
+    || (m.profiles?.email||"").toLowerCase().includes(term)
+    || (m.profiles?.phone||"").includes(term)
+    || (m.teams?.team_name||"").toLowerCase().includes(term)
   );
 
-  container.innerHTML = `<table style="min-width:${560 + shown.length*96}px">
+  // التجميع حسب المشروع: أعضاء الفريق الواحد يجلسون معًا،
+  // فترتيبهم متجاورين يختصر تنقّل الميسّر بين الطاولات
+  const groups = {};
+  filtered.forEach(m => {
+    const key = m.teams?.team_name || "بلا مشروع";
+    (groups[key] = groups[key] || []).push(m);
+  });
+  const names = Object.keys(groups).sort((a,b) => a.localeCompare(b,"ar"));
+  names.forEach(k => groups[k].sort((a,b) =>
+    (b.is_leader?1:0) - (a.is_leader?1:0) ||
+    (a.profiles?.full_name||"").localeCompare(b.profiles?.full_name||"","ar")));
+
+  const NAME_W = 180, PHONE_W = 120;
+
+  container.innerHTML = `<table style="min-width:${NAME_W + PHONE_W + 150 + shown.length*96}px;border-collapse:separate;border-spacing:0">
     <thead><tr>
-      <th style="width:36px">#</th>
-      <th>الاسم</th>
-      <th>الجوال</th>
-      <th>المسار</th>
+      <th style="position:sticky;right:0;z-index:3;background:var(--card);min-width:${NAME_W}px;box-shadow:-1px 0 0 var(--border)">المشارك</th>
+      <th style="position:sticky;right:${NAME_W}px;z-index:3;background:var(--card);min-width:${PHONE_W}px;box-shadow:-1px 0 0 var(--border)">الجوال</th>
+      <th style="min-width:150px">المسار</th>
       ${shown.map(s => {
         const m = FAC_BADGE[s.session_type] || FAC_BADGE.prep;
         return `<th style="text-align:center;min-width:96px" title="${esc(s.title)} — ${fmtDate(s.session_date)}">
@@ -413,28 +429,40 @@ function renderMatrixTable(){
       }).join("")}
     </tr></thead>
     <tbody>
-      ${filtered.map((m, idx) => `
-        <tr>
-          <td style="color:var(--muted)">${idx+1}</td>
-          <td><strong>${esc(m.profiles?.full_name||"—")}</strong><br><span style="color:var(--muted);font-size:11px">${esc(m.profiles?.email||"")}</span></td>
-          <td style="font-size:12px;color:var(--muted)">${esc(m.profiles?.phone||"—")}</td>
-          <td style="font-size:12px;color:var(--muted)">${esc(m.teams?.tracks?.name_ar||"—")}</td>
-          ${shown.map(s => {
-            const key = `${s.id}|${m.user_id}`;
-            const present = !!matrixAttendanceMap[key];
-            const locked = !s.attendance_open;
-            return `<td style="text-align:center">
-              <button ${locked ? "disabled" : ""} onclick="toggleMatrixCell('${s.id}','${m.user_id}')"
-                title="${locked ? "التحضير مغلق لهذه الجلسة" : (present ? "حاضر — اضغط للإلغاء" : "غائب — اضغط للتحضير")}"
-                style="width:30px;height:30px;border-radius:8px;border:none;font-weight:800;font-size:14px;
-                cursor:${locked ? "not-allowed" : "pointer"};opacity:${locked ? ".45" : "1"};
-                background:${present ? '#e6f7f3' : '#fdf5f4'};color:${present ? 'var(--teal)' : 'var(--danger)'}">
-                ${present ? '✓' : '✗'}
-              </button>
-            </td>`;
-          }).join("")}
-        </tr>
-      `).join("")}
+      ${names.map(team => {
+        const rows = groups[team];
+        const track = rows[0]?.teams?.tracks?.name_ar || "—";
+        // صف فاصل باسم المشروع = رأس الطاولة
+        return `<tr style="background:var(--border-light)">
+            <td colspan="${3 + shown.length}" style="position:sticky;right:0;padding:9px 14px;font-weight:800;font-size:13px;color:var(--navy)">
+              ${esc(team)}
+              <span style="font-weight:400;color:var(--muted);font-size:11.5px"> · ${esc(track)} · ${rows.length} أعضاء</span>
+            </td>
+          </tr>` +
+          rows.map(m => `
+            <tr>
+              <td style="position:sticky;right:0;z-index:1;background:var(--card);box-shadow:-1px 0 0 var(--border)">
+                <strong style="font-size:13px">${esc(m.profiles?.full_name||"—")}</strong>
+                ${m.is_leader ? ` <span style="font-size:9px;padding:1px 6px;border-radius:20px;background:#fbf3e2;color:var(--gold);font-weight:700">قائد</span>` : ""}
+              </td>
+              <td style="position:sticky;right:${NAME_W}px;z-index:1;background:var(--card);font-size:12px;color:var(--muted);box-shadow:-1px 0 0 var(--border)">${esc(m.profiles?.phone||"—")}</td>
+              <td style="font-size:12px;color:var(--muted)">${esc(m.teams?.tracks?.name_ar||"—")}</td>
+              ${shown.map(s => {
+                const key = `${s.id}|${m.user_id}`;
+                const present = !!matrixAttendanceMap[key];
+                const locked = !s.attendance_open;
+                return `<td style="text-align:center">
+                  <button ${locked ? "disabled" : ""} onclick="toggleMatrixCell('${s.id}','${m.user_id}')"
+                    title="${locked ? "التحضير مغلق لهذه الجلسة" : (present ? "حاضر — اضغط للإلغاء" : "غائب — اضغط للتحضير")}"
+                    style="width:30px;height:30px;border-radius:8px;border:none;font-weight:800;font-size:14px;
+                    cursor:${locked ? "not-allowed" : "pointer"};opacity:${locked ? ".45" : "1"};
+                    background:${present ? '#e6f7f3' : '#fdf5f4'};color:${present ? 'var(--teal)' : 'var(--danger)'}">
+                    ${present ? '✓' : '✗'}
+                  </button>
+                </td>`;
+              }).join("")}
+            </tr>`).join("");
+      }).join("")}
     </tbody>
   </table>`;
 }
@@ -616,6 +644,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r94</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r95</div>
 </body>
 </html>
