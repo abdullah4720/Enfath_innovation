@@ -426,15 +426,15 @@ function certMarkup({name, typeName, text, introText, sigLabelOverride, sigNameO
   const enfathSrc = document.querySelector('img[alt="إنفاذ"]')?.src || "";
 
   return `
-  <div id="cert-canvas" style="font-size:11px; width:87.5em; min-height:61.875em; background:#fff; border:0.375em solid #00BDC4; display:flex; flex-direction:column; font-family:'IBM Plex Sans Arabic',sans-serif; direction:rtl;">
+  <div id="cert-canvas" style="font-size:11px; width:87.5em; min-height:54.7em; background:#fff; border:0.375em solid #00BDC4; display:flex; flex-direction:column; font-family:'IBM Plex Sans Arabic',sans-serif; direction:rtl;">
 
-    <div style="height:9.875em; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+    <div style="height:7.6em; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
       ${enfathSrc ? `<img src="${enfathSrc}" alt="" style="height:3.875em; width:auto; max-width:20em; object-fit:contain; margin:0 2em;">` : ""}
       <div style="width:1px; height:3.25em; background:#D8DEE8; flex-shrink:0;"></div>
       ${qassimSrc ? `<img src="${qassimSrc}" alt="" style="height:3.875em; width:auto; max-width:20em; object-fit:contain; margin:0 2em;">` : ""}
     </div>
 
-    <div style="height:11.5625em; background:#001938; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:flex-start; padding:0 4.375em; flex-shrink:0;">
+    <div style="height:8.9em; background:#001938; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:flex-start; padding:0 4.375em; flex-shrink:0;">
       <div style="position:absolute; top:-120%; height:340%; width:0.4375em; left:4.625em; background:#00BDC4; opacity:.3; transform:rotate(24deg);"></div>
       <div style="position:absolute; top:-120%; height:340%; width:1.625em;  left:8.125em; background:#00BDC4; opacity:.95; transform:rotate(24deg);"></div>
       <div style="position:absolute; top:-120%; height:340%; width:0.8125em; left:11.625em; background:#00BDC4; opacity:.45; transform:rotate(24deg);"></div>
@@ -444,18 +444,18 @@ function certMarkup({name, typeName, text, introText, sigLabelOverride, sigNameO
       </div>
     </div>
 
-    <div style="flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; padding:3.4em 6.875em 1.5em;">
-      <div style="flex-shrink:0; font-size:2.7em; font-weight:800; color:#001938; margin-bottom:.9em; line-height:1.3;">${certLine(typeName)}</div>
-      <div style="flex-shrink:0; width:7.375em; height:0.3125em; background:#00BDC4; border-radius:3px; margin-bottom:2em;"></div>
+    <div style="flex:1; display:flex; flex-direction:column; align-items:center; text-align:center; padding:1.9em 6.875em 1em;">
+      <div style="flex-shrink:0; font-size:2.7em; font-weight:800; color:#001938; margin-bottom:.75em; line-height:1.25;">${certLine(typeName)}</div>
+      <div style="flex-shrink:0; width:7.375em; height:0.3125em; background:#00BDC4; border-radius:3px; margin-bottom:1.6em;"></div>
 
       ${intro ? `<div style="flex-shrink:0; font-size:${(1.34*scale).toFixed(3)}em; color:#334155; line-height:1.9; margin-bottom:.5em;">${certLine(intro)}</div>` : ""}
-      <div style="flex-shrink:0; font-size:${(1.95*scale).toFixed(3)}em; font-weight:800; color:#001938; margin:.85em 0 1.1em;">${certLine(name)}</div>
+      <div style="flex-shrink:0; font-size:${(1.95*scale).toFixed(3)}em; font-weight:800; color:#001938; margin:.7em 0 .9em;">${certLine(name)}</div>
       ${lines.map(l => `<div style="flex-shrink:0; font-size:${(1.34*scale).toFixed(3)}em; color:#334155; line-height:1.9; margin-bottom:.5em;">${certLine(l)}</div>`).join("")}
 
-      <div style="flex-shrink:0; width:100%; height:2px; background:#00BDC4; opacity:.55; margin:2em 0 0;"></div>
+      <div style="flex-shrink:0; width:100%; height:2px; background:#00BDC4; opacity:.55; margin:1.6em 0 0;"></div>
     </div>
 
-    <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-shrink:0; padding:1.9em 6.875em 2.4em; font-size:1em; color:#64748B;">
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-shrink:0; padding:1.2em 6.875em 1.5em; font-size:1em; color:#64748B;">
       <div style="min-width:15.625em;">رمز التحقق: <bdi>${esc(code||"—")}</bdi></div>
       <div style="text-align:center; line-height:1.85;">${certLine(sigLabel)}<b style="display:block; font-size:1.25em; color:#001938; font-weight:700; margin-top:.25em;">${certLine(sigName)}</b></div>
       <div style="min-width:15.625em; text-align:left;">${isolateNums(esc(certDate(date)))}</div>
@@ -484,8 +484,12 @@ async function openCertOverlay(data){
 function fitCertToScreen(){
   const el = document.getElementById("cert-canvas");
   if(!el) return;
-  const avail = Math.min(window.innerWidth - 60, 1180);
-  const fs = Math.max(6, Math.min(11, avail / 87.5));
+  // نلائم بالعرض *والارتفاع* معًا. الاكتفاء بالعرض يجعل البطاقة
+  // تتجاوز الشاشة رأسيًا على اللابتوبات (768px مثلًا) فيضطر
+  // المستخدم للتمرير لرؤية زر التحميل.
+  const availW = Math.min(window.innerWidth - 60, 1180);
+  const availH = window.innerHeight - 150;      // مساحة الأزرار والهوامش
+  const fs = Math.max(6, Math.min(11, availW / 87.5, availH / 61.875));
   el.style.fontSize = fs + "px";
 }
 
