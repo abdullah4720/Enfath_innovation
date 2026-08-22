@@ -6145,8 +6145,25 @@ async function renderAnalytics(){
   chartInstances.forEach(c => c.destroy());
   chartInstances = [];
 
-  const { data: teams } = await sb.from("teams").select("created_at, status, tracks(name_ar)");
-  const { data: satisfaction } = await sb.from("satisfaction_by_stage").select("*");
+  // كانت الأخطاء تمرّ صامتة فتبدو الصفحة فارغة بلا سبب ظاهر
+  const { data: teams, error: teamsErr } = await sb.from("teams").select("created_at, status, tracks(name_ar)");
+  const { data: satisfaction, error: satErr } = await sb.from("satisfaction_by_stage").select("*");
+
+  if(teamsErr){
+    main.innerHTML = `<div class="page-header"><div><h1>التحليلات</h1></div></div>
+      <div class="card"><div class="empty-state">
+        تعذّر تحميل بيانات الفرق<br>
+        <span class="hint">${esc(teamsErr.message)}</span>
+      </div></div>`;
+    return;
+  }
+
+  if(!teams || !teams.length){
+    main.innerHTML = `<div class="page-header"><div><h1>التحليلات</h1><p>مؤشرات بصرية عن التسجيل والمشاركة عبر البرنامج</p></div></div>
+      <div class="card">${emptyIllustration("bar-chart-3","لا توجد فرق مسجّلة بعد","تظهر الرسوم البيانية تلقائيًا بمجرد تسجيل أول فريق")}</div>`;
+    if(window.lucide) lucide.createIcons();
+    return;
+  }
 
   // تسجيلات تراكمية عبر الوقت
   if(teams && teams.length){
@@ -6200,7 +6217,10 @@ async function renderAnalytics(){
       options: { plugins:{legend:{display:false}}, scales:{ y:{ beginAtZero:true, max:10 } } }
     }));
   } else {
-    document.getElementById("chart-nps").parentElement.innerHTML = `<h3>متوسط الرضا حسب المرحلة (NPS)</h3><div class="empty-state">لا توجد استجابات استبيانات بعد</div>`;
+    const npsBox = document.getElementById("chart-nps").parentElement;
+    npsBox.innerHTML = `<h3>متوسط الرضا حسب المرحلة (NPS)</h3><div class="empty-state">${
+      satErr ? "تعذّر التحميل: " + esc(satErr.message) : "لا توجد استجابات استبيانات بعد"
+    }</div>`;
   }
 }
 
@@ -6592,6 +6612,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r119</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r120</div>
 </body>
 </html>
