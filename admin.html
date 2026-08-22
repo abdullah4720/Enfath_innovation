@@ -2587,12 +2587,287 @@ async function renderMentorshipSettings(){
 }
 
 let cachedPrepData = [];
+let prepTab = "grid";   // grid = شبكة التحضير | sessions = إدارة الجلسات
+
 async function renderPrep(){
   const main = document.getElementById("main-content");
   main.innerHTML = `<div class="page-header">
-      <div><h1>جلسات التحضير</h1><p>الورش والتدريبات قبل الهاكاثون — سجّل الحضور يدويًا أو فعّل الجلسة النشطة لمسح QR</p></div>
-      <button class="btn btn-primary" onclick="openPrepModal()">+ إضافة جلسة</button>
+      <div><h1>الحضور والتحضير</h1><p>شبكة تحضير موحّدة لكل المشاركين — أيام الهاكاثون والجلسات التحضيرية والفعاليات</p></div>
+      ${prepTab === "sessions" ? `<button class="btn btn-primary" onclick="openPrepModal()">+ إضافة جلسة</button>` : ""}
     </div>
+    <div class="tabs" style="margin-bottom:16px">
+      <div class="tab ${prepTab==='grid'?'active':''}" onclick="switchPrepTab('grid')">شبكة التحضير</div>
+      <div class="tab ${prepTab==='sessions'?'active':''}" onclick="switchPrepTab('sessions')">إدارة الجلسات</div>
+    </div>
+    <div id="prep-root"></div>`;
+
+  if(prepTab === "grid") return renderAttendanceGrid();
+  renderPrepSessions();
+}
+
+function switchPrepTab(t){ prepTab = t; renderPrep(); }
+
+/* ============================================================
+   شبكة التحضير — صف لكل مشارك، عمود لكل جلسة
+   ============================================================ */
+let gridSessions = [];
+let gridRows     = [];      // { user_id, name, team, track, attended:Set }
+let gridSearch   = "";
+let gridTrack    = "";
+let gridPage     = 1;
+const GRID_PAGE_SIZE = 50;
+
+async function renderAttendanceGrid(){
+  const root = document.getElementById("prep-root");
+  root.innerHTML = `<div class="card">${skeletonRows(6)}</div>`;
+
+  // ثلاثة استعلامات مجمّعة فقط — لا استعلام لكل مشارك
+  const [sesRes, memRes, attRes] = await Promise.all([
+    sb.from("prep_sessions")
+      .select("id, title, session_type, session_date, attendance_open, counts_for_certificate")
+      .order("display_order").order("session_date"),
+    sb.from("team_members")
+      .select("user_id, profiles!team_members_user_id_fkey(full_name), teams(team_name, tracks(name_ar))"),
+    sb.from("prep_attendance").select("session_id, user_id")
+  ]);
+
+  if(sesRes.error || memRes.error || attRes.error){
+    root.innerHTML = `<div class="card"><div class="empty-state">تعذّر التحميل — تأكد من تطبيق ملف 84</div></div>`;
+    return;
+  }
+
+  gridSessions = sesRes.data || [];
+
+  const attByUser = {};
+  (attRes.data||[]).forEach(a => {
+    (attByUser[a.user_id] = attByUser[a.user_id] || new Set()).add(a.session_id);
+  });
+
+  // مشارك واحد قد يظهر بعدة فرق نظريًا — نأخذ أول انتماء
+  const seen = new Set();
+  gridRows = [];
+  (memRes.data||[]).forEach(m => {
+    if(seen.has(m.user_id)) return;
+    seen.add(m.user_id);
+    gridRows.push({
+      user_id: m.user_id,
+      name:  m.profiles?.full_name || "—",
+      team:  m.teams?.team_name || "—",
+      track: m.teams?.tracks?.name_ar || "—",
+      attended: attByUser[m.user_id] || new Set()
+    });
+  });
+  gridRows.sort((a,b) => a.name.localeCompare(b.name, "ar"));
+
+  drawGridShell();
+}
+
+function drawGridShell(){
+  const root = document.getElementById("prep-root");
+  const tracks = [...new Set(gridRows.map(r => r.track))].filter(t => t !== "—").sort();
+
+  root.innerHTML = `
+    <div class="card" style="margin-bottom:14px">
+      <div class="form-row-2" style="grid-template-columns:2fr 1fr">
+        <div class="field" style="margin:0"><label>بحث بالاسم أو الفريق</label>
+          <input id="grid-search" value="${esc(gridSearch)}" placeholder="اكتب للبحث..." oninput="onGridSearch(this.value)">
+        </div>
+        <div class="field" style="margin:0"><label>المسار</label>
+          <select id="grid-track" onchange="onGridTrack(this.value)">
+            <option value="">كل المسارات</option>
+            ${tracks.map(t => `<option value="${esc(t)}" ${gridTrack===t?"selected":""}>${esc(t)}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="grid-body"></div>`;
+  drawGrid();
+}
+
+function onGridSearch(v){ gridSearch = v; gridPage = 1; drawGrid(); }
+function onGridTrack(v){ gridTrack = v; gridPage = 1; drawGrid(); }
+
+function gridFiltered(){
+  const q = gridSearch.trim().toLowerCase();
+  return gridRows.filter(r => {
+    if(gridTrack && r.track !== gridTrack) return false;
+    if(!q) return true;
+    return r.name.toLowerCase().includes(q) || r.team.toLowerCase().includes(q);
+  });
+}
+
+const SESSION_BADGE = {
+  day:   { label: "يوم",    color: "#00BDC4" },
+  prep:  { label: "تحضيري", color: "#7C6FE0" },
+  event: { label: "فعالية", color: "#C9922A" },
+};
+
+function drawGrid(){
+  const box = document.getElementById("grid-body");
+  if(!box) return;
+
+  if(!gridSessions.length){
+    box.innerHTML = `<div class="card">${emptyIllustration("calendar-x","لا توجد جلسات بعد","أضف أيام الهاكاثون من الجدول الزمني، أو جلسة من تبويب إدارة الجلسات")}</div>`;
+    return;
+  }
+  if(!gridRows.length){
+    box.innerHTML = `<div class="card">${emptyIllustration("users","لا يوجد مشاركون في فرق بعد","الشبكة تعرض أعضاء الفرق فقط")}</div>`;
+    return;
+  }
+
+  const rows  = gridFiltered();
+  const pages = Math.max(1, Math.ceil(rows.length / GRID_PAGE_SIZE));
+  if(gridPage > pages) gridPage = pages;
+  const slice = rows.slice((gridPage-1)*GRID_PAGE_SIZE, gridPage*GRID_PAGE_SIZE);
+
+  // إجمالي الحضور لكل جلسة (على المصفّى، لا على الصفحة)
+  const totals = {};
+  gridSessions.forEach(s => {
+    totals[s.id] = rows.filter(r => r.attended.has(s.id)).length;
+  });
+
+  box.innerHTML = `
+    <div class="card" style="padding:0;overflow:auto">
+      <table style="min-width:max-content;margin:0">
+        <thead>
+          <tr>
+            <th style="position:sticky;right:0;background:var(--card);z-index:2;min-width:170px">المشارك</th>
+            <th style="min-width:190px">البيانات</th>
+            ${gridSessions.map(s => {
+              const m = SESSION_BADGE[s.session_type] || SESSION_BADGE.prep;
+              return `<th style="text-align:center;min-width:104px">
+                <div style="font-size:12px;line-height:1.5">${esc(s.title)}</div>
+                <div style="margin-top:4px;display:flex;gap:5px;justify-content:center;align-items:center;flex-wrap:wrap">
+                  <span style="font-size:9.5px;padding:1px 7px;border-radius:20px;background:${m.color}1f;color:${m.color};font-weight:700">${m.label}</span>
+                  <span title="${s.attendance_open ? "التحضير مفتوح للميسّر" : "التحضير مغلق"}"
+                        style="cursor:pointer;font-size:11px" onclick="toggleSessionOpen('${s.id}', ${!s.attendance_open})">
+                    ${s.attendance_open ? "🔓" : "🔒"}
+                  </span>
+                </div>
+                <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${totals[s.id]} / ${rows.length}</div>
+              </th>`;
+            }).join("")}
+            <th style="text-align:center;min-width:78px">النسبة</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${slice.map(r => {
+            const counted = gridSessions.filter(s => s.counts_for_certificate);
+            const hit = counted.filter(s => r.attended.has(s.id)).length;
+            const pct = counted.length ? Math.round(hit/counted.length*100) : 100;
+            return `<tr data-uid="${r.user_id}">
+              <td style="position:sticky;right:0;background:var(--card);z-index:1"><strong>${esc(r.name)}</strong></td>
+              <td style="font-size:12px;color:var(--muted)">${esc(r.team)}<br>${esc(r.track)}</td>
+              ${gridSessions.map(s => {
+                const on = r.attended.has(s.id);
+                return `<td style="text-align:center;padding:6px">
+                  <button type="button" onclick="toggleAttendance('${r.user_id}','${s.id}')"
+                    id="cell-${r.user_id}-${s.id}"
+                    title="${on ? "حاضر — اضغط للإلغاء" : "غائب — اضغط للتحضير"}"
+                    style="width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:14px;transition:.12s;
+                           border:1.5px solid ${on ? "var(--teal)" : "var(--border)"};
+                           background:${on ? "var(--teal)" : "#fff"};
+                           color:${on ? "#fff" : "var(--border)"}">${on ? "✓" : ""}</button>
+                </td>`;
+              }).join("")}
+              <td style="text-align:center;font-weight:700;color:${pct >= 50 ? "var(--teal)" : "var(--muted)"}">${pct}%</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;flex-wrap:wrap;gap:10px">
+      <span style="font-size:12.5px;color:var(--muted)">
+        ${rows.length} مشارك${gridSearch||gridTrack ? " (مصفّى)" : ""} · النسبة تحتسب الجلسات المعتمدة للشهادة فقط
+      </span>
+      ${pages > 1 ? `<div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-outline btn-sm" ${gridPage<=1?"disabled":""} onclick="gridGo(${gridPage-1})">السابق</button>
+        <span style="font-size:12.5px">${gridPage} / ${pages}</span>
+        <button class="btn btn-outline btn-sm" ${gridPage>=pages?"disabled":""} onclick="gridGo(${gridPage+1})">التالي</button>
+      </div>` : ""}
+    </div>`;
+  if(window.lucide) lucide.createIcons();
+}
+
+function gridGo(p){ gridPage = p; drawGrid(); }
+
+/* ---- تبديل الحضور فورًا ---- */
+// نحدّث الخلية بصريًا قبل انتظار الخادم، ونتراجع لو فشل الطلب
+async function toggleAttendance(userId, sessionId){
+  const row = gridRows.find(r => r.user_id === userId);
+  if(!row) return;
+  const cell = document.getElementById(`cell-${userId}-${sessionId}`);
+  const wasOn = row.attended.has(sessionId);
+
+  paintCell(cell, !wasOn);
+  cell.disabled = true;
+
+  const { error } = wasOn
+    ? await sb.from("prep_attendance").delete().eq("user_id", userId).eq("session_id", sessionId)
+    : await sb.from("prep_attendance").insert({ user_id: userId, session_id: sessionId });
+
+  cell.disabled = false;
+
+  if(error){
+    paintCell(cell, wasOn);          // تراجع
+    showToast("تعذّر الحفظ: " + error.message, true);
+    return;
+  }
+
+  wasOn ? row.attended.delete(sessionId) : row.attended.add(sessionId);
+  updateGridTotals();
+}
+
+function paintCell(cell, on){
+  if(!cell) return;
+  cell.textContent      = on ? "✓" : "";
+  cell.style.background = on ? "var(--teal)" : "#fff";
+  cell.style.borderColor= on ? "var(--teal)" : "var(--border)";
+  cell.style.color      = on ? "#fff" : "var(--border)";
+  cell.title            = on ? "حاضر — اضغط للإلغاء" : "غائب — اضغط للتحضير";
+}
+
+// تحديث الإجماليات والنسب بلا إعادة رسم الجدول (حفاظًا على موضع التمرير)
+function updateGridTotals(){
+  const rows = gridFiltered();
+  const heads = document.querySelectorAll("#grid-body thead th");
+  gridSessions.forEach((s, i) => {
+    const el = heads[i+2]?.querySelector("div:last-child");
+    if(el) el.textContent = `${rows.filter(r => r.attended.has(s.id)).length} / ${rows.length}`;
+  });
+
+  const counted = gridSessions.filter(s => s.counts_for_certificate);
+  document.querySelectorAll("#grid-body tbody tr").forEach(tr => {
+    // المعرّف من data-uid لا من تفكيك نص الـid (UUID يحوي شرطات)
+    const r = gridRows.find(x => x.user_id === tr.dataset.uid);
+    if(!r) return;
+    const hit = counted.filter(s => r.attended.has(s.id)).length;
+    const pct = counted.length ? Math.round(hit/counted.length*100) : 100;
+    const cell = tr.lastElementChild;
+    cell.textContent = pct + "%";
+    cell.style.color = pct >= 50 ? "var(--teal)" : "var(--muted)";
+  });
+}
+
+/* ---- فتح وإغلاق التحضير ---- */
+async function toggleSessionOpen(sessionId, open){
+  const { data, error } = await sb.rpc("set_attendance_open", { p_session_id: sessionId, p_open: open });
+  if(error || !data?.success){
+    showToast("خطأ: " + (data?.error || error?.message), true);
+    return;
+  }
+  const s = gridSessions.find(x => x.id === sessionId);
+  if(s) s.attendance_open = open;
+  logActivity(open ? "فتح التحضير" : "إغلاق التحضير", "prep_session", sessionId, { title: data.title });
+  showToast(`${open ? "فُتح" : "أُغلق"} التحضير — ${data.title}`);
+  drawGrid();
+}
+
+/* ============================================================ */
+
+async function renderPrepSessions(){
+  const main = document.getElementById("prep-root");
+  main.innerHTML = `
     <div id="prep-page-body">
       <div class="card" style="margin-bottom:16px">
         <div class="form-row-2" style="grid-template-columns:2fr 1fr 1fr">
@@ -6064,6 +6339,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r113</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r114</div>
 </body>
 </html>
