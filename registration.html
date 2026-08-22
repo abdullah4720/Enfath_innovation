@@ -1189,8 +1189,12 @@ function openSurveyForm(survey){
     <p class="sub" style="margin-bottom:20px">إجاباتك تساعدنا نحسّن البرنامج — تُرسَل مرة وحدة فقط</p>
     <div id="survey-form-fields">
       ${questions.map((q, i) => {
-        if(q.type === "nps"){
-          return `<div class="field"><label>${esc(q.label)}</label>
+        // نص السؤال قد يكون بمفتاح label (لوحة التحكم) أو
+        // question_ar (البذور القديمة)
+        const qLabel = q.label || q.question_ar || "";
+        // rating مرادف قديم لـnps — نقبله حتى لا يسقط لمربع نص
+        if(q.type === "nps" || q.type === "rating"){
+          return `<div class="field"><label>${esc(qLabel)}</label>
             <div class="star-rating" data-qid="${q.id}" style="display:flex;gap:6px;justify-content:center;margin-top:8px" onmouseleave="resetStarsPreview('${q.id}')">
               ${Array.from({length:5},(_,i)=>`
                 <i data-lucide="star" data-star-value="${(i+1)*2}" data-qid="${q.id}"
@@ -1203,7 +1207,7 @@ function openSurveyForm(survey){
           </div>`;
         }
         if(q.type === "choice"){
-          return `<div class="field"><label>${esc(q.label)}</label>
+          return `<div class="field"><label>${esc(qLabel)}</label>
             ${(q.options||[]).map(o => `
               <label style="display:block;padding:6px 0;font-size:13.5px">
                 <input type="radio" name="q_${q.id}" value="${esc(o)}" data-qtype="choice" data-qid="${q.id}"> ${esc(o)}
@@ -1211,7 +1215,7 @@ function openSurveyForm(survey){
             `).join("")}
           </div>`;
         }
-        return `<div class="field"><label>${esc(q.label)}</label><textarea rows="3" data-qtype="text" data-qid="${q.id}"></textarea></div>`;
+        return `<div class="field"><label>${esc(qLabel)}</label><textarea rows="3" data-qtype="text" data-qid="${q.id}"></textarea></div>`;
       }).join("")}
     </div>
     <div id="survey-alert" class="alert"></div>
@@ -2573,6 +2577,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r112</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r113</div>
 </body>
 </html>
