@@ -4499,6 +4499,7 @@ function openSurveyModal(s=null){
   const isEdit = !!s;
   s = s || {title:"", target_stage:"overall", is_active:true, questions_json:[]};
   surveyQuestionsDraft = JSON.parse(JSON.stringify(s.questions_json || []));
+  dedupeQuestionIds();   // إصلاح الاستبيانات المحفوظة بمعرّفات مكرَّرة
   openModal(`
     <h3 style="margin-bottom:16px">${isEdit ? "تعديل استبيان" : "إضافة استبيان"}</h3>
     <div class="field"><label>عنوان الاستبيان</label><input id="f-survey-title" value="${esc(s.title)}"></div>
@@ -4524,6 +4525,21 @@ function openSurveyModal(s=null){
   `);
   renderSurveyQuestionsList();
 }
+// الاستبيانات المحفوظة قبل الإصلاح قد تحمل معرّفات مكرَّرة.
+// نصحّحها عند الفتح، ويثبت التصحيح عند الحفظ.
+function dedupeQuestionIds(){
+  const seen = new Set();
+  let fixed = 0;
+  surveyQuestionsDraft.forEach(q => {
+    if(!q.id || seen.has(q.id)){
+      q.id = newQuestionId();
+      fixed++;
+    }
+    seen.add(q.id);
+  });
+  if(fixed) showToast(`صُحِّح ${fixed} سؤال بمعرّف مكرَّر — اضغط حفظ للتثبيت`);
+}
+
 function renderSurveyQuestionsList(){
   const box = document.getElementById("survey-questions-list");
   if(!box) return;
@@ -4543,8 +4559,19 @@ function renderSurveyQuestionsList(){
     </div>
   `).join("");
 }
+function newQuestionId(){
+  const used = new Set(surveyQuestionsDraft.map(q => q.id));
+  let id;
+  do {
+    id = "q_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+  } while(used.has(id));
+  return id;
+}
+
 function addSurveyQuestion(){
-  surveyQuestionsDraft.push({ id: "q_"+Date.now(), label:"", type:"nps", options:[] });
+  // Date.now() وحده يتكرر عند الضغط السريع (نفس الملّي ثانية)،
+  // فتتطابق معرّفات الأسئلة وتنكسر النجوم بصفحة المشارك
+  surveyQuestionsDraft.push({ id: newQuestionId(), label:"", type:"nps", options:[] });
   renderSurveyQuestionsList();
 }
 async function saveSurvey(id){
@@ -6024,6 +6051,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r111</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r112</div>
 </body>
 </html>
