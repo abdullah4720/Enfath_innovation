@@ -762,6 +762,8 @@ async function renderOverview(){
 
     <div class="grid-stats" id="hero-metrics" style="grid-template-columns:repeat(4,1fr)">${skeletonCards(4)}</div>
 
+    <div id="attendance-overview" style="margin-top:16px"></div>
+
     <div class="card" style="margin-top:16px">
       <h3 class="section-title" style="margin:0 0 4px"><i data-lucide="route" style="width:15px;height:15px;color:var(--gold);vertical-align:-3px;display:inline-block"></i> رحلة البرنامج</h3>
       <div id="journey-bar-box">${skeletonRows(1)}</div>
@@ -865,6 +867,61 @@ async function renderHeroMetrics(){
     ${heroCard("award", "var(--gold)", s.certificates_issued, null, "الشهادات الصادرة")}
     ${heroCard("smile", "#7C6FE0", `${s.avg_nps ?? "—"}${s.avg_nps ? '<span style="font-size:14px;color:var(--muted);font-weight:600">/10</span>' : ''}`, null, "متوسط الرضا (NPS)")}
   `;
+  renderAttendanceOverview();
+}
+
+/* ---------------- نظرة عامة على الحضور ---------------- */
+// شريط لكل جلسة بنسبة حضورها، والأيام أولًا. استعلامان مجمّعان.
+async function renderAttendanceOverview(){
+  const box = document.getElementById("attendance-overview");
+  if(!box) return;
+  box.innerHTML = `<div class="card">${skeletonRows(3)}</div>`;
+
+  const [sesRes, attRes, memRes] = await Promise.all([
+    sb.from("prep_sessions").select("id, title, session_type, counts_for_certificate")
+      .order("display_order").order("session_date"),
+    sb.from("prep_attendance").select("session_id"),
+    sb.from("team_members").select("user_id")
+  ]);
+
+  const sessions = sesRes.data || [];
+  const total = new Set((memRes.data||[]).map(m => m.user_id)).size;
+
+  if(!sessions.length || !total){
+    box.innerHTML = `<div class="card"><h3 style="margin:0 0 4px">الحضور</h3>
+      <p class="hint" style="margin:0">لا توجد جلسات أو مشاركون بعد</p></div>`;
+    return;
+  }
+
+  const counts = {};
+  (attRes.data||[]).forEach(a => counts[a.session_id] = (counts[a.session_id]||0) + 1);
+
+  const colors = { day:"#00BDC4", prep:"#7C6FE0", event:"#C9922A" };
+  const labels = { day:"يوم", prep:"تحضيري", event:"فعالية" };
+
+  box.innerHTML = `<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <h3 style="margin:0">الحضور حسب الجلسة</h3>
+      <button class="btn btn-outline btn-sm" onclick="navigateTo('prep')">فتح شبكة التحضير</button>
+    </div>
+    ${sessions.map(s => {
+      const n = counts[s.id] || 0;
+      const pct = Math.round(n / total * 100);
+      const c = colors[s.session_type] || colors.prep;
+      return `<div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px;gap:8px">
+          <span>${esc(s.title)}
+            <span style="font-size:9.5px;padding:1px 7px;border-radius:20px;background:${c}1f;color:${c};font-weight:700">${labels[s.session_type]||""}</span>
+            ${s.counts_for_certificate ? "" : `<span style="font-size:10.5px;color:var(--muted)">· لا تُحتسب للشهادة</span>`}
+          </span>
+          <strong style="white-space:nowrap">${n} / ${total} · ${pct}%</strong>
+        </div>
+        <div style="height:8px;background:var(--border-light);border-radius:5px;overflow:hidden">
+          <div style="width:${pct}%;height:100%;background:${c};transition:width .3s"></div>
+        </div>
+      </div>`;
+    }).join("")}
+  </div>`;
 }
 function heroCard(icon, color, num, trend, label){
   return `<div class="stat-card" style="position:relative;overflow:hidden;text-align:right;padding:18px">
@@ -2614,6 +2671,8 @@ let gridSessions = [];
 let gridRows     = [];      // { user_id, name, team, track, attended:Set }
 let gridSearch   = "";
 let gridTrack    = "";
+let gridSession  = "";   // جلسة مختارة لفلترة حاضر/غائب
+let gridStatus   = "";   // present | absent | none | full | at_risk
 let gridPage     = 1;
 const GRID_PAGE_SIZE = 50;
 
@@ -2622,14 +2681,16 @@ async function renderAttendanceGrid(){
   root.innerHTML = `<div class="card">${skeletonRows(6)}</div>`;
 
   // ثلاثة استعلامات مجمّعة فقط — لا استعلام لكل مشارك
-  const [sesRes, memRes, attRes] = await Promise.all([
+  const [sesRes, memRes, attRes, certRes] = await Promise.all([
     sb.from("prep_sessions")
       .select("id, title, session_type, session_date, attendance_open, counts_for_certificate")
       .order("display_order").order("session_date"),
     sb.from("team_members")
       .select("user_id, profiles!team_members_user_id_fkey(full_name), teams(team_name, tracks(name_ar))"),
-    sb.from("prep_attendance").select("session_id, user_id")
+    sb.from("prep_attendance").select("session_id, user_id"),
+    sb.from("certificate_types").select("min_attendance_pct").eq("key","participation").maybeSingle()
   ]);
+  certThreshold = certRes?.data?.min_attendance_pct ?? 50;
 
   if(sesRes.error || memRes.error || attRes.error){
     root.innerHTML = `<div class="card"><div class="empty-state">تعذّر التحميل — تأكد من تطبيق ملف 84</div></div>`;
@@ -2667,8 +2728,9 @@ function drawGridShell(){
   const tracks = [...new Set(gridRows.map(r => r.track))].filter(t => t !== "—").sort();
 
   root.innerHTML = `
+    <div id="grid-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
     <div class="card" style="margin-bottom:14px">
-      <div class="form-row-2" style="grid-template-columns:2fr 1fr">
+      <div class="form-row-2" style="grid-template-columns:2fr 1fr 1fr 1fr">
         <div class="field" style="margin:0"><label>بحث بالاسم أو الفريق</label>
           <input id="grid-search" value="${esc(gridSearch)}" placeholder="اكتب للبحث..." oninput="onGridSearch(this.value)">
         </div>
@@ -2678,21 +2740,99 @@ function drawGridShell(){
             ${tracks.map(t => `<option value="${esc(t)}" ${gridTrack===t?"selected":""}>${esc(t)}</option>`).join("")}
           </select>
         </div>
+        <div class="field" style="margin:0"><label>الجلسة</label>
+          <select id="grid-session" onchange="onGridSession(this.value)">
+            <option value="">— اختر جلسة —</option>
+            ${gridSessions.map(s => `<option value="${s.id}" ${gridSession===s.id?"selected":""}>${esc(s.title)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field" style="margin:0"><label>الحالة</label>
+          <select id="grid-status" onchange="onGridStatus(this.value)">
+            <option value="">الكل</option>
+            <option value="present"  ${gridStatus==='present'?'selected':''}>حاضر</option>
+            <option value="absent"   ${gridStatus==='absent'?'selected':''}>غائب</option>
+            <option value="none"     ${gridStatus==='none'?'selected':''}>لم يحضر أي جلسة</option>
+            <option value="full"     ${gridStatus==='full'?'selected':''}>حضر كل الجلسات</option>
+            <option value="at_risk"  ${gridStatus==='at_risk'?'selected':''}>دون حد الشهادة</option>
+          </select>
+          <p class="hint" style="margin-top:4px;font-size:11px">«حاضر/غائب» يحتاج اختيار جلسة</p>
+        </div>
       </div>
     </div>
     <div id="grid-body"></div>`;
+  drawGridStats();
   drawGrid();
 }
 
 function onGridSearch(v){ gridSearch = v; gridPage = 1; drawGrid(); }
-function onGridTrack(v){ gridTrack = v; gridPage = 1; drawGrid(); }
+function onGridTrack(v){ gridTrack = v; gridPage = 1; drawGrid(); drawGridStats(); }
+function onGridSession(v){ gridSession = v; gridPage = 1; drawGrid(); drawGridStats(); }
+function onGridStatus(v){ gridStatus = v; gridPage = 1; drawGrid(); }
+
+// حد الشهادة الأدنى — يُقرأ من نوع شهادة المشاركة عند التحميل
+let certThreshold = 50;
+
+function rowPct(r){
+  const counted = gridSessions.filter(s => s.counts_for_certificate);
+  if(!counted.length) return 100;
+  return Math.round(counted.filter(s => r.attended.has(s.id)).length / counted.length * 100);
+}
+
+function drawGridStats(){
+  const box = document.getElementById("grid-stats");
+  if(!box) return;
+
+  // الإحصاءات تتبع فلتر المسار فقط، لا البحث ولا الحالة —
+  // وإلا صارت تصف نفسها بدل أن تصف الحضور
+  const base = gridRows.filter(r => !gridTrack || r.track === gridTrack);
+  const counted = gridSessions.filter(s => s.counts_for_certificate);
+
+  const sel = gridSession ? gridSessions.find(s => s.id === gridSession) : null;
+  const present = sel ? base.filter(r => r.attended.has(sel.id)).length : null;
+
+  const avg = base.length
+    ? Math.round(base.reduce((a,r) => a + rowPct(r), 0) / base.length)
+    : 0;
+  const atRisk = base.filter(r => rowPct(r) < certThreshold).length;
+  const zero   = base.filter(r => counted.every(s => !r.attended.has(s.id))).length;
+
+  box.innerHTML = `
+    ${statCard(base.length, "المشاركون")}
+    ${sel
+      ? statCard(`${present} <span style="font-size:13px;color:var(--muted)">/ ${base.length}</span>`,
+                 `حضور: ${esc(sel.title)}`, true)
+      : statCard(gridSessions.filter(s=>s.session_type==='day').length, "أيام الهاكاثون")}
+    ${statCard(avg + "%", "متوسط الحضور")}
+    ${statCard(atRisk, `دون حد الشهادة (${certThreshold}%)`)}
+    ${statCard(zero, "لم يحضروا شيئًا")}
+  `;
+}
 
 function gridFiltered(){
   const q = gridSearch.trim().toLowerCase();
+  const counted = gridSessions.filter(s => s.counts_for_certificate);
+
   return gridRows.filter(r => {
     if(gridTrack && r.track !== gridTrack) return false;
-    if(!q) return true;
-    return r.name.toLowerCase().includes(q) || r.team.toLowerCase().includes(q);
+    if(q && !(r.name.toLowerCase().includes(q) || r.team.toLowerCase().includes(q))) return false;
+
+    switch(gridStatus){
+      case "present":
+        // بلا جلسة مختارة: حضر شيئًا على الأقل
+        return gridSession ? r.attended.has(gridSession)
+                           : counted.some(s => r.attended.has(s.id));
+      case "absent":
+        return gridSession ? !r.attended.has(gridSession)
+                           : counted.some(s => !r.attended.has(s.id));
+      case "none":
+        return counted.every(s => !r.attended.has(s.id));
+      case "full":
+        return counted.length > 0 && counted.every(s => r.attended.has(s.id));
+      case "at_risk":
+        return rowPct(r) < certThreshold;
+      default:
+        return true;
+    }
   });
 }
 
@@ -2752,9 +2892,7 @@ function drawGrid(){
         </thead>
         <tbody>
           ${slice.map(r => {
-            const counted = gridSessions.filter(s => s.counts_for_certificate);
-            const hit = counted.filter(s => r.attended.has(s.id)).length;
-            const pct = counted.length ? Math.round(hit/counted.length*100) : 100;
+            const pct = rowPct(r);
             return `<tr data-uid="${r.user_id}">
               <td style="position:sticky;right:0;background:var(--card);z-index:1"><strong>${esc(r.name)}</strong></td>
               <td style="font-size:12px;color:var(--muted)">${esc(r.team)}<br>${esc(r.track)}</td>
@@ -2816,6 +2954,7 @@ async function toggleAttendance(userId, sessionId){
 
   wasOn ? row.attended.delete(sessionId) : row.attended.add(sessionId);
   updateGridTotals();
+  drawGridStats();
 }
 
 function paintCell(cell, on){
@@ -6339,6 +6478,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r114</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r115</div>
 </body>
 </html>

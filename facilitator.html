@@ -298,6 +298,7 @@ async function renderAttendanceMatrix(){
         <select id="matrix-track-filter" style="max-width:220px" onchange="loadAttendanceMatrix()"><option value="">كل المسارات</option></select>
       </div>
     </div>
+    <div id="open-sessions-bar"></div>
     <div class="card" style="overflow-x:auto">
       <div id="matrix-container"><div class="empty-state">جاري التحميل...</div></div>
     </div>
@@ -318,7 +319,9 @@ async function loadAttendanceMatrix(){
   const container = document.getElementById("matrix-container");
   container.innerHTML = `<div class="empty-state">جاري التحميل...</div>`;
 
-  let sessionsQuery = sb.from("prep_sessions").select("id,title,session_date,track_id").order("session_date");
+  let sessionsQuery = sb.from("prep_sessions")
+    .select("id,title,session_date,track_id,session_type,attendance_open,counts_for_certificate,display_order")
+    .order("display_order").order("session_date");
   const { data: sessions } = await sessionsQuery;
   matrixSessions = matrixTrackFilter
     ? (sessions||[]).filter(s => !s.track_id || s.track_id === matrixTrackFilter)
@@ -337,25 +340,77 @@ async function loadAttendanceMatrix(){
     const { data: attendance } = await sb.from("prep_attendance").select("session_id,user_id").in("session_id", sessionIds);
     (attendance||[]).forEach(a => { matrixAttendanceMap[`${a.session_id}|${a.user_id}`] = true; });
   }
+  renderOpenSessionsBar();
   renderMatrixTable();
 }
+
+// شريط يوضّح للميسّر أين يستطيع التحضير الآن
+function renderOpenSessionsBar(){
+  const box = document.getElementById("open-sessions-bar");
+  if(!box) return;
+  const open = matrixSessions.filter(s => s.attendance_open);
+
+  if(!open.length){
+    box.innerHTML = `<div class="card" style="margin-bottom:14px;background:#fef3e2;border-color:#f0d9a8">
+      <div style="font-size:13px;color:#92600a">
+        🔒 لا توجد جلسات مفتوحة للتحضير حاليًا. تستطيع استعراض كل بيانات الحضور،
+        لكن التسجيل يبدأ بعد أن تفتح الإدارة الجلسة.
+      </div></div>`;
+    return;
+  }
+
+  box.innerHTML = `<div class="card" style="margin-bottom:14px;background:#e6f7f3;border-color:#a8e0d4">
+    <div style="font-size:13px;color:#0a6b57;margin-bottom:${open.length?8:0}px">
+      🔓 مفتوح للتحضير الآن — اضغط لعرض الجلسة وحدها:
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${open.map(s => `<button onclick="focusSession('${s.id}')"
+        style="padding:7px 14px;border-radius:20px;border:1.5px solid var(--teal);background:#fff;
+               color:var(--teal);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer">
+        ${esc(s.title)}</button>`).join("")}
+      ${matrixFocusSession ? `<button onclick="focusSession('')"
+        style="padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:#fff;
+               font-family:inherit;font-size:12.5px;cursor:pointer">عرض كل الجلسات</button>` : ""}
+    </div></div>`;
+}
+
+let matrixFocusSession = "";
+function focusSession(id){
+  matrixFocusSession = (matrixFocusSession === id) ? "" : id;
+  renderOpenSessionsBar();
+  renderMatrixTable();
+}
+
 function renderMatrixTable(){
   const container = document.getElementById("matrix-container");
   if(!matrixParticipants.length){ container.innerHTML = `<div class="empty-state">لا يوجد مشاركون مؤهّلون</div>`; return; }
   if(!matrixSessions.length){ container.innerHTML = `<div class="empty-state">لا توجد جلسات مضافة بعد لهذا المسار</div>`; return; }
+
+  const shown = matrixFocusSession
+    ? matrixSessions.filter(s => s.id === matrixFocusSession)
+    : matrixSessions;
 
   const term = (document.getElementById("matrix-search")?.value || "").trim().toLowerCase();
   const filtered = !term ? matrixParticipants : matrixParticipants.filter(m =>
     (m.profiles?.full_name||"").toLowerCase().includes(term) || (m.profiles?.email||"").toLowerCase().includes(term)
   );
 
-  container.innerHTML = `<table style="min-width:${560 + matrixSessions.length*60}px">
+  container.innerHTML = `<table style="min-width:${560 + shown.length*96}px">
     <thead><tr>
       <th style="width:36px">#</th>
       <th>الاسم</th>
       <th>الجوال</th>
       <th>المسار</th>
-      ${matrixSessions.map((s,i) => `<th style="text-align:center" title="${esc(s.title)} — ${fmtDate(s.session_date)}">${i+1}</th>`).join("")}
+      ${shown.map(s => {
+        const m = FAC_BADGE[s.session_type] || FAC_BADGE.prep;
+        return `<th style="text-align:center;min-width:96px" title="${esc(s.title)} — ${fmtDate(s.session_date)}">
+          <div style="font-size:11.5px;line-height:1.4">${esc(s.title)}</div>
+          <div style="margin-top:4px;display:flex;gap:5px;justify-content:center;align-items:center">
+            <span style="font-size:9px;padding:1px 6px;border-radius:20px;background:${m.color}1f;color:${m.color};font-weight:700">${m.label}</span>
+            <span style="font-size:10.5px" title="${s.attendance_open ? "التحضير مفتوح" : "التحضير مغلق — راجع الإدارة"}">${s.attendance_open ? "🔓" : "🔒"}</span>
+          </div>
+        </th>`;
+      }).join("")}
     </tr></thead>
     <tbody>
       ${filtered.map((m, idx) => `
@@ -364,12 +419,15 @@ function renderMatrixTable(){
           <td><strong>${esc(m.profiles?.full_name||"—")}</strong><br><span style="color:var(--muted);font-size:11px">${esc(m.profiles?.email||"")}</span></td>
           <td style="font-size:12px;color:var(--muted)">${esc(m.profiles?.phone||"—")}</td>
           <td style="font-size:12px;color:var(--muted)">${esc(m.teams?.tracks?.name_ar||"—")}</td>
-          ${matrixSessions.map(s => {
+          ${shown.map(s => {
             const key = `${s.id}|${m.user_id}`;
             const present = !!matrixAttendanceMap[key];
+            const locked = !s.attendance_open;
             return `<td style="text-align:center">
-              <button onclick="toggleMatrixCell('${s.id}','${m.user_id}')"
-                style="width:30px;height:30px;border-radius:8px;border:none;cursor:pointer;font-weight:800;font-size:14px;
+              <button ${locked ? "disabled" : ""} onclick="toggleMatrixCell('${s.id}','${m.user_id}')"
+                title="${locked ? "التحضير مغلق لهذه الجلسة" : (present ? "حاضر — اضغط للإلغاء" : "غائب — اضغط للتحضير")}"
+                style="width:30px;height:30px;border-radius:8px;border:none;font-weight:800;font-size:14px;
+                cursor:${locked ? "not-allowed" : "pointer"};opacity:${locked ? ".45" : "1"};
                 background:${present ? '#e6f7f3' : '#fdf5f4'};color:${present ? 'var(--teal)' : 'var(--danger)'}">
                 ${present ? '✓' : '✗'}
               </button>
@@ -380,7 +438,19 @@ function renderMatrixTable(){
     </tbody>
   </table>`;
 }
+const FAC_BADGE = {
+  day:   { label:"يوم",    color:"#00BDC4" },
+  prep:  { label:"تحضيري", color:"#7C6FE0" },
+  event: { label:"فعالية", color:"#C9922A" },
+};
+
 async function toggleMatrixCell(sessionId, userId){
+  // الفرض الحقيقي بالقاعدة (سياسة RLS)، وهذا لرسالة واضحة
+  const ses = matrixSessions.find(x => x.id === sessionId);
+  if(ses && !ses.attendance_open){
+    alert(`التحضير مغلق لجلسة «${ses.title}». تفتحه الإدارة من لوحة التحكم.`);
+    return;
+  }
   const key = `${sessionId}|${userId}`;
   const isPresent = !!matrixAttendanceMap[key];
   if(isPresent){
@@ -389,7 +459,12 @@ async function toggleMatrixCell(sessionId, userId){
     delete matrixAttendanceMap[key];
   } else {
     const { error } = await sb.from("prep_attendance").insert({ session_id: sessionId, user_id: userId });
-    if(error){ alert("خطأ: " + error.message); return; }
+    if(error){
+      alert(error.message.includes("policy")
+        ? "التحضير مغلق لهذه الجلسة — تفتحه الإدارة من لوحة التحكم"
+        : "خطأ: " + error.message);
+      return;
+    }
     matrixAttendanceMap[key] = true;
   }
   renderMatrixTable();
@@ -541,6 +616,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r93</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r94</div>
 </body>
 </html>
