@@ -3589,7 +3589,7 @@ async function renderJudgingAssignments(){
           ${rounds.map(r => `<option value="${r.id}" ${r.id===judgeAssignSelectedRound?"selected":""}>${esc(r.name_ar)}</option>`).join("")}
         </select>
       </div>
-      <button class="btn btn-primary" onclick='openAutoAssignModal("${curRound.id}", ${JSON.stringify(curRound.name_ar)})'>
+      <button class="btn btn-primary" id="auto-assign-btn" onclick='openAutoAssignModal("${curRound.id}", ${JSON.stringify(curRound.name_ar)})'>
         توزيع تلقائي متوازن
       </button>
     </div>
@@ -3612,6 +3612,19 @@ async function renderJudgingAssignments(){
 function changeAssignRound(id){
   judgeAssignSelectedRound = id;
   loadJudgingAssignmentsList();
+  // زر التوزيع يحمل معرّف الجولة في onclick، فلا يكفي تحديث
+  // القائمة — لا بد من إعادة بنائه، وإلا وزّع على الجولة القديمة
+  syncAutoAssignButton();
+}
+
+// نحدّث الزر في مكانه بلا إعادة رسم الصفحة (حفاظًا على الفلاتر)
+function syncAutoAssignButton(){
+  const btn = document.getElementById("auto-assign-btn");
+  const sel = document.getElementById("assign-round-select");
+  if(!btn || !sel) return;
+  const name = sel.options[sel.selectedIndex]?.text || "";
+  btn.setAttribute("onclick",
+    `openAutoAssignModal('${sel.value}', ${JSON.stringify(name)})`);
 }
 let cachedAssignTeams = [], cachedAssignments = [];
 function filterJudgingAssignments(){
@@ -6806,6 +6819,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r121</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r122</div>
 </body>
 </html>
