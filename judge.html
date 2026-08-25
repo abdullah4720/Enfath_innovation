@@ -688,8 +688,22 @@ function judgeCardHtml(c, autoOpen){
               <div class="project-card-meta">إصدار ${submission.version} · آخر تحديث ${new Date(submission.submitted_at).toLocaleDateString('ar-SA')}</div>
             </div>
           </div>
-          <div class="project-card-desc">${esc(submission.description||"لا يوجد وصف بعد")}</div>
-          ${submission.file_url ? `<a href="${esc(submission.file_url)}" target="_blank" class="project-card-file"><i data-lucide="paperclip" style="width:13px;height:13px"></i> فتح الملف المرفق</a>` : ""}
+          <div class="project-card-desc" style="white-space:pre-line">${esc(submission.description||"لا يوجد وصف بعد")}</div>
+          ${(() => {
+            // حقول الابتكار الثلاثة — تفيد المحكّم في تقدير النضج
+            const flags = [
+              ["براءة اختراع", submission.has_patent],
+              ["سجل تجاري",    submission.has_commercial_registry],
+              ["نموذج مصغّر",   submission.has_prototype],
+            ].filter(([, v]) => v !== null && v !== undefined);
+            if(!flags.length) return "";
+            return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
+              ${flags.map(([label, v]) => `<span style="font-size:11.5px;padding:4px 12px;border-radius:20px;
+                background:${v ? "#e6f7f3" : "var(--border-light)"};color:${v ? "var(--teal)" : "var(--muted)"};font-weight:600">
+                ${v ? "✓" : "✗"} ${label}</span>`).join("")}
+            </div>`;
+          })()}
+          ${submission.file_url ? `<a href="${esc(submission.file_url)}" target="_blank" class="project-card-file"><i data-lucide="paperclip" style="width:13px;height:13px"></i> فتح ملف المشروع</a>` : `<p style="font-size:12px;color:var(--muted);margin-top:10px">لم يُرفق الفريق ملفًا</p>`}
         </div>
       ` : `<div class="project-box"><p>لم يقدّم الفريق فكرته بعد</p></div>`}
 
@@ -841,6 +855,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r114</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r115</div>
 </body>
 </html>

@@ -3409,6 +3409,7 @@ async function renderJudging(){
       <div class="tab ${judgingTab==='judges'?'active':''}" data-t="judges">المحكّمون</div>
       <div class="tab ${judgingTab==='results'?'active':''}" data-t="results">النتائج المجمّعة</div>
       <div class="tab ${judgingTab==='summary'?'active':''}" data-t="summary">موجز التحكيم</div>
+      <div class="tab ${judgingTab==='workload'?'active':''}" data-t="workload">أعباء المحكّمين</div>
     </div>
     <div id="judging-body"></div>`;
 
@@ -3423,6 +3424,7 @@ async function renderJudging(){
   else if(judgingTab === "assignments") renderJudgingAssignments();
   else if(judgingTab === "judges") renderJudgesManagement();
   else if(judgingTab === "summary") renderJudgingSummary();
+  else if(judgingTab === "workload") renderJudgeWorkload();
   else renderJudgingResults();
 }
 
@@ -3579,11 +3581,17 @@ async function renderJudgingAssignments(){
   }
   if(!judgeAssignSelectedRound) judgeAssignSelectedRound = rounds.find(r=>r.is_active)?.id || rounds[0].id;
 
+  const curRound = rounds.find(r => r.id === judgeAssignSelectedRound) || rounds[0];
   body.innerHTML = `<div class="card">
-    <div class="field" style="margin-bottom:0"><label>الجولة</label>
-      <select id="assign-round-select" onchange="changeAssignRound(this.value)">
-        ${rounds.map(r => `<option value="${r.id}" ${r.id===judgeAssignSelectedRound?"selected":""}>${esc(r.name_ar)}</option>`).join("")}
-      </select>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div class="field" style="margin:0;flex:1;min-width:220px"><label>الجولة</label>
+        <select id="assign-round-select" onchange="changeAssignRound(this.value)">
+          ${rounds.map(r => `<option value="${r.id}" ${r.id===judgeAssignSelectedRound?"selected":""}>${esc(r.name_ar)}</option>`).join("")}
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick='openAutoAssignModal("${curRound.id}", ${JSON.stringify(curRound.name_ar)})'>
+        توزيع تلقائي متوازن
+      </button>
     </div>
   </div>
   <div class="card">
@@ -4056,6 +4064,9 @@ async function renderJudgingSummary(){
         <div class="field" style="margin:0;min-width:190px"><label>الجولة</label>
           <select id="summary-round-filter" onchange="applySummaryFilters()"><option value="">كل الجولات</option></select>
         </div>
+        <div class="field" style="margin:0;align-self:flex-end">
+          <button class="btn btn-outline btn-sm" onclick="exportResultsExcel()">تصدير النتائج Excel</button>
+        </div>
         <div class="field" style="margin:0;min-width:190px"><label>حالة الاعتماد</label>
           <select id="summary-status-filter" onchange="applySummaryFilters()">
             <option value="">الكل</option>
@@ -4331,6 +4342,189 @@ async function confirmDeleteEvaluation(judgeId, teamId, roundId, judgeName, team
   showToast(`تم حذف تقييم ${judgeName}`);
   closeModal();
   renderJudgingSummary();
+}
+
+/* ============================================================
+   أعباء المحكّمين — من هو المحكّم وكم أُسند له وأين وصل
+   ============================================================ */
+let workloadRound = "";
+
+async function renderJudgeWorkload(){
+  const body = document.getElementById("judging-body");
+  body.innerHTML = `<div class="card">${skeletonRows(5)}</div>`;
+
+  const [wlRes, rndRes] = await Promise.all([
+    sb.from("judge_workload").select("*"),
+    sb.from("judging_rounds").select("id, name_ar, round_order").order("round_order")
+  ]);
+
+  if(wlRes.error){
+    body.innerHTML = `<div class="card"><div class="empty-state">
+      تعذّر التحميل — تأكد من تطبيق ملف 91<br>
+      <span class="hint">${esc(wlRes.error.message)}</span></div></div>`;
+    return;
+  }
+
+  const rounds = rndRes.data || [];
+  if(!workloadRound && rounds.length) workloadRound = rounds[0].id;
+  const rows = (wlRes.data||[]).filter(r => !workloadRound || r.round_id === workloadRound);
+
+  const active   = rows.filter(r => r.assigned_teams > 0);
+  const idle     = rows.filter(r => r.assigned_teams === 0);
+  const totalAsg = active.reduce((a,r) => a + Number(r.assigned_teams||0), 0);
+  const totalDone= active.reduce((a,r) => a + Number(r.scored_teams||0), 0);
+
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px">
+      ${statCard(active.length, "محكّمون مُسنَد لهم")}
+      ${statCard(idle.length, "بلا إسناد")}
+      ${statCard(totalAsg, "إجمالي الإسنادات")}
+      ${statCard(totalAsg ? Math.round(totalDone/totalAsg*100)+"%" : "—", "نسبة الإنجاز")}
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="field" style="margin:0;max-width:280px"><label>الجولة</label>
+        <select onchange="workloadRound=this.value; renderJudgeWorkload()">
+          ${rounds.map(r => `<option value="${r.id}" ${r.id===workloadRound?"selected":""}>${esc(r.name_ar)}</option>`).join("")}
+        </select>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:auto">
+      ${rows.length ? `<table style="margin:0"><thead><tr>
+          <th>المحكّم</th><th>التخصص</th><th>الجهة</th>
+          <th style="text-align:center">مُسنَد</th>
+          <th style="text-align:center">قُيّم</th>
+          <th style="min-width:150px">التقدّم</th>
+          <th style="text-align:center">متوسط درجاته</th>
+          <th>آخر نشاط</th>
+        </tr></thead><tbody>
+        ${rows.sort((a,b) => (b.assigned_teams||0)-(a.assigned_teams||0)).map(r => {
+          const pct = Number(r.progress_pct || 0);
+          const col = pct >= 100 ? "var(--teal)" : pct >= 50 ? "var(--gold)" : "var(--danger)";
+          return `<tr${r.is_active === false ? ' style="opacity:.55"' : ""}>
+            <td><strong>${esc(r.judge_name||"—")}</strong>
+              ${r.is_active === false ? ' <span class="badge badge-gray">معطّل</span>' : ""}
+              ${Number(r.conflict_teams) > 0 ? ` <span class="badge badge-gold" title="فرق عليها تعارض مصالح">${r.conflict_teams} تعارض</span>` : ""}
+              <br><span style="font-size:11.5px;color:var(--muted)">${esc(r.email||"")}</span></td>
+            <td style="font-size:12.5px">${esc(r.specialization||"—")}</td>
+            <td style="font-size:12.5px;color:var(--muted)">${esc(r.organization||"—")}</td>
+            <td style="text-align:center"><strong>${r.assigned_teams||0}</strong></td>
+            <td style="text-align:center">${r.scored_teams||0}</td>
+            <td>
+              <div style="height:7px;background:var(--border-light);border-radius:5px;overflow:hidden">
+                <div style="width:${Math.min(pct,100)}%;height:100%;background:${col}"></div>
+              </div>
+              <span style="font-size:11px;color:var(--muted)">${pct}%</span>
+            </td>
+            <td style="text-align:center">${r.avg_score !== null && r.avg_score !== undefined ? Number(r.avg_score).toFixed(2) : "—"}</td>
+            <td style="font-size:11.5px;color:var(--muted)">${r.last_activity ? fmtDate(r.last_activity) : "—"}</td>
+          </tr>`;
+        }).join("")}
+        </tbody></table>` : `<div style="padding:20px">${emptyIllustration("users","لا يوجد محكّمون","أضف محكّمين من تبويب إدارة المحكّمين")}</div>`}
+    </div>
+
+    <p class="hint" style="margin-top:12px">
+      «متوسط درجاته» يكشف المحكّم المتشدّد أو المتساهل مقارنةً بزملائه.
+      و«التعارض» يعني فرقًا استُبعد منها.
+    </p>`;
+}
+
+/* ---------------- التوزيع التلقائي ---------------- */
+function openAutoAssignModal(roundId, roundName){
+  openModal(`
+    <h3>توزيع تلقائي متوازن</h3>
+    <p class="hint" style="margin:-8px 0 14px">${esc(roundName)}</p>
+    <div class="field">
+      <label>عدد المحكّمين لكل مشروع</label>
+      <input type="number" id="f-auto-per" value="3" min="1" max="10">
+    </div>
+    <div class="alert" style="font-size:12.5px">
+      يوزّع المشاريع بالتساوي، ويحترم الإسنادات القائمة فلا يلمسها،
+      ويُعلّم تعارض المصالح تلقائيًا حين يكون المحكّم من جهة أحد أعضاء الفريق.
+    </div>
+    <div id="auto-assign-preview"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+      <button class="btn btn-outline" onclick='runAutoAssign("${roundId}", true)'>معاينة</button>
+      <button class="btn btn-primary" onclick='runAutoAssign("${roundId}", false)'>تنفيذ</button>
+    </div>
+  `);
+}
+
+async function runAutoAssign(roundId, dryRun){
+  const per = parseInt(document.getElementById("f-auto-per").value) || 3;
+  const box = document.getElementById("auto-assign-preview");
+  box.innerHTML = `<div style="padding:10px 0">${skeletonRows(2)}</div>`;
+
+  const { data, error } = await sb.rpc("auto_assign_judges", {
+    p_round_id: roundId, p_judges_per_team: per, p_dry_run: dryRun
+  });
+
+  if(error){ box.innerHTML = `<div class="alert error" style="display:block">${esc(error.message)}</div>`; return; }
+
+  const rows = data || [];
+  if(!rows.length){
+    box.innerHTML = `<div class="alert" style="display:block;font-size:12.5px">لا توجد إسنادات جديدة — كل المشاريع مكتملة</div>`;
+    return;
+  }
+
+  const conflicts = rows.filter(r => (r.الحالة||"").includes("تعارض")).length;
+
+  box.innerHTML = `<div style="margin-top:12px;max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:10px">
+      <table style="margin:0;font-size:12.5px"><thead><tr><th>الفريق</th><th>المحكّم</th><th>الحالة</th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${esc(r.الفريق)}</td><td>${esc(r.المحكّم)}</td>
+        <td style="font-size:11.5px">${esc(r.الحالة)}</td>
+      </tr>`).join("")}</tbody></table>
+    </div>
+    <p class="hint" style="margin-top:8px">${rows.length} إسنادًا${conflicts ? ` · ${conflicts} عليها تعارض مصالح` : ""}</p>`;
+
+  if(!dryRun){
+    logActivity("توزيع تلقائي للمحكّمين", "judging", roundId, { count: rows.length, per });
+    showToast(`أُسند ${rows.length} تكليفًا`);
+    setTimeout(() => { closeModal(); renderJudgingAssignments(); }, 1200);
+  }
+}
+
+/* ---------------- تصدير النتائج ---------------- */
+async function exportResultsExcel(){
+  showToast("جاري التحضير...");
+  const { data, error } = await sb.from("results_export").select("*");
+  if(error){ showToast("خطأ: " + error.message, true); return; }
+  if(!data || !data.length){ showToast("لا توجد نتائج للتصدير", true); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  // ورقة 1: التفصيل الكامل
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "التفصيل");
+
+  // ورقة 2: ملخّص لكل فريق — المعدل المرجّح وعدد المحكّمين
+  const byTeam = {};
+  data.forEach(r => {
+    const k = r.الجولة + "|" + r.الفريق;
+    if(!byTeam[k]) byTeam[k] = {
+      الجولة: r.الجولة, الفريق: r.الفريق, المسار: r.المسار,
+      المشروع: r.المشروع, judges: new Set(), sw: 0, w: 0,
+      الاعتماد: r.حالة_الاعتماد || "غير معتمدة"
+    };
+    const t = byTeam[k];
+    t.judges.add(r.المحكّم);
+    t.sw += Number(r.الدرجة) * Number(r.الوزن);
+    t.w  += Number(r.الوزن);
+  });
+  const summary = Object.values(byTeam).map(t => ({
+    الجولة: t.الجولة, الفريق: t.الفريق, المسار: t.المسار, المشروع: t.المشروع,
+    عدد_المحكّمين: t.judges.size,
+    المعدل_المرجّح: t.w ? Math.round(t.sw / t.w * 100) / 100 : null,
+    الاعتماد: t.الاعتماد
+  })).sort((a,b) => (b.المعدل_المرجّح||0) - (a.المعدل_المرجّح||0));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "الترتيب");
+
+  const stamp = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `نتائج-التحكيم-${stamp}.xlsx`);
+  logActivity("تصدير نتائج التحكيم", "judging", null, { rows: data.length });
+  showToast(`صُدِّر ${data.length} سطرًا`);
 }
 
 /* ============================================================
@@ -6612,6 +6806,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-19-r120</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r121</div>
 </body>
 </html>
