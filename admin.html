@@ -4542,41 +4542,109 @@ async function runAutoAssign(roundId, dryRun){
 /* ---------------- تصدير النتائج ---------------- */
 async function exportResultsExcel(){
   showToast("جاري التحضير...");
-  const { data, error } = await sb.from("results_export").select("*");
-  if(error){ showToast("خطأ: " + error.message, true); return; }
-  if(!data || !data.length){ showToast("لا توجد نتائج للتصدير", true); return; }
+
+  const [detRes, rankRes, wlRes] = await Promise.all([
+    sb.from("results_export").select("*"),
+    sb.from("final_rankings").select("*").order("round_order").order("track_name").order("rank_in_track"),
+    sb.from("judge_workload").select("*")
+  ]);
+
+  if(detRes.error){ showToast("خطأ: " + detRes.error.message, true); return; }
+  const data = detRes.data || [];
+  if(!data.length){ showToast("لا توجد نتائج للتصدير", true); return; }
 
   const wb = XLSX.utils.book_new();
 
-  // ورقة 1: التفصيل الكامل
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "التفصيل");
+  /* ---- 1. الترتيب النهائي: الورقة الأهم للمراجعة ---- */
+  const ranks = (rankRes.data || []).map(r => ({
+    الجولة: r.round_name,
+    المسار: r.track_name || "—",
+    المركز: r.rank_in_track ?? "",
+    الفريق: r.team_name,
+    المشروع: r.project_title || "—",
+    النتيجة_النهائية: r.final_score !== null ? Number(r.final_score) : null,
+    عدد_المحكمين: r.judges_count,
+    التفاوت: r.spread !== null ? Number(r.spread) : null,
+    تقييم_جزئي: r.has_partial ? "نعم" : "",
+    الاعتماد: r.approval_status === "approved" ? "معتمدة" : "غير معتمدة",
+    المركز_العام: r.rank_overall ?? ""
+  }));
+  if(ranks.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ranks), "الترتيب النهائي");
 
-  // ورقة 2: ملخّص لكل فريق — المعدل المرجّح وعدد المحكّمين
-  const byTeam = {};
+  /* ---- 2. مصفوفة: صف لكل فريق وعمود لكل محكّم ---- */
+  // تكشف بنظرة أي محكّم شذّ عن زملائه
+  const cell = {};      // فريق|محكّم -> معدله
+  const judges = new Set();
+  const teams = {};
   data.forEach(r => {
-    const k = r.الجولة + "|" + r.الفريق;
-    if(!byTeam[k]) byTeam[k] = {
-      الجولة: r.الجولة, الفريق: r.الفريق, المسار: r.المسار,
-      المشروع: r.المشروع, judges: new Set(), sw: 0, w: 0,
-      الاعتماد: r.حالة_الاعتماد || "غير معتمدة"
-    };
-    const t = byTeam[k];
-    t.judges.add(r.المحكّم);
-    t.sw += Number(r.الدرجة) * Number(r.الوزن);
-    t.w  += Number(r.الوزن);
+    const tk = r.الجولة + "|" + r.الفريق;
+    teams[tk] = teams[tk] || { الجولة: r.الجولة, المسار: r.المسار, الفريق: r.الفريق };
+    judges.add(r.المحكّم);
+    const ck = tk + "|" + r.المحكّم;
+    cell[ck] = cell[ck] || { sw: 0, w: 0 };
+    cell[ck].sw += Number(r.الدرجة) * Number(r.الوزن);
+    cell[ck].w  += Number(r.الوزن);
   });
-  const summary = Object.values(byTeam).map(t => ({
-    الجولة: t.الجولة, الفريق: t.الفريق, المسار: t.المسار, المشروع: t.المشروع,
-    عدد_المحكّمين: t.judges.size,
-    المعدل_المرجّح: t.w ? Math.round(t.sw / t.w * 100) / 100 : null,
-    الاعتماد: t.الاعتماد
-  })).sort((a,b) => (b.المعدل_المرجّح||0) - (a.المعدل_المرجّح||0));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), "الترتيب");
+  const judgeList = [...judges].sort();
+  const matrix = Object.entries(teams).map(([tk, t]) => {
+    const row = { الجولة: t.الجولة, المسار: t.المسار, الفريق: t.الفريق };
+    let sum = 0, n = 0;
+    judgeList.forEach(j => {
+      const c = cell[tk + "|" + j];
+      const v = c && c.w ? Math.round(c.sw / c.w * 100) / 100 : null;
+      row[j] = v;
+      if(v !== null){ sum += v; n++; }
+    });
+    row["المعدل"] = n ? Math.round(sum / n * 100) / 100 : null;
+    return row;
+  }).sort((a,b) => (b.المعدل||0) - (a.المعدل||0));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(matrix), "مصفوفة المحكّمين");
+
+  /* ---- 3. متوسط كل معيار لكل فريق ---- */
+  // يكشف نقاط القوة والضعف بين المشاريع
+  const byCrit = {};
+  const critNames = new Set();
+  data.forEach(r => {
+    const tk = r.الجولة + "|" + r.الفريق;
+    byCrit[tk] = byCrit[tk] || { الجولة: r.الجولة, المسار: r.المسار, الفريق: r.الفريق, _c: {} };
+    critNames.add(r.المعيار);
+    const c = byCrit[tk]._c;
+    c[r.المعيار] = c[r.المعيار] || { sum: 0, n: 0, w: r.الوزن };
+    c[r.المعيار].sum += Number(r.الدرجة);
+    c[r.المعيار].n++;
+  });
+  const critList = [...critNames];
+  const critRows = Object.values(byCrit).map(t => {
+    const row = { الجولة: t.الجولة, المسار: t.المسار, الفريق: t.الفريق };
+    critList.forEach(cn => {
+      const c = t._c[cn];
+      row[cn] = c ? Math.round(c.sum / c.n * 100) / 100 : null;
+    });
+    return row;
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(critRows), "متوسط المعايير");
+
+  /* ---- 4. أداء المحكّمين ---- */
+  const wl = (wlRes.data || []).filter(r => r.assigned_teams > 0).map(r => ({
+    المحكّم: r.judge_name,
+    البريد: r.email,
+    التخصص: r.specialization || "—",
+    الجهة: r.organization || "—",
+    الجولة: r.round_name,
+    مُسنَد: r.assigned_teams,
+    قُيّم: r.scored_teams,
+    نسبة_الإنجاز: r.progress_pct,
+    متوسط_درجاته: r.avg_score !== null ? Number(r.avg_score) : null
+  }));
+  if(wl.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wl), "أداء المحكّمين");
+
+  /* ---- 5. التفصيل الكامل ---- */
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), "التفصيل الكامل");
 
   const stamp = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `نتائج-التحكيم-${stamp}.xlsx`);
-  logActivity("تصدير نتائج التحكيم", "judging", null, { rows: data.length });
-  showToast(`صُدِّر ${data.length} سطرًا`);
+  logActivity("تصدير نتائج التحكيم", "judging", null, { rows: data.length, sheets: 5 });
+  showToast(`صُدِّرت ${wb.SheetNames.length} أوراق`);
 }
 
 /* ============================================================
@@ -6967,6 +7035,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r124</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r125</div>
 </body>
 </html>
