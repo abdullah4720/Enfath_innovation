@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>تسجيل الحضور | هاكاثون إنفاذ</title>
+<title>تسجيل الحضور | هاكاثون ابتكار إنفاذ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root{
-    --navy:#1A2E5A; --navy-dark:#0D1B3E; --navy-light:#2A3D6B; --teal:#00BDC4; --gold:#C9922A;
+    --navy:#001938; --navy-dark:#0D1B3E; --navy-light:#002647; --teal:#00BDC4; --gold:#C9922A;
     --bg:#F7F8FA; --card:#FFFFFF; --ink:#1A1A2E; --muted:#6B7A99; --border:#E4E6EF; --danger:#C0392B; --radius:14px;
   }
   *{box-sizing:border-box;}
@@ -224,6 +224,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r94</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-27-r95</div>
 </body>
 </html>

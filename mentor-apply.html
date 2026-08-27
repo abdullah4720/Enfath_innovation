@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>التقديم كمرشد | هاكاثون إنفاذ</title>
+<title>التقديم كمرشد | هاكاثون ابتكار إنفاذ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
-    --navy:#1A2E5A; --navy-dark:#0D1B3E; --navy-light:#2A3D6B; --teal:#00BDC4; --gold:#C9922A;
+    --navy:#001938; --navy-dark:#0D1B3E; --navy-light:#002647; --teal:#00BDC4; --gold:#C9922A;
     --bg:#F7F8FA; --card:#FFFFFF; --ink:#1A1A2E; --muted:#6B7A99; --border:#E4E6EF; --danger:#C0392B; --radius:16px;
   }
   *{box-sizing:border-box;}
@@ -52,7 +52,7 @@
 
 <div class="hero">
   <div class="program-mark"><img src="data:image/jpeg;base64,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" alt="ابتكار إنفاذ"></div>
-  <h1>انضم كمرشد لهاكاثون إنفاذ</h1>
+  <h1>انضم كمرشد لهاكاثون ابتكار إنفاذ</h1>
   <p>شارك خبرتك مع فرق واعدة تبني حلول ذكاء اصطناعي لخدمة القطاع القضائي</p>
 </div>
 
@@ -182,6 +182,6 @@ async function handleApply(){
   showAlert("تم إرسال طلبك بنجاح! سيتم التواصل معك بعد مراجعة الإدارة", "success");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r1</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-27-r2</div>
 </body>
 </html>
