@@ -4557,6 +4557,44 @@ async function exportResultsExcel(){
 
   const wb = XLSX.utils.book_new();
 
+  /* ---- 0. الغلاف ---- */
+  // SheetJS المجاني لا يدرج صورًا، فالغلاف نصّي منسَّق
+  const now = new Date();
+  const stampAr = now.toLocaleDateString("ar-SA-u-nu-latn", {year:"numeric", month:"long", day:"2-digit"});
+  const roundsSeen = [...new Set((rankRes.data || []).map(r => r.round_name))].filter(Boolean);
+  const cover = [
+    ["ابتكار إنفاذ"],
+    ["Infath Innovation"],
+    [""],
+    ["تقرير نتائج التحكيم"],
+    [""],
+    ["الجهة المنظِّمة", "جامعة القصيم"],
+    ["الشريك", "إنفاذ"],
+    [""],
+    ["تاريخ التصدير", stampAr],
+    ["الجولات المشمولة", roundsSeen.join(" · ") || "—"],
+    ["عدد الفرق", new Set(data.map(r => r.الفريق)).size],
+    ["عدد المحكّمين", new Set(data.map(r => r.المحكّم)).size],
+    ["عدد التقييمات", data.length],
+    [""],
+    ["محتويات الملف"],
+    ["الترتيب النهائي", "المركز والنتيجة وحالة الاعتماد"],
+    ["مصفوفة المحكّمين", "صف لكل فريق وعمود لكل محكّم"],
+    ["متوسط المعايير", "متوسط كل معيار لكل فريق"],
+    ["أداء المحكّمين", "العبء والإنجاز ومتوسط الدرجات"],
+    ["التفصيل الكامل", "كل درجة على حدة"],
+    [""],
+    ["وثيقة داخلية — لا تُنشر قبل اعتماد النتائج وإعلانها رسميًا"]
+  ];
+  const wsCover = XLSX.utils.aoa_to_sheet(cover);
+  wsCover["!cols"] = [{wch:26},{wch:52}];
+  wsCover["!merges"] = [
+    {s:{r:0,c:0},e:{r:0,c:1}}, {s:{r:1,c:0},e:{r:1,c:1}},
+    {s:{r:3,c:0},e:{r:3,c:1}}, {s:{r:14,c:0},e:{r:14,c:1}},
+    {s:{r:21,c:0},e:{r:21,c:1}}
+  ];
+  XLSX.utils.book_append_sheet(wb, wsCover, "الغلاف");
+
   /* ---- 1. الترتيب النهائي: الورقة الأهم للمراجعة ---- */
   const ranks = (rankRes.data || []).map(r => ({
     الجولة: r.round_name,
@@ -4645,7 +4683,7 @@ async function exportResultsExcel(){
 
   const stamp = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `نتائج-التحكيم-${stamp}.xlsx`);
-  logActivity("تصدير نتائج التحكيم", "judging", null, { rows: data.length, sheets: 5 });
+  logActivity("تصدير نتائج التحكيم", "judging", null, { rows: data.length, sheets: wb.SheetNames.length });
   showToast(`صُدِّرت ${wb.SheetNames.length} أوراق`);
 }
 
@@ -7044,6 +7082,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r127</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r128</div>
 </body>
 </html>

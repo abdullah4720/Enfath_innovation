@@ -10,7 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <style>
   :root{
-    --navy:#1A2E5A; --navy-dark:#0D1B3E; --navy-light:#2A3D6B; --teal:#1F9E8E; --gold:#C9922A;
+    --navy:#1A2E5A; --navy-dark:#0D1B3E; --navy-light:#2A3D6B; --teal:#00BDC4; --gold:#C9922A;
     --bg:#F7F8FA; --card:#FFFFFF; --ink:#1A1A2E; --muted:#6B7A99; --border:#E4E6EF; --danger:#C0392B; --radius:14px;
   }
   *{box-sizing:border-box;}
@@ -224,6 +224,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-09-r93</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-25-r94</div>
 </body>
 </html>
