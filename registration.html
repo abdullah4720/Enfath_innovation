@@ -99,6 +99,12 @@
   .sub{color:var(--muted); font-size:13.5px; margin:0 0 24px;}
 
   .field{margin-bottom:16px;}
+  /* التسليمات المطلوبة */
+  .bar-track{height:8px;background:var(--border-light,#EEF0F5);border-radius:5px;overflow:hidden}
+  .bar-fill{height:100%;background:linear-gradient(90deg,var(--teal),#5FE8EC);transition:width .5s}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px}
+  .dv-form .field{margin-bottom:10px}
+
   .form-row-2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   @media (max-width:520px){ .form-row-2{grid-template-columns:1fr;} }
   .field label{display:block; font-size:13px; margin-bottom:6px; font-weight:500;}
@@ -1004,6 +1010,7 @@ const DASH_SECTIONS = {
   ]},
   files: { label:"الملفات", icon:"folder-open", color:"#0D9488", tabs:[
     { t:"files", label:"الملفات", icon:"folder-open" },
+    { t:"deliverables", label:"التسليمات المطلوبة", icon:"upload" },
   ]},
   account: { label:"حسابي", icon:"circle-user", color:"#6B7A99", tabs:[
     { t:"profile", label:"ملفي الشخصي", icon:"user-round" },
@@ -1110,6 +1117,7 @@ async function renderDashSection(membership){
   else if(dashTab === "certs") renderCertsTab();
   else if(dashTab === "updates") renderUpdatesTab(membership);
   else if(dashTab === "files") renderFilesTab(membership);
+  else if(dashTab === "deliverables") renderDeliverablesTab(membership);
   else if(dashTab === "surveys") renderSurveysTab();
   else renderMyProfileTab();
 }
@@ -2221,6 +2229,184 @@ async function renderUpdatesTab(membership){
       </div>
     `).join("")}
   </div>`;
+}
+
+
+/* ---------------- تبويب: التسليمات المطلوبة ---------------- */
+// ما يجب على الفريق تسليمه. الرفع متاح لأعضاء الفريق فقط،
+// وللمطلوبات المفتوحة فقط. إعادة الرفع تستبدل التسليم السابق.
+
+let currentMembership = null;
+async function renderDeliverablesTab(membership){
+  currentMembership = membership;
+  const body = document.getElementById("dash-tab-body");
+  const teamId = membership?.team_id;
+
+  if(!teamId){
+    body.innerHTML = `<div class="card">
+      <h2>التسليمات المطلوبة</h2>
+      <p class="sub">كوِّن فريقك أو انضم لفريق أولًا لتتمكن من التسليم.</p></div>`;
+    return;
+  }
+
+  body.innerHTML = `<div class="card"><h2>التسليمات المطلوبة</h2>
+    <p class="sub">جارٍ التحميل...</p></div>`;
+
+  const { data, error } = await sb.from("deliverables_status")
+    .select("*").eq("team_id", teamId).order("due_at", {nullsFirst:false});
+
+  if(error){
+    body.innerHTML = `<div class="card"><h2>التسليمات المطلوبة</h2>
+      <div class="hint">خطأ: ${esc(error.message)}</div></div>`;
+    return;
+  }
+
+  const rows = data || [];
+  if(!rows.length){
+    body.innerHTML = `<div class="card"><h2>التسليمات المطلوبة</h2>
+      <p class="sub">لا توجد تسليمات مطلوبة حاليًا.</p></div>`;
+    return;
+  }
+
+  const done = rows.filter(r => r.submission_id).length;
+  body.innerHTML = `
+    <div class="card">
+      <h2>التسليمات المطلوبة</h2>
+      <p class="sub">أنجزتم ${done} من ${rows.length}</p>
+      <div style="margin:14px 0">
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.round(done/rows.length*100)}%"></div></div>
+      </div>
+    </div>
+    ${rows.map(r => delivCardHtml(r)).join("")}`;
+  if(window.lucide) lucide.createIcons();
+}
+
+function delivCardHtml(r){
+  const overdue = !r.submission_id && r.due_at && new Date(r.due_at) < new Date();
+  const closed  = !r.is_open;
+  const tone = {
+    "مقبول":"#0D9488", "مرفوض":"#C0392B", "متأخر":"#C0392B",
+    "لم يُسلَّم":"#8FA6BC", "بانتظار المراجعة":"#C9922A"
+  }[r.الحالة] || "#8FA6BC";
+
+  const due = r.due_at
+    ? new Date(r.due_at).toLocaleDateString("ar-SA-u-nu-latn",{day:"2-digit",month:"long"})
+      + " · " + new Date(r.due_at).toLocaleTimeString("ar-SA-u-nu-latn",{hour:"2-digit",minute:"2-digit"})
+    : "بلا موعد محدد";
+
+  return `
+  <div class="card" style="margin-top:12px;border-right:3px solid ${tone}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong>${esc(r.deliverable_title)}</strong>
+          ${r.is_required ? '<span class="pill" style="background:#FDF0D5;color:#8A6A1E">إلزامي</span>' : ''}
+        </div>
+        <p class="hint" style="margin:6px 0 0">الموعد: ${esc(due)}</p>
+        <p style="margin:8px 0 0;font-size:13px;color:${tone};font-weight:600">${esc(r.الحالة)}</p>
+        ${r.review_note ? `<p class="hint" style="margin:6px 0 0">ملاحظة الإدارة: ${esc(r.review_note)}</p>` : ""}
+        ${r.file_url ? `<p style="margin:8px 0 0;font-size:13px">
+           <a href="${esc(r.file_url)}" target="_blank" rel="noopener">${esc(r.file_name || "الملف المرفوع")}</a></p>` : ""}
+      </div>
+      <div>
+        ${closed
+          ? '<span class="hint">الرفع مغلق</span>'
+          : `<button class="btn btn-primary btn-sm" style="width:auto"
+               onclick="openDelivUpload('${r.deliverable_id}','${r.team_id}', this)">
+               ${r.submission_id ? "استبدال الملف" : "رفع الملف"}</button>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function openDelivUpload(deliverableId, teamId, btnEl){
+  // لا نظام نوافذ في هذه الصفحة — نفتح النموذج داخل البطاقة نفسها
+  const card = btnEl.closest(".card");
+  if(card.querySelector(".dv-form")) return;   // مفتوح أصلًا
+  const form = document.createElement("div");
+  form.className = "dv-form";
+  form.style.cssText = "margin-top:14px;padding-top:14px;border-top:1px solid var(--border)";
+  form.innerHTML = `
+    <div class="field"><label>اختر الملف</label>
+      <input type="file" class="dv-file"></div>
+    <div class="field"><label>ملاحظة (اختياري)</label>
+      <textarea class="dv-note" rows="2" placeholder="أي توضيح تودّون إضافته"></textarea></div>
+    <div class="dv-alert alert" style="display:none"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary dv-send" style="width:auto">رفع</button>
+      <button class="btn btn-outline dv-cancel" style="width:auto">إلغاء</button>
+    </div>`;
+  card.appendChild(form);
+  form.querySelector(".dv-cancel").onclick = () => form.remove();
+  form.querySelector(".dv-send").onclick = () => submitDeliverable(deliverableId, teamId, form);
+  form.querySelector(".dv-file").focus();
+}
+
+async function submitDeliverable(deliverableId, teamId, form){
+  const fileInput = form.querySelector(".dv-file");
+  const alertBox  = form.querySelector(".dv-alert");
+  const btn       = form.querySelector(".dv-send");
+  const file      = fileInput.files[0];
+
+  const fail = (msg) => {
+    alertBox.style.display = "block";
+    alertBox.className = "dv-alert alert error";
+    alertBox.textContent = msg;
+    btn.disabled = false; btn.textContent = "رفع";
+  };
+
+  if(!file){ fail("اختر ملفًا أولًا"); return; }
+
+  const { data: d } = await sb.from("deliverables")
+    .select("allowed_types,max_size_mb,is_open").eq("id", deliverableId).maybeSingle();
+  if(!d?.is_open){ fail("الرفع مغلق لهذا المطلوب"); return; }
+
+  const maxMb = d?.max_size_mb || 25;
+  if(file.size > maxMb * 1024 * 1024){
+    fail(`الملف أكبر من الحد المسموح (${maxMb} ميجابايت)`); return;
+  }
+  if(d?.allowed_types){
+    const allowed = d.allowed_types.split(",").map(x => x.trim().toLowerCase()).filter(Boolean);
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    if(allowed.length && !allowed.includes(ext)){
+      fail(`الصيغة غير مسموحة. المسموح: ${allowed.join("، ")}`); return;
+    }
+  }
+
+  btn.disabled = true; btn.textContent = "جارٍ الرفع...";
+  alertBox.style.display = "none";
+
+  try{
+    // Supabase Storage يرفض المسارات غير اللاتينية؛ والاسم العربي
+    // يُمحى بالتنقية. نستخدم الامتداد فقط، والاسم الأصلي يُحفظ في
+    // عمود file_name فيراه المستخدم صحيحًا.
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const path = `${teamId}/${deliverableId}/${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage.from("deliverables").upload(path, file, { upsert:true });
+    if(upErr) throw upErr;
+
+    const { data: urlData } = sb.storage.from("deliverables").getPublicUrl(path);
+    const uid = (await sb.auth.getUser()).data.user?.id;
+
+    // تسليم واحد لكل فريق لكل مطلوب — الرفع مجددًا يستبدل السابق
+    const { error: dbErr } = await sb.from("deliverable_submissions").upsert({
+      deliverable_id: deliverableId,
+      team_id: teamId,
+      file_url: urlData.publicUrl,
+      file_name: file.name,
+      file_size_kb: Math.round(file.size / 1024),
+      note: form.querySelector(".dv-note").value.trim() || null,
+      submitted_by: uid,
+      submitted_at: new Date().toISOString(),
+      review_status: "pending",
+      review_note: null, reviewed_by: null, reviewed_at: null
+    }, { onConflict: "deliverable_id,team_id" });
+    if(dbErr) throw dbErr;
+
+    renderDeliverablesTab(currentMembership);
+  }catch(e){
+    fail("تعذّر الرفع: " + (e.message || e));
+  }
 }
 
 /* ---------------- تبويب: الملفات (مكتبة مرجعية مستقلة) ---------------- */
