@@ -319,7 +319,7 @@
       <p class="sub" id="su-subheading">أدخل بياناتك ومعلومات فريقك — كل ذلك بخطوة واحدة</p>
 
       <h4 style="font-size:12.5px;color:var(--muted);margin:16px 0 10px">البيانات الأساسية</h4>
-      <div class="field"><label>الاسم الثلاثي</label><input id="su-name" placeholder="مثال: عبدالله محمد العييدي"></div>
+      <div class="field"><label>الاسم الثلاثي</label><input id="su-name" placeholder="الاسم الكامل"></div>
       <div class="field"><label>البريد الإلكتروني</label><input type="email" id="su-email"></div>
       <div class="field"><label>رقم الجوال</label><input id="su-phone" placeholder="05xxxxxxxx"></div>
       <div class="field"><label>كلمة المرور</label><input type="password" id="su-password"></div>
@@ -335,29 +335,12 @@
             <option value="أخرى">أخرى</option>
           </select>
         </div>
-        <div class="field"><label>المدينة</label><input id="su-city" placeholder="مثال: بريدة"></div>
+        <div class="field"><label>المدينة</label><input id="su-city" placeholder=""></div>
       </div>
 
       <div class="field">
         <label>الجهة</label>
-        <input id="su-org" list="org-suggestions" placeholder="اكتب أو اختر من القائمة">
-        <datalist id="org-suggestions">
-          <option value="جامعة القصيم">
-          <option value="جامعة الملك سعود">
-          <option value="جامعة الملك عبدالعزيز">
-          <option value="جامعة الملك فهد للبترول والمعادن">
-          <option value="جامعة الإمام محمد بن سعود الإسلامية">
-          <option value="جامعة الأميرة نورة بنت عبدالرحمن">
-          <option value="جامعة الملك خالد">
-          <option value="جامعة أم القرى">
-          <option value="جامعة طيبة">
-          <option value="وزارة العدل">
-          <option value="وزارة الداخلية">
-          <option value="ديوان المظالم">
-          <option value="هيئة الخبراء بمجلس الوزراء">
-          <option value="وزارة الاتصالات وتقنية المعلومات">
-          <option value="أخرى">
-        </datalist>
+        <input id="su-org" placeholder="اسم الجهة">
       </div>
 
       <div class="form-row-2">
@@ -391,7 +374,7 @@
           <option value="أخرى">أخرى</option>
         </select>
       </div>
-      <div class="field" id="su-role-other-box" style="display:none"><label>حدّد الدور</label><input id="su-role-other" placeholder="اكتب دورك بالمشروع"></div>
+      <div class="field" id="su-role-other-box" style="display:none"><label>حدّد الدور</label><input id="su-role-other" placeholder=""></div>
 
       <div id="su-join-banner" style="display:none; background:#e6f7f3; border:1px solid #b8e6dc; border-radius:12px; padding:14px 16px; margin-top:20px">
         <strong id="su-join-team-name" style="color:var(--navy); font-size:14px"></strong>
@@ -408,11 +391,11 @@
         <div id="su-create-box">
           <div class="field" style="margin-top:14px"><label>اختر المسار</label></div>
           <div id="su-track-list"><p class="hint">جاري تحميل المسارات...</p></div>
-          <div class="field" style="margin-top:14px"><label>اسم الفريق</label><input id="su-team-name" placeholder="اسم فريقك"></div>
+          <div class="field" style="margin-top:14px"><label>اسم الفريق</label><input id="su-team-name" placeholder=""></div>
         </div>
 
         <div id="su-join-box" style="display:none; margin-top:14px">
-          <div class="field"><label>رمز الدعوة</label><input id="su-join-code" placeholder="مثال: a1b2c3d4" style="text-transform:uppercase"></div>
+          <div class="field"><label>رمز الدعوة</label><input id="su-join-code" placeholder="رمز الدعوة" style="text-transform:uppercase"></div>
         </div>
       </div>
 
@@ -1325,11 +1308,7 @@ async function renderMyProfileTab(){
       <div class="field"><label>المدينة</label><input id="profile-city" value="${esc(profile.city||"")}"></div>
     </div>
 
-    <div class="field"><label>الجهة</label><input id="profile-org" list="org-suggestions-2" value="${esc(profile.organization||"")}"></div>
-    <datalist id="org-suggestions-2">
-      <option value="جامعة القصيم"><option value="جامعة الملك سعود"><option value="جامعة الملك عبدالعزيز">
-      <option value="وزارة العدل"><option value="وزارة الداخلية"><option value="ديوان المظالم"><option value="أخرى">
-    </datalist>
+    <div class="field"><label>الجهة</label><input id="profile-org" value="${esc(profile.organization||"")}"></div>
 
     <div class="form-row-2">
       <div class="field"><label>الفئة العمرية</label>
@@ -2485,7 +2464,7 @@ async function renderNoTeamView(){
       <div id="track-list">
         ${trackOptionsHtml(tracks || [], "selectTrack")}
       </div>
-      <div class="field" style="margin-top:16px"><label>اسم الفريق</label><input id="new-team-name" placeholder="اسم فريقك"></div>
+      <div class="field" style="margin-top:16px"><label>اسم الفريق</label><input id="new-team-name" placeholder=""></div>
       <div id="create-alert" class="alert"></div>
       <button class="btn btn-primary" onclick="createTeam()">إنشاء الفريق</button>
     </div>
@@ -2493,7 +2472,7 @@ async function renderNoTeamView(){
     <div id="join-team-box" class="card" style="display:none">
       <h2>الانضمام لفريق قائم</h2>
       <p class="sub">اطلب رمز الدعوة من قائد الفريق</p>
-      <div class="field"><label>رمز الدعوة</label><input id="join-code" placeholder="مثال: a1b2c3d4" style="text-transform:uppercase"></div>
+      <div class="field"><label>رمز الدعوة</label><input id="join-code" placeholder="رمز الدعوة" style="text-transform:uppercase"></div>
       <div id="join-alert" class="alert"></div>
       <button class="btn btn-primary" onclick="joinTeam()">الانضمام للفريق</button>
     </div>
@@ -2799,6 +2778,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-27-r121</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-28-r122</div>
 </body>
 </html>

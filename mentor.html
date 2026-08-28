@@ -530,7 +530,7 @@ async function renderMyProfile(){
         ${domainOptions.map(o => `<option value="${esc(o)}" ${savedDomain===o?"selected":""}>${esc(o)}</option>`).join("")}
       </select>
     </div>
-    <div class="field"><label>المسمى الوظيفي / جهة العمل الحالية</label><input id="profile-position" value="${esc(profile.current_position||"")}" placeholder="مثال: مهندس برمجيات أول، شركة كذا"></div>
+    <div class="field"><label>المسمى الوظيفي / جهة العمل الحالية</label><input id="profile-position" value="${esc(profile.current_position||"")}" placeholder=""></div>
     <div class="field"><label>نبذة تعريفية</label><textarea id="profile-bio" rows="4" placeholder="خبرتك ذات الصلة بالبرنامج...">${esc(profile.bio||"")}</textarea></div>
     <div id="profile-alert" class="alert"></div>
     <button class="btn btn-primary" onclick="saveMyProfile()">حفظ التعديلات</button>
@@ -779,7 +779,7 @@ function openBulkCloseModal(){
       ${list.map(b => esc(b.teamName)).join("، ")}
     </p>
     <div class="field"><label>ملاحظة عامة (تُضاف لكل الجلسات المُقفلة دفعة واحدة)</label>
-      <textarea id="bulk-fb-notes" rows="3" placeholder="مثال: تم إنهاء جلسات اليوم بشكل طبيعي، بدون ملاحظات خاصة لكل فريق"></textarea>
+      <textarea id="bulk-fb-notes" rows="3" placeholder=""></textarea>
       <p class="hint" style="margin-top:4px">لو عندك ملاحظة خاصة لفريق معيّن، الأفضل ترجع تسجّلها له لحاله من القائمة بدل الإقفال الجماعي</p>
     </div>
     <div id="bulk-fb-alert" class="alert"></div>
@@ -1070,6 +1070,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-27-r98</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-28-r99</div>
 </body>
 </html>
