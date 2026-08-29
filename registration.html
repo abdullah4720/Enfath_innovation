@@ -1066,6 +1066,7 @@ const DASH_SECTIONS = {
   ]},
   certs: { label:"الشهادات", icon:"award", color:"var(--teal)", tabs:[
     { t:"certs", label:"الشهادات", icon:"award" },
+    { t:"surveys", label:"الاستبيانات", icon:"clipboard-list" },
   ]},
   updates: { label:"التحديثات", icon:"megaphone", color:"#7C6FE0", tabs:[
     { t:"updates", label:"التحديثات", icon:"megaphone" },
@@ -1076,7 +1077,6 @@ const DASH_SECTIONS = {
   ]},
   account: { label:"حسابي", icon:"circle-user", color:"#6B7A99", tabs:[
     { t:"profile", label:"ملفي الشخصي", icon:"user-round" },
-    { t:"surveys", label:"الاستبيانات", icon:"clipboard-list" },
   ]},
 };
 
@@ -1800,8 +1800,16 @@ async function renderMentorshipTab(membership){
           <div>
             <strong>${fmtDate(b.mentor_slots?.start_time)}</strong> — ${esc(b.mentor_slots?.profiles?.full_name||"مرشد")}<br>
             <span class="hint">${esc(b.mentor_slots?.location || (b.mentor_slots?.is_online ? "عبر الإنترنت" : ""))}</span>
-            ${b.status === "completed" && !ratedBookingIds.has(b.id) ? renderRatingPrompt(b.id, b.mentor_slots?.mentor_user_id, team.id) : ""}
-            ${b.status === "completed" && ratedBookingIds.has(b.id) ? `<p class="hint" style="margin-top:6px">✓ شكرًا على تقييمكم لهذه الجلسة</p>` : ""}
+            ${(() => {
+              // التقييم يعتمد على انتهاء وقت الجلسة لا على إغلاق المرشد لها.
+              // لو انتظرنا الإغلاق، وقد لا يحدث، لضاع التقييم بلا سبب.
+              const ended = b.mentor_slots && new Date(b.mentor_slots.end_time) <= new Date();
+              const ratable = ended && b.status !== "cancelled" && b.status !== "no_show_team";
+              if(!ratable) return "";
+              return ratedBookingIds.has(b.id)
+                ? `<p class="hint" style="margin-top:6px">شكرًا على تقييمكم لهذه الجلسة</p>`
+                : renderRatingPrompt(b.id, b.mentor_slots?.mentor_user_id, team.id);
+            })()}
             ${b.status === "completed" ? `<button class="btn-link" style="font-size:12px;margin-top:4px" onclick='bookFollowUpWithMentor("${b.mentor_slots?.mentor_user_id}", ${JSON.stringify(b.mentor_slots?.profiles?.full_name||"")})'>احجز موعد آخر مع نفس المرشد</button>` : ""}
           </div>
           <div style="text-align:left">
@@ -2009,7 +2017,12 @@ function renderRatingPrompt(bookingId, mentorId, teamId){
       </div>
 
       <div id="rating-alert-${bookingId}" style="font-size:12px;color:var(--danger);margin-bottom:8px;display:none"></div>
-      <button type="button" class="btn btn-primary" style="width:auto;padding:10px 22px" onclick="submitMentorRating('${bookingId}','${mentorId}','${teamId}')">إرسال التقييم</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button type="button" class="btn btn-primary" style="width:auto;padding:10px 22px" onclick="submitMentorRating('${bookingId}','${mentorId}','${teamId}')">إرسال التقييم</button>
+        <button type="button" class="btn-link" style="font-size:12.5px;color:var(--muted)"
+          onclick="markSessionNotHeld('${bookingId}','${mentorId}','${teamId}')">لم تُعقد الجلسة</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0;font-size:11.5px">اختر «لم تُعقد» إن تعذّر انعقاد الجلسة — يُسجَّل ذلك ولا يُطلب منكم تقييمها</p>
     </div>
   `;
 }
@@ -2022,6 +2035,28 @@ function selectRatingValue(bookingId, criterion, value){
     btn.classList.toggle("selected", parseInt(btn.dataset.val) === value);
   });
 }
+
+async function markSessionNotHeld(bookingId, mentorId, teamId){
+  const alertBox = document.getElementById(`rating-alert-${bookingId}`);
+  if(!confirm("تأكيد أن الجلسة لم تُعقد؟\n\nسيُسجَّل ذلك ولن يُطلب منكم تقييمها.")) return;
+
+  // نسجّلها في mentor_ratings بعلامة session_held=false — فتُحتسب
+  // ضمن "مقيَّمة" ولا يعود النموذج، ولا تُحسب في متوسط المرشد.
+  const { error } = await sb.from("mentor_ratings").insert({
+    booking_id: bookingId, mentor_user_id: mentorId, team_id: teamId,
+    rating: null, specialty_fit_rating: null,
+    session_held: false,
+    comment: (document.getElementById(`comment-${bookingId}`)?.value || "").trim() || null
+  });
+
+  if(error){
+    alertBox.textContent = "تعذّر التسجيل: " + error.message;
+    alertBox.style.display = "block";
+    return;
+  }
+  renderMentorshipTab(cachedMembership);
+}
+
 async function submitMentorRating(bookingId, mentorId, teamId){
   const sel = ratingSelections[bookingId] || {};
   const alertBox = document.getElementById(`rating-alert-${bookingId}`);
@@ -2034,7 +2069,8 @@ async function submitMentorRating(bookingId, mentorId, teamId){
 
   const { error } = await sb.from("mentor_ratings").insert({
     booking_id: bookingId, mentor_user_id: mentorId, team_id: teamId,
-    rating: sel.benefit, specialty_fit_rating: sel.fit, comment: comment || null
+    rating: sel.benefit, specialty_fit_rating: sel.fit,
+    session_held: true, comment: comment || null
   });
   if(error){ alertBox.textContent = "تعذّر إرسال التقييم: " + error.message; alertBox.style.display = "block"; return; }
   delete ratingSelections[bookingId];
@@ -2902,6 +2938,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r127</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r129</div>
 </body>
 </html>
