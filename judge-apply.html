@@ -60,8 +60,11 @@
   <div class="panel">
     <div class="switcher">
       <button id="tab-new" onclick="switchTab('new')">حساب جديد</button>
-      <button id="tab-existing" class="active" onclick="switchTab('existing')">لدي حساب مسبقًا</button>
+      <button id="tab-existing" class="active" onclick="switchTab('existing')">لدي حساب</button>
     </div>
+    <p class="hint" style="text-align:center;margin:-4px 0 14px;font-size:12.5px">
+      معتمد سابقًا؟ <a href="./judge.html" style="color:var(--teal);font-weight:600">ادخل إلى لوحة التحكيم</a>
+    </p>
     <p class="hint" style="margin:-8px 0 16px">التخصص والمجال مطلوبان حتى لمن لديه حساب، لأنهما خاصان بطلب الانضمام</p>
     <div id="form-alert" class="alert"></div>
 
@@ -163,6 +166,16 @@ async function handleApply(){
   }
 
   // منع تعارض المصالح: لا يقدر مشارك حالي (عضو بفريق) يسجّل كمحكّم بنفس حسابه
+  // من اعتُمد سابقًا لا يُعيد التقديم — إعادة الإرسال تُرجع حالته
+  // إلى pending فيفقد صلاحيته. نوجّهه إلى لوحته مباشرة.
+  const { data: myRoles } = await sb.from("user_roles")
+    .select("roles(key)").eq("user_id", userId);
+  if((myRoles || []).some(r => r.roles?.key === "judge")){
+    showAlert("حسابكم معتمد بالفعل — يجري تحويلكم إلى لوحة التحكيم", "success");
+    setTimeout(() => { location.href = "./judge.html"; }, 1200);
+    return;
+  }
+
   const { data: existingMembership } = await sb.from("team_members").select("id").eq("user_id", userId).limit(1);
   if(existingMembership && existingMembership.length){
     showAlert("هذا الحساب مسجَّل حاليًا كعضو بأحد الفرق المشاركة. لمنع تعارض المصالح، لا يمكن التسجيل كمحكّم بنفس الحساب — يرجى استخدام بريد إلكتروني مختلف");
@@ -182,6 +195,6 @@ async function handleApply(){
   showAlert("تم إرسال طلبك بنجاح! سيتم التواصل معك بعد مراجعة الإدارة", "success");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r4</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r5</div>
 </body>
 </html>
