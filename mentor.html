@@ -54,6 +54,16 @@
   .tab.active{color:var(--teal); border-color:var(--teal);}
 
   .field{margin-bottom:14px;}
+  /* تبويبات شاشة الدخول والتقديم */
+  .switcher{display:flex;gap:4px;background:var(--bg,#F7F8FA);padding:4px;border-radius:11px;margin-bottom:16px}
+  .switcher button{flex:1;padding:9px 12px;border:0;border-radius:8px;background:transparent;
+    font-family:inherit;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:.18s}
+  .switcher button.active{background:#fff;color:var(--navy,#001938);box-shadow:0 1px 4px rgba(0,25,56,.1)}
+  body.dark .switcher{background:rgba(255,255,255,.06)}
+  body.dark .switcher button.active{background:rgba(255,255,255,.14);color:#fff}
+  .auth-gate textarea{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:9px;
+    font-family:inherit;font-size:13.5px;resize:vertical}
+
   .field label{display:block; font-size:13px; margin-bottom:6px; font-weight:500;}
   .field input, .field textarea, .field select{width:100%; padding:11px 13px; border:1px solid var(--border); border-radius:9px; font-family:inherit; font-size:14px;}
   .form-row-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
@@ -104,11 +114,54 @@
 </div>
 <div id="auth-gate-screen" class="auth-gate">
   <h2>لوحة الإرشاد</h2>
-  <p>سجّل دخولك بحساب المرشد الخاص بك</p>
+  <p id="gate-tagline">شارك خبرتك مع فرق واعدة تبني حلول ذكاء اصطناعي لخدمة القطاع القضائي</p>
+
+  <div class="switcher" id="gate-tabs">
+    <button id="tab-login" class="active" onclick="gateTab('login')">تسجيل الدخول</button>
+    <button id="tab-apply" onclick="gateTab('apply')">التقديم كمرشد</button>
+  </div>
+
   <div id="gate-alert" class="alert"></div>
-  <div class="field"><input type="email" id="gate-email" placeholder="البريد الإلكتروني"></div>
-  <div class="field"><input type="password" id="gate-password" placeholder="كلمة المرور"></div>
-  <button class="btn btn-primary" style="width:100%" onclick="handleGateLogin()">دخول</button>
+
+  <!-- دخول -->
+  <div id="pane-login">
+    <div class="field"><input type="email" id="gate-email" placeholder="البريد الإلكتروني"></div>
+    <div class="field"><input type="password" id="gate-password" placeholder="كلمة المرور"></div>
+    <button class="btn btn-primary" onclick="handleGateLogin()">دخول</button>
+  </div>
+
+  <!-- تقديم -->
+  <div id="pane-apply" style="display:none">
+    <div class="switcher" style="margin-bottom:14px">
+      <button id="ap-new" class="active" onclick="applyMode('new')">حساب جديد</button>
+      <button id="ap-existing" onclick="applyMode('existing')">لدي حساب</button>
+    </div>
+
+    <div id="ap-new-fields">
+      <div class="field"><input id="ap-name" placeholder="الاسم الكامل"></div>
+      <div class="field"><input type="email" id="ap-email" placeholder="البريد الإلكتروني"></div>
+      <div class="field"><input id="ap-phone" placeholder="رقم الجوال"></div>
+      <div class="field"><input id="ap-org" placeholder="الجهة"></div>
+      <div class="field"><input type="password" id="ap-password" placeholder="كلمة المرور"></div>
+    </div>
+
+    <div id="ap-existing-fields" style="display:none">
+      <div class="field"><input type="email" id="ap-login-email" placeholder="البريد الإلكتروني"></div>
+      <div class="field"><input type="password" id="ap-login-password" placeholder="كلمة المرور"></div>
+    </div>
+
+    <div class="field"><input id="ap-position" placeholder="المنصب الحالي (اختياري)"></div>
+    <div class="field"><input id="ap-spec" placeholder="التخصص أو المجال"></div>
+    <div class="field"><textarea id="ap-bio" rows="3" placeholder="نبذة عن خبرتكم"></textarea></div>
+
+    <button class="btn btn-primary" onclick="submitApplication()">إرسال الطلب</button>
+  </div>
+
+  <!-- حالة الطلب -->
+  <div id="pane-status" style="display:none;text-align:center;padding:10px 0">
+    <p id="status-text" style="font-size:14.5px;line-height:1.9;margin:0 0 14px"></p>
+    <button class="btn btn-outline" style="width:auto" onclick="handleLogout()">تسجيل الخروج</button>
+  </div>
 </div>
 
 <div id="content-screen" style="display:none">
@@ -226,28 +279,131 @@ async function handleLogout(){
   document.getElementById("content-screen").style.display = "none";
   document.getElementById("auth-gate-screen").style.display = "block";
 }
+function gateTab(t){
+  document.getElementById("tab-login").classList.toggle("active", t === "login");
+  document.getElementById("tab-apply").classList.toggle("active", t === "apply");
+  document.getElementById("pane-login").style.display = t === "login" ? "block" : "none";
+  document.getElementById("pane-apply").style.display = t === "apply" ? "block" : "none";
+  const a = document.getElementById("gate-alert");
+  a.textContent = ""; a.className = "alert";
+}
+
+function applyMode(m){
+  document.getElementById("ap-new").classList.toggle("active", m === "new");
+  document.getElementById("ap-existing").classList.toggle("active", m === "existing");
+  document.getElementById("ap-new-fields").style.display      = m === "new" ? "block" : "none";
+  document.getElementById("ap-existing-fields").style.display = m === "existing" ? "block" : "none";
+}
+
+function gateAlert(msg, type){
+  const a = document.getElementById("gate-alert");
+  a.textContent = msg;
+  a.className = "alert " + (type || "error");
+}
+
+// رابط واحد لكل دور: الصفحة تتصرّف حسب حالة الزائر.
+// غير مسجّل → دخول أو تقديم · طلب معلّق → حالته · معتمَد → اللوحة.
 async function restoreSession(){
   const { data } = await sb.auth.getSession();
-  if(data.session){
-    const { data: roles } = await sb.from("user_roles").select("roles(key)").eq("user_id", data.session.user.id);
-    const roleKeys = (roles||[]).map(r => r.roles?.key);
-    if(roleKeys.includes("mentor") || roleKeys.includes("admin")){
-      // مرشد عُطّل بعد فتح جلسته: نطرده عند أول تحميل للصفحة
-      if(!roleKeys.includes("admin") && !(await isAccountActive(data.session.user.id))){
-        await sb.auth.signOut();
-        const alertBox = document.getElementById("gate-alert");
-        if(alertBox){
-          alertBox.textContent = "حسابك كمرشد معطَّل حاليًا. للاستفسار تواصل مع فريق تنظيم البرنامج.";
-          alertBox.className = "alert error";
-        }
-        return;
-      }
-      currentUser = data.session.user;
-      showContent();
-    }
+  if(!data.session) return;
+
+  const uid = data.session.user.id;
+  const { data: roles } = await sb.from("user_roles").select("roles(key)").eq("user_id", uid);
+  const keys = (roles || []).map(r => r.roles?.key);
+
+  if(keys.includes("mentor") || keys.includes("admin")){
+    currentUser = data.session.user;
+    showContent();
+    return;
   }
+
+  // مسجّل بلا دور: نعرض حالة طلبه
+  const { data: app } = await sb.from("mentor_applications")
+    .select("status").eq("user_id", uid).maybeSingle();
+
+  document.getElementById("gate-tabs").style.display = "none";
+  document.getElementById("pane-login").style.display = "none";
+  document.getElementById("pane-apply").style.display = "none";
+  document.getElementById("pane-status").style.display = "block";
+
+  document.getElementById("status-text").textContent =
+    !app                      ? "لم يُسجَّل لكم طلب انضمام بعد. سجّلوا الخروج ثم قدّموا طلبًا جديدًا."
+    : app.status === "pending"  ? "طلبكم قيد المراجعة من فريق التنظيم. سنُشعركم فور اعتماده."
+    : app.status === "rejected" ? "نعتذر عن عدم إمكانية قبول طلبكم في هذه الدورة."
+    : "طلبكم معتمد. إن لم تظهر لوحتكم، يرجى تسجيل الخروج والدخول من جديد.";
 }
 restoreSession();
+
+async function submitApplication(){
+  const mode = document.getElementById("ap-new").classList.contains("active") ? "new" : "existing";
+  const spec = document.getElementById("ap-spec").value.trim();
+  const bio  = document.getElementById("ap-bio").value.trim();
+  const pos  = document.getElementById("ap-position").value.trim();
+
+  if(!spec){ gateAlert("التخصص أو المجال مطلوب"); return; }
+
+  let uid = null;
+
+  if(mode === "new"){
+    const name  = document.getElementById("ap-name").value.trim();
+    const email = document.getElementById("ap-email").value.trim();
+    const phone = document.getElementById("ap-phone").value.trim();
+    const org   = document.getElementById("ap-org").value.trim();
+    const pass  = document.getElementById("ap-password").value;
+
+    if(!name || !email || !pass){ gateAlert("الاسم والبريد وكلمة المرور مطلوبة"); return; }
+    if(pass.length < 6){ gateAlert("كلمة المرور يجب ألا تقل عن ستة أحرف"); return; }
+
+    const { data, error } = await sb.auth.signUp({
+      email, password: pass,
+      options: { data: { full_name: name, phone, organization: org } }
+    });
+    if(error){
+      gateAlert(error.message.includes("already")
+        ? "هذا البريد مسجّل مسبقًا — استخدموا «لدي حساب»" : error.message);
+      return;
+    }
+    if(!data.session){
+      gateAlert("تحققوا من بريدكم لتأكيد الحساب، ثم عودوا واستخدموا «لدي حساب»", "success");
+      return;
+    }
+    uid = data.user.id;
+  } else {
+    const email = document.getElementById("ap-login-email").value.trim();
+    const pass  = document.getElementById("ap-login-password").value;
+    if(!email || !pass){ gateAlert("البريد وكلمة المرور مطلوبان"); return; }
+    const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+    if(error){ gateAlert("بيانات الدخول غير صحيحة"); return; }
+    uid = data.user.id;
+  }
+
+  // من اعتُمد سابقًا لا يُعيد التقديم — إعادة الإرسال تُرجع الحالة
+  // إلى pending فيفقد صلاحيته.
+  const { data: myRoles } = await sb.from("user_roles").select("roles(key)").eq("user_id", uid);
+  if((myRoles || []).some(r => r.roles?.key === "mentor")){
+    gateAlert("حسابكم معتمد بالفعل — جارٍ فتح لوحتكم", "success");
+    setTimeout(() => location.reload(), 1200);
+    return;
+  }
+
+  // تعارض المصالح: عضو فريق لا يكون مرشدًا بنفس الحساب
+  const { data: mem } = await sb.from("team_members").select("id").eq("user_id", uid).limit(1);
+  if(mem && mem.length){
+    gateAlert("هذا الحساب مسجَّل عضوًا بأحد الفرق. لمنع تعارض المصالح، استخدموا بريدًا مختلفًا");
+    return;
+  }
+
+  if(pos) await sb.from("profiles").update({ current_position: pos }).eq("id", uid);
+
+  const { error: appErr } = await sb.from("mentor_applications").upsert({
+    user_id: uid, specialization: spec, bio: bio || null, status: "pending"
+  }, { onConflict: "user_id" });
+
+  if(appErr){ gateAlert("تعذّر إرسال الطلب: " + appErr.message); return; }
+
+  gateAlert("تم إرسال طلبكم. سنُشعركم فور مراجعته", "success");
+  setTimeout(() => location.reload(), 1600);
+}
 
 async function showContent(){
   document.getElementById("auth-gate-screen").style.display = "none";
@@ -1070,6 +1226,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r101</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r102</div>
 </body>
 </html>
