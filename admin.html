@@ -1827,7 +1827,10 @@ async function openResourceFileModal(f=null){
   const isEdit = !!f;
   f = f || {title:"",description:"",file_url:"",category:"",track_id:"",team_id:"",is_pinned:false};
   const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
-  const { data: teams } = await sb.from("teams").select("id,team_name,team_code").eq("status","confirmed").order("team_name");
+  const { data: teams } = await sb.from("teams")
+    .select("id,team_name,team_code,status").order("team_name");
+  const { data: people } = await sb.from("profiles")
+    .select("id,full_name,email").order("full_name");
   const initialScope = f.team_id ? "team" : (f.track_id ? "track" : "all");
 
   openModal(`
@@ -3508,7 +3511,7 @@ async function openAnnouncementModal(a=null){
   a = a || {title:"",body:"",file_url:"",track_id:"",team_id:"",is_pinned:false};
   const { data: tracks } = await sb.from("tracks").select("id,name_ar");
   const { data: teams } = await sb.from("teams").select("id,team_name,team_code").eq("status","confirmed").order("team_name");
-  const initialScope = a.team_id ? "team" : (a.track_id ? "track" : "all");
+  const initialScope = a.user_id ? "user" : (a.team_id ? "team" : (a.track_id ? "track" : "all"));
   openModal(`
     <h3>${isEdit ? "تعديل تحديث" : "إضافة تحديث جديد"}</h3>
     <div class="field"><label>العنوان</label><input id="f-ann-title" value="${esc(a.title)}" placeholder=""></div>
@@ -3530,10 +3533,12 @@ async function openAnnouncementModal(a=null){
       <select id="f-ann-scope" onchange="
         document.getElementById('f-ann-track-box').style.display = this.value==='track' ? 'block' : 'none';
         document.getElementById('f-ann-team-box').style.display = this.value==='team' ? 'block' : 'none';
+        document.getElementById('f-ann-user-box').style.display = this.value==='user' ? 'block' : 'none';
       ">
         <option value="all" ${initialScope==='all'?'selected':''}>الجميع</option>
         <option value="track" ${initialScope==='track'?'selected':''}>مسار محدد</option>
-        <option value="team" ${initialScope==='team'?'selected':''}>فريق واحد محدد فقط ⭐</option>
+        <option value="team" ${initialScope==='team'?'selected':''}>فريق واحد محدد</option>
+        <option value="user" ${initialScope==='user'?'selected':''}>مشارك واحد</option>
       </select>
     </div>
     <div class="field" id="f-ann-track-box" style="display:${initialScope==='track'?'block':'none'}">
@@ -3545,9 +3550,16 @@ async function openAnnouncementModal(a=null){
     <div class="field" id="f-ann-team-box" style="display:${initialScope==='team'?'block':'none'}">
       <label>الفريق</label>
       <select id="f-ann-team"><option value="">اختر فريقًا</option>
-        ${(teams||[]).map(t=>`<option value="${t.id}" ${a.team_id===t.id?"selected":""}>${esc(t.team_name)} (${esc(t.team_code||"")})</option>`).join("")}
+        ${(teams||[]).map(t=>`<option value="${t.id}" ${a.team_id===t.id?"selected":""}>${esc(t.team_name)}${t.status!=="confirmed"?" — "+esc(t.status==="pending"?"قيد المراجعة":t.status):""}</option>`).join("")}
       </select>
-      <p class="hint" style="margin-top:4px">يصل هذا التحديث لأعضاء هذا الفريق فقط — مثالي لتحديثات الإرشاد أو التحكيم أو الاعتماد الخاصة بفريق واحد</p>
+      <p class="hint" style="margin-top:4px">يصل هذا التحديث لأعضاء هذا الفريق فقط</p>
+    </div>
+    <div class="field" id="f-ann-user-box" style="display:${initialScope==='user'?'block':'none'}">
+      <label>المشارك</label>
+      <select id="f-ann-user"><option value="">اختر مشاركًا</option>
+        ${(people||[]).map(p=>`<option value="${p.id}" ${a.user_id===p.id?"selected":""}>${esc(p.full_name||p.email)}</option>`).join("")}
+      </select>
+      <p class="hint" style="margin-top:4px">يصل لهذا المشارك وحده — للتنبيهات الفردية</p>
     </div>
 
     <div class="field"><label><input type="checkbox" id="f-ann-pin" ${a.is_pinned?"checked":""}> تثبيت أعلى القائمة</label></div>
@@ -3605,12 +3617,14 @@ async function saveAnnouncement(id){
   const scope = document.getElementById("f-ann-scope").value;
   const track_id = scope === "track" ? (document.getElementById("f-ann-track").value || null) : null;
   const team_id = scope === "team" ? (document.getElementById("f-ann-team").value || null) : null;
+  const user_id = scope === "user" ? (document.getElementById("f-ann-user").value || null) : null;
   const is_pinned = document.getElementById("f-ann-pin").checked;
   if(!title){ showToast("العنوان مطلوب", true); return; }
   if(scope === "track" && !track_id){ showToast("اختر المسار المستهدف", true); return; }
-  if(scope === "team" && !team_id){ showToast("اختر الفريق المستهدف", true); return; }
+  if(scope === "team"  && !team_id){ showToast("اختر الفريق المستهدف", true); return; }
+  if(scope === "user"  && !user_id){ showToast("اختر المشارك المستهدف", true); return; }
 
-  const payload = { title, body, file_url: file_url || null, track_id, team_id, is_pinned };
+  const payload = { title, body, file_url: file_url || null, track_id, team_id, user_id, is_pinned };
   const q = id ? sb.from("announcements").update(payload).eq("id", id) : sb.from("announcements").insert({...payload, created_by: currentUser.id});
   const { error } = await q;
   if(error) return showToast("خطأ: " + error.message, true);
@@ -7316,6 +7330,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r134</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r135</div>
 </body>
 </html>
