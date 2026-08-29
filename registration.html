@@ -646,9 +646,40 @@ async function initJoinFlow(){
   document.getElementById("su-team-section").style.display = "none";
 }
 
-async function loadTracksForSignup(){
-  const { data: tracks } = await sb.from("tracks").select("*").eq("is_active", true).eq("registration_open", true).order("display_order");
-  document.getElementById("su-track-list").innerHTML = trackOptionsHtml(tracks || [], "selectSignupTrack");
+async function loadTracksForSignup(attempt = 1){
+  // كانت تتجاهل الخطأ فتعرض قائمة فارغة صامتة عند تعثّر الشبكة،
+  // فيظن المستخدم أن لا مسارات. الآن: مؤشر تحميل، ثم إعادة
+  // محاولة تلقائية، ثم رسالة صريحة بزر إعادة المحاولة.
+  const box = document.getElementById("su-track-list");
+  if(!box) return;
+
+  if(attempt === 1){
+    box.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px">جارٍ تحميل المسارات...</div>';
+  }
+
+  const { data: tracks, error } = await sb.from("tracks")
+    .select("*").eq("is_active", true).eq("registration_open", true)
+    .order("display_order");
+
+  if(error || !tracks){
+    if(attempt < 3){
+      setTimeout(() => loadTracksForSignup(attempt + 1), attempt * 700);
+      return;
+    }
+    box.innerHTML = `<div style="padding:16px;text-align:center;border:1px solid var(--border);border-radius:10px">
+      <p style="margin:0 0 10px;color:var(--muted);font-size:13px">تعذّر تحميل المسارات</p>
+      <button type="button" class="btn btn-outline" style="width:auto"
+        onclick="loadTracksForSignup()">إعادة المحاولة</button>
+    </div>`;
+    return;
+  }
+
+  if(!tracks.length){
+    box.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">لا توجد مسارات مفتوحة للتسجيل حاليًا</div>';
+    return;
+  }
+
+  box.innerHTML = trackOptionsHtml(tracks, "selectSignupTrack");
 }
 let selectedSignupTrackId = null;
 function selectSignupTrack(id){
@@ -2778,6 +2809,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-28-r122</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r123</div>
 </body>
 </html>
