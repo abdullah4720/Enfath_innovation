@@ -553,22 +553,34 @@ async function handleResetPassword(){
   const { error } = await sb.auth.updateUser({ password: newPassword });
   if(error){ showAlert("تعذّر تحديث كلمة المرور: " + error.message); return; }
   showAlert("تم تحديث كلمة المرور بنجاح، سجّل دخولك الآن", "success");
+  history.replaceState(null, "", location.pathname);   // إزالة type=recovery
   setTimeout(() => {
     document.getElementById("reset-password-form").style.display = "none";
     switchAuthTab("login");
   }, 1800);
 }
-// اكتشاف رابط استعادة كلمة المرور القادم من البريد
+// شاشة تعيين كلمة مرور جديدة
+function showResetPasswordScreen(){
+  document.getElementById("auth-screen").style.display = "block";
+  document.querySelector(".hero").style.display = "block";
+  document.getElementById("dash-screen").style.display = "none";
+  document.getElementById("signup-form").style.display = "none";
+  document.getElementById("login-form").style.display = "none";
+  document.getElementById("forgot-password-form").style.display = "none";
+  document.getElementById("reset-password-form").style.display = "block";
+}
+
+// رابط الاستعادة يُنشئ جلسة، فكانت restoreSession تسبق حدث
+// PASSWORD_RECOVERY وتعرض لوحة المشارك. نفحص الرابط مباشرة:
+// Supabase يضع type=recovery في hash أو query حسب الإصدار.
+function isRecoveryLink(){
+  const h = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+  const q = new URLSearchParams(location.search);
+  return h.get("type") === "recovery" || q.get("type") === "recovery";
+}
+
 sb.auth.onAuthStateChange((event) => {
-  if(event === "PASSWORD_RECOVERY"){
-    document.getElementById("auth-screen").style.display = "block";
-    document.querySelector(".hero").style.display = "block";
-    document.getElementById("dash-screen").style.display = "none";
-    document.getElementById("signup-form").style.display = "none";
-    document.getElementById("login-form").style.display = "none";
-    document.getElementById("forgot-password-form").style.display = "none";
-    document.getElementById("reset-password-form").style.display = "block";
-  }
+  if(event === "PASSWORD_RECOVERY") showResetPasswordScreen();
 });
 
 /* ---------------- إنشاء حساب ---------------- */
@@ -880,7 +892,7 @@ async function handleLogout(){
 // فتنتظر المسارات جولة شبكة كاملة قبل أن تبدأ أصلًا.
 let tracksPromise = null;
 function primeTracks(){
-  if(!tracksPromise && !new URLSearchParams(location.search).get("join")){
+  if(!tracksPromise && !new URLSearchParams(location.search).get("join") && !isRecoveryLink()){
     tracksPromise = loadTracksForSignup();
   }
   return tracksPromise;
@@ -888,6 +900,11 @@ function primeTracks(){
 primeTracks();
 
 async function restoreSession(){
+  // رابط الاستعادة أولًا — وإلا عُرضت اللوحة وضاع الغرض
+  if(isRecoveryLink()){
+    showResetPasswordScreen();
+    return;
+  }
   const { data } = await sb.auth.getSession();
   if(data.session){
     currentUser = data.session.user;
@@ -2821,6 +2838,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r124</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r125</div>
 </body>
 </html>
