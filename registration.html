@@ -58,7 +58,7 @@
     width:64px; height:64px; border-radius:50%; background:var(--border-light); display:flex;
     align-items:center; justify-content:center; margin:0 auto 14px;
   }
-  .empty-illustration .icon-wrap i{width:28px; height:28px; color:var(--muted);}
+  .empty-illustration .icon-wrap i, .empty-illustration .icon-wrap svg{width:28px; height:28px; color:var(--muted);}
   .empty-illustration p{color:var(--muted); font-size:13.5px; margin:0;}
 
   .top-bar{background:rgba(253,252,250,.95); border-bottom:1px solid var(--border); padding:12px 20px; text-align:center;}
@@ -218,7 +218,7 @@
   .tl-item:last-child{padding-bottom:0;}
   .tl-dot{position:absolute;right:-28px;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;}
   .tl-dot.done{background:var(--teal);border-color:var(--teal);}
-  .tl-dot.done i{width:11px;height:11px;color:#fff;}
+  .tl-dot.done i, .tl-dot.done svg{width:11px;height:11px;color:#fff;}
   .tl-title{font-size:13.5px;font-weight:700;color:var(--ink);}
   .tl-title.past{color:var(--muted);}
   .tl-meta{font-size:11.5px;color:var(--muted);margin-top:2px;}
@@ -244,7 +244,7 @@
     width:46px; height:46px; border-radius:12px; background:color-mix(in srgb, var(--accent) 14%, white);
     display:flex; align-items:center; justify-content:center; margin:0 auto 12px;
   }
-  .home-card-icon i{width:22px; height:22px; color:var(--accent);}
+  .home-card-icon i, .home-card-icon svg{width:22px; height:22px; color:var(--accent);}
   .home-card-label{font-size:13.5px; font-weight:700; color:var(--ink); margin-bottom:4px;}
   .home-card-stat{font-size:11.5px; color:var(--muted);}
 
@@ -254,20 +254,20 @@
     font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; padding:0; margin-bottom:16px;
   }
   .back-to-home:hover{color:var(--navy);}
-  .back-to-home i{width:15px; height:15px;}
+  .back-to-home i, .back-to-home svg{width:15px; height:15px;}
   .section-heading{display:flex; align-items:center; gap:12px; margin-bottom:18px;}
   .section-heading-icon{
     width:38px; height:38px; border-radius:10px; background:color-mix(in srgb, var(--accent) 14%, white);
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .section-heading-icon i{width:19px; height:19px; color:var(--accent);}
+  .section-heading-icon i, .section-heading-icon svg{width:19px; height:19px; color:var(--accent);}
   .section-heading h2{margin:0; font-size:17px; color:var(--ink);}
 
   .dash-tabs{display:flex; gap:4px; background:#eef0f6; padding:4px; border-radius:12px; margin-bottom:20px; overflow-x:auto;}
   .dash-tab{flex:1; white-space:nowrap; padding:10px 14px; border:none; border-radius:9px; background:none; font-family:inherit;
     font-size:13.5px; font-weight:600; color:var(--muted); cursor:pointer; transition:.15s;
     display:inline-flex; align-items:center; justify-content:center; gap:6px;}
-  .dash-tab i{width:14px; height:14px; flex-shrink:0;}
+  .dash-tab i, .dash-tab svg{width:14px; height:14px; flex-shrink:0;}
   .dash-tab.active{background:#fff; color:var(--navy); box-shadow:0 1px 5px rgba(0,0,0,.08);}
 
   .eligible-yes{color:var(--teal); font-weight:600;}
@@ -2838,6 +2838,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r125</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r126</div>
 </body>
 </html>
