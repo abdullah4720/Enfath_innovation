@@ -6663,6 +6663,7 @@ async function renderSystemCheck(){
 
   function renderChecksList(){
     const box = document.getElementById("system-check-results");
+    if(!box) return;   // غادر المستخدم الصفحة قبل انتهاء الفحوص
     box.innerHTML = `<table><thead><tr><th>الفحص</th><th>النتيجة</th><th>الزمن</th><th>تفاصيل</th></tr></thead><tbody>
       ${checks.map(c => `<tr>
         <td>${esc(c.label)}</td>
@@ -6694,7 +6695,7 @@ async function renderSystemCheck(){
     const { data, error } = await sb.rpc("debug_my_access");
     if(error) throw error;
     if(!data.is_admin_or_coordinator){
-      throw new Error(`البريد: ${data.email} — الأدوار الحالية: [${data.roles.join(", ")||"لا يوجد"}] — هذا الحساب ما يملك admin أو coordinator`);
+      throw new Error(`البريد: ${data.email} — الأدوار الحالية: [${data.roles.join(", ")||"لا يوجد"}] — هذا الحساب لا يملك صلاحية admin أو coordinator`);
     }
     return `البريد: ${data.email} — الأدوار: [${data.roles.join(", ")}]`;
   });
@@ -7672,6 +7673,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r142</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r143</div>
 </body>
 </html>
