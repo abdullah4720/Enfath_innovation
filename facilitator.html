@@ -268,7 +268,9 @@ async function renderMentorPresence(){
     `<div class="card"><p class="hint">جارٍ التحميل...</p></div>`;
 
   const { data, error } = await sb.from("profiles")
-    .select("id, full_name, specialization, organization, mentor_present, mentor_present_at, user_roles!inner(roles!inner(key))")
+    // user_roles فيها مفتاحان لـprofiles (user_id و assigned_by)،
+    // فنحدّد المقصود صراحةً وإلا رفض Supabase الربط
+    .select("id, full_name, specialization, organization, mentor_present, mentor_present_at, user_roles!user_roles_user_id_fkey!inner(roles!inner(key))")
     .eq("user_roles.roles.key", "mentor")
     .order("full_name");
 
@@ -758,6 +760,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r100</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r101</div>
 </body>
 </html>
