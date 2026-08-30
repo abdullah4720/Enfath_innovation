@@ -328,6 +328,7 @@
     <div class="switcher">
       <button id="tab-signup" class="active" onclick="switchAuthTab('signup')">حساب جديد</button>
       <button id="tab-login" onclick="switchAuthTab('login')">لدي حساب</button>
+      <button id="tab-activate" onclick="switchAuthTab('activate')">تفعيل أول مرة</button>
     </div>
 
     <div id="auth-alert" class="alert"></div>
@@ -429,6 +430,20 @@
       <div class="field"><label>كلمة المرور</label><input type="password" id="li-password"></div>
       <button class="btn btn-primary" id="li-btn" onclick="handleLogin()">تسجيل الدخول</button>
       <button class="btn-link" style="margin-top:12px;display:block;text-align:center;width:100%" onclick="showForgotPassword()">نسيت كلمة المرور؟</button>
+    </div>
+
+    <!-- تفعيل الحساب المستورَد -->
+    <div id="activate-form" style="display:none">
+      <h2>تفعيل الحساب</h2>
+      <p class="sub">لمن سُجّل ضمن فريق مسبقًا — أدخلوا بريدكم ورقم جوالكم لتعيين كلمة المرور</p>
+      <div class="field"><label>البريد الإلكتروني</label><input type="email" id="ac-email"></div>
+      <div class="field"><label>رقم الجوال</label><input id="ac-phone" placeholder="05xxxxxxxx"></div>
+      <div class="field"><label>كلمة المرور الجديدة</label><input type="password" id="ac-password"></div>
+      <div class="field"><label>تأكيد كلمة المرور</label><input type="password" id="ac-password2"></div>
+      <button class="btn btn-primary" id="ac-btn" onclick="handleActivate()">تفعيل والدخول</button>
+      <p class="hint" style="margin-top:12px;text-align:center">
+        رقم الجوال هو المسجَّل في بيانات فريقكم، ويصلح للتفعيل مرة واحدة فقط
+      </p>
     </div>
 
     <!-- نسيت كلمة المرور -->
@@ -546,12 +561,55 @@ function showAlert(msg, type="error"){
 function clearAlert(){
   document.getElementById("auth-alert").className = "alert";
 }
+
+/* ---------------- تفعيل الحساب المستورَد ---------------- */
+// المشارك المستورَد ليس له كلمة مرور. يُدخل بريده ورقم جواله
+// المسجَّل فيعيّنها. بعدها لا يعود الجوال يصلح — حماية من انتحال
+// زميل لحساب زميله، فالجوال معروف بينهم.
+
+async function handleActivate(){
+  const email = document.getElementById("ac-email").value.trim();
+  const phone = document.getElementById("ac-phone").value.trim();
+  const p1 = document.getElementById("ac-password").value;
+  const p2 = document.getElementById("ac-password2").value;
+  const btn = document.getElementById("ac-btn");
+
+  if(!email || !phone){ showAlert("البريد ورقم الجوال مطلوبان"); return; }
+  if(p1.length < 6){ showAlert("كلمة المرور يجب ألا تقل عن ستة أحرف"); return; }
+  if(p1 !== p2){ showAlert("كلمتا المرور غير متطابقتين"); return; }
+
+  btn.disabled = true; btn.textContent = "جارٍ التفعيل...";
+
+  const { data, error } = await sb.rpc("activate_imported_account", {
+    p_email: email, p_phone: phone, p_new_password: p1
+  });
+
+  if(error || !data?.success){
+    showAlert(data?.error || error?.message || "تعذّر التفعيل");
+    btn.disabled = false; btn.textContent = "تفعيل والدخول";
+    return;
+  }
+
+  // التفعيل نجح — ندخل مباشرة بالكلمة الجديدة
+  const { error: loginErr } = await sb.auth.signInWithPassword({ email, password: p1 });
+  if(loginErr){
+    showAlert("فُعّل حسابكم. سجّلوا الدخول الآن", "success");
+    switchAuthTab("login");
+    document.getElementById("li-email").value = email;
+    btn.disabled = false; btn.textContent = "تفعيل والدخول";
+    return;
+  }
+  location.reload();
+}
+
 function switchAuthTab(tab){
   clearAlert();
   document.getElementById("tab-signup").classList.toggle("active", tab==="signup");
   document.getElementById("tab-login").classList.toggle("active", tab==="login");
-  document.getElementById("signup-form").style.display = tab==="signup" ? "block" : "none";
-  document.getElementById("login-form").style.display = tab==="login" ? "block" : "none";
+  document.getElementById("tab-activate").classList.toggle("active", tab==="activate");
+  document.getElementById("signup-form").style.display   = tab==="signup"   ? "block" : "none";
+  document.getElementById("login-form").style.display    = tab==="login"    ? "block" : "none";
+  document.getElementById("activate-form").style.display = tab==="activate" ? "block" : "none";
   document.getElementById("forgot-password-form").style.display = "none";
   document.getElementById("reset-password-form").style.display = "none";
 }
@@ -872,6 +930,13 @@ async function handleLogin(){
   const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if(error){
     btn.disabled = false; btn.textContent = "تسجيل الدخول";
+    // قد يكون حسابًا مستورَدًا لم يُفعَّل بعد — نوجّهه للتبويب الصحيح
+    const { data: chk } = await sb.from("profiles")
+      .select("activation_status").eq("email", email.toLowerCase()).maybeSingle();
+    if(chk && chk.activation_status === "pending"){
+      showAlert("حسابكم يحتاج تفعيلًا أول مرة — استخدموا تبويب «تفعيل أول مرة»");
+      return;
+    }
     showAlert("بيانات الدخول غير صحيحة");
     return;
   }
@@ -2938,6 +3003,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r129</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r130</div>
 </body>
 </html>
