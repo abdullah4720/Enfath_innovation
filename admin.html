@@ -7290,7 +7290,12 @@ async function renderParticipants(){
       </div>
     </div>
     <div class="card" style="margin-bottom:16px">
-      <p class="hint" style="margin-bottom:10px">صيغة ملف الاستيراد المتوقعة (بأول صف عناوين الأعمدة): <code>الاسم</code>, <code>البريد</code>, <code>الجوال</code>, <code>الجهة</code>, <code>المسار</code></p>
+      <p class="hint" style="margin-bottom:10px">
+        ملف قائمة الأسماء: أول صف عناوين الأعمدة —
+        <code>الاسم</code> · <code>البريد</code> · <code>الجوال</code> · <code>الجهة</code> · <code>المسار</code>
+        <br>تُطابَق العناوين بالكلمة المفتاحية، فـ«اسم قائد الفريق» و«الاسم الثلاثي» كلاهما يعمل.
+        <br><strong>لاستيراد الفرق والمشاريع كاملة، استخدم تبويب «استيراد الفرق».</strong>
+      </p>
       <div class="field" style="margin:0"><label>بحث بالاسم أو البريد أو الجهة</label><input id="participants-search" placeholder="اكتب للبحث..." oninput="filterParticipantsView()"></div>
     </div>
     <div class="card"><div id="participants-table">${skeletonRows(4)}</div></div>`;
@@ -7329,16 +7334,34 @@ async function handleRosterImport(event){
 
       if(!rows.length){ showToast("الملف فارغ", true); return; }
 
+      // المطابقة بالكلمة المفتاحية لا بالنص الحرفي: رؤوس الملفات
+      // تختلف («الاسم» · «اسم قائد الفريق» · «الاسم الثلاثي»...)
+      // فالمطابقة الحرفية كانت تفشل مع أي صيغة غير متوقَّعة.
+      const pick = (row, keys) => {
+        for(const k of Object.keys(row)){
+          const norm = String(k).trim().toLowerCase();
+          if(keys.some(w => norm.includes(w))){
+            const v = row[k];
+            if(v !== null && v !== undefined && String(v).trim() !== "") return String(v).trim();
+          }
+        }
+        return null;
+      };
+
       const records = rows.map(r => ({
-        full_name: r["الاسم"] || r["Name"] || r["name"] || "",
-        email: r["البريد"] || r["Email"] || r["email"] || null,
-        phone: String(r["الجوال"] || r["Phone"] || r["phone"] || "") || null,
-        organization: r["الجهة"] || r["Organization"] || r["organization"] || null,
-        track_name: r["المسار"] || r["Track"] || r["track"] || null,
-        imported_by: currentUser.id
+        full_name:    pick(r, ["اسم", "name"]) || "",
+        email:        pick(r, ["بريد", "ايميل", "إيميل", "mail"]),
+        phone:        pick(r, ["جوال", "هاتف", "phone", "mobile"]),
+        organization: pick(r, ["جهة", "منظمة", "org"]),
+        track_name:   pick(r, ["مسار", "track"]),
+        imported_by:  currentUser.id
       })).filter(r => r.full_name);
 
-      if(!records.length){ showToast("لم يتم العثور على عمود 'الاسم' بالملف", true); return; }
+      if(!records.length){
+        const heads = Object.keys(rows[0] || {}).join("، ") || "لا رؤوس";
+        showToast("لم يُعثر على عمود الاسم. الأعمدة الموجودة: " + heads, true);
+        return;
+      }
 
       const { error } = await sb.from("participant_roster").insert(records);
       if(error){ showToast("خطأ بالاستيراد: " + error.message, true); return; }
@@ -7697,6 +7720,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r144</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r145</div>
 </body>
 </html>
