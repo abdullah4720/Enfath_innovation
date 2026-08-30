@@ -2613,7 +2613,7 @@ async function submitDeliverable(deliverableId, teamId, form){
     // Supabase Storage يرفض المسارات غير اللاتينية؛ والاسم العربي
     // يُمحى بالتنقية. نستخدم الامتداد فقط، والاسم الأصلي يُحفظ في
     // عمود file_name فيراه المستخدم صحيحًا.
-    const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
     const path = `${teamId}/${deliverableId}/${Date.now()}.${ext}`;
     const { error: upErr } = await sb.storage.from("deliverables").upload(path, file, { upsert:true });
     if(upErr) throw upErr;
@@ -3003,7 +3003,8 @@ async function saveSubmission(teamId, currentVersion){
     const progressEl = document.getElementById("sub-upload-progress");
     progressEl.style.display = "block";
     progressEl.textContent = "جاري رفع الملف...";
-    const path = `${teamId}/${Date.now()}_${selectedFile.name}`;
+    const ext = (selectedFile.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "") || "bin";
+    const path = `${teamId}/${Date.now()}.${ext}`;
 
     try{
       const { error: uploadError } = await sb.storage.from("project-files").upload(path, selectedFile, { upsert: true });
@@ -3032,6 +3033,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r132</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r133</div>
 </body>
 </html>
