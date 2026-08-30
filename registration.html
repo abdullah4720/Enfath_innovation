@@ -101,6 +101,20 @@
   .field{margin-bottom:16px;}
   /* التسليمات المطلوبة */
   .bar-track{height:8px;background:var(--border-light,#EEF0F5);border-radius:5px;overflow:hidden}
+  /* حالة موعد الإرشاد */
+  .bk-row{position:relative;padding-right:14px;border-right:3px solid transparent}
+  .bk-tag{position:absolute;top:10px;left:0;font-size:11px;font-weight:700;
+          padding:2px 9px;border-radius:999px}
+  .bk-upcoming{border-right-color:var(--teal)}
+  .bk-upcoming .bk-tag{background:rgba(0,189,196,.13);color:#0A7C82}
+  .bk-live{border-right-color:#C9922A;background:rgba(201,146,42,.05)}
+  .bk-live .bk-tag{background:#FBF3E2;color:#8A6A1E}
+  .bk-ended{border-right-color:var(--border);opacity:.82}
+  .bk-ended .bk-tag{background:#F0F1F5;color:#6B7A99}
+  .bk-cancelled{border-right-color:#C0392B;opacity:.7}
+  .bk-cancelled .bk-tag{background:#FDECEB;color:#C0392B}
+  body.dark .bk-live{background:rgba(201,146,42,.1)}
+
   /* بطاقات المرشدين */
   .mentors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
   .mentor-card{border:1px solid var(--border);border-radius:12px;padding:14px;background:#fff;transition:.2s}
@@ -1858,10 +1872,21 @@ async function renderMentorshipTab(membership){
     bookingHtml = `<div class="card">
       <h2>مواعيدك الحالية (${cachedTeamBookings.length})</h2>
       ${cachedTeamBookings.map(b => {
-        const [label, cls] = statusLabels[b.status] || ["—","status-pending"];
-        const sessionEnded = b.mentor_slots && new Date(b.mentor_slots.end_time) <= new Date();
+        // الحالة تُحسب من الوقت لا من إغلاق المرشد — أوضح للفريق
+        // وأقل إجراءً على المرشد.
+        const now = new Date();
+        const st = b.mentor_slots ? new Date(b.mentor_slots.start_time) : null;
+        const en = b.mentor_slots ? new Date(b.mentor_slots.end_time)   : null;
+        const sessionEnded = en && en <= now;
+        const live = st && en && st <= now && en > now;
+        const [label, cls] =
+          b.status === "cancelled" ? ["ملغاة", "bk-cancelled"]
+          : sessionEnded           ? ["منتهية", "bk-ended"]
+          : live                   ? ["جارية الآن", "bk-live"]
+          : ["قادمة", "bk-upcoming"];
         return `
-        <div class="member-row" style="align-items:flex-start">
+        <div class="member-row bk-row ${cls}" style="align-items:flex-start">
+          <span class="bk-tag">${label}</span>
           <div>
             <strong>${fmtDate(b.mentor_slots?.start_time)}</strong> — ${esc(b.mentor_slots?.profiles?.full_name||"مرشد")}<br>
             <span class="hint">${esc(b.mentor_slots?.location || (b.mentor_slots?.is_online ? "عبر الإنترنت" : ""))}</span>
@@ -3007,6 +3032,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r131</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r132</div>
 </body>
 </html>

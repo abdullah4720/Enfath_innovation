@@ -165,6 +165,7 @@
   .grid-stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:26px;}
   .stat-card{background:var(--border-light); border-radius:12px; padding:20px 20px; border:none;}
   .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-bottom:14px}
   .stat-card .num{font-size:28px; font-weight:700; color:var(--navy);}
   .stat-card .label{font-size:12.5px; color:var(--muted); margin-top:5px;}
   .stat-card.accent{background:#FBF3E2;}
@@ -2603,7 +2604,7 @@ async function addMemberToTeam(userId, userName){
 let mentorshipTab = "overview";
 async function renderMentorshipAdmin(){
   const main = document.getElementById("main-content");
-  main.innerHTML = `<div class="page-header"><div><h1>إدارة الإرشاد</h1><p>تحكّم كامل بعملية الإرشاد: مين يوجّه الفرق للمرشدين، ومتابعة كل الحجوزات</p></div></div>
+  main.innerHTML = `<div class="page-header"><div><h1>إدارة الإرشاد</h1><p>إدارة عملية الإرشاد: توجيه الفرق للمرشدين، وضبط قواعد الحجز، ومتابعة المواعيد</p></div></div>
     <div class="tabs" id="mentorship-tabs">
       <div class="tab ${mentorshipTab==='overview'?'active':''}" data-t="overview">نظرة عامة</div>
       <div class="tab ${mentorshipTab==='mentors'?'active':''}" data-t="mentors">المرشدون</div>
@@ -3044,16 +3045,134 @@ async function cancelMentorBooking(bookingId){
 /* ---------------- إعدادات التوجيه ---------------- */
 async function renderMentorshipSettings(){
   const body = document.getElementById("mentorship-body");
-  const { data } = await sb.from("platform_settings").select("value").eq("key","mentorship_mode").maybeSingle();
-  const currentMode = data?.value || "self";
-  const modeLabel = currentMode === "admin_only" ? "توجيه من الإدارة فقط" : "حجز ذاتي من الفريق";
+  body.innerHTML = `<div class="card"><p class="hint">جارٍ التحميل...</p></div>`;
 
-  body.innerHTML = `<div class="card">
-    <h3 style="margin:0 0 10px">من يوجّه الفرق للمرشدين؟</h3>
-    <p class="hint" style="margin-bottom:16px">الوضع الحالي: <strong style="color:var(--ink)">${modeLabel}</strong></p>
-    <button class="btn btn-outline" onclick="navigateTo('generalSettings')">تعديل من الإعدادات العامة →</button>
-    <p class="hint" style="margin-top:14px">توحّد هذا الإعداد بصفحة "الإعدادات العامة" — مكان واحد لكل إعدادات المنصة</p>
-  </div>`;
+  const { data: rows } = await sb.from("platform_settings")
+    .select("key,value")
+    .in("key", ["mentorship_mode","max_bookings_per_day","allow_same_mentor_gap",
+                "same_mentor_gap_hours","booking_lead_minutes","booking_opens_at"]);
+
+  const S = Object.fromEntries((rows||[]).map(r => [r.key, r.value]));
+  const mode = S.mentorship_mode || "self";
+  const modeLabel = mode === "admin_only" ? "توجيه من الإدارة فقط" : "حجز ذاتي من الفريق";
+
+  body.innerHTML = `
+    <div class="card">
+      <h3 style="margin:0 0 10px">من يوجّه الفرق للمرشدين؟</h3>
+      <p class="hint" style="margin-bottom:16px">
+        الوضع الحالي: <strong style="color:var(--ink)">${modeLabel}</strong></p>
+      <button class="btn btn-outline" onclick="navigateTo('generalSettings')">
+        تعديل من الإعدادات العامة</button>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin:0 0 6px">ضوابط الحجز</h3>
+      <p class="hint" style="margin:0 0 18px">
+        تُطبَّق على الفرق فقط — الإدارة تحجز نيابةً بلا قيد</p>
+
+      <div class="settings-grid">
+        <div class="field">
+          <label>أقصى جلسات للفريق في اليوم</label>
+          <input type="number" id="mb-max-day" min="0" max="20"
+                 value="${esc(S.max_bookings_per_day ?? '6')}">
+          <p class="hint">0 = بلا حد</p>
+        </div>
+
+        <div class="field">
+          <label>أقل مهلة قبل الموعد (دقائق)</label>
+          <input type="number" id="mb-lead" min="0" max="1440"
+                 value="${esc(S.booking_lead_minutes ?? '0')}">
+          <p class="hint">0 = الحجز متاح حتى بداية الموعد</p>
+        </div>
+
+        <div class="field">
+          <label>الفاصل بين جلستين مع المرشد نفسه (ساعات)</label>
+          <input type="number" id="mb-gap" min="0" max="24"
+                 value="${esc(S.same_mentor_gap_hours ?? '3')}">
+          <p class="hint">0 = يُسمح بجلسات متتالية مع المرشد نفسه</p>
+        </div>
+
+        <div class="field">
+          <label>موعد فتح الحجز</label>
+          <input type="datetime-local" id="mb-opens"
+                 value="${S.booking_opens_at ? esc(String(S.booking_opens_at).slice(0,16)) : ''}">
+          <p class="hint">اتركه فارغًا ليكون الحجز مفتوحًا</p>
+        </div>
+      </div>
+
+      <div id="mb-alert" class="alert" style="margin-top:6px"></div>
+      <button class="btn btn-primary" style="width:auto" onclick="saveBookingRules()">
+        حفظ الضوابط</button>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin:0 0 10px">حالة الإرشاد الآن</h3>
+      <div id="mb-health"><p class="hint">جارٍ الفحص...</p></div>
+    </div>`;
+
+  loadMentorshipHealth();
+}
+
+async function loadMentorshipHealth(){
+  const box = document.getElementById("mb-health");
+  if(!box) return;
+
+  const { data, error } = await sb.from("mentorship_health").select("*").maybeSingle();
+  if(error || !data){
+    box.innerHTML = `<p class="hint">${esc(error?.message || "تعذّر الفحص")}</p>`;
+    return;
+  }
+
+  const warn = data.فترة_الإرشاد_جارية && data.حاضرون_اليوم === 0;
+
+  box.innerHTML = `
+    <div class="stats-grid">
+      ${statCard(data.إجمالي_المرشدين, "مرشدًا معتمدًا")}
+      ${statCard(data.حاضرون_اليوم, "حاضر اليوم", warn)}
+      ${statCard(data.مواعيد_ظاهرة, "موعدًا ظاهرًا للفرق")}
+      ${statCard(data.فترة_الإرشاد_جارية ? "نعم" : "لا", "فترة الإرشاد جارية")}
+    </div>
+    ${warn ? `<div class="alert alert-error" style="margin-top:12px">
+      فترة الإرشاد جارية ولا مرشد مسجَّل حاضرًا — لن تظهر أي مواعيد للفرق.
+      سجّل الحضور من لوحة الميسّرين.</div>` : ""}`;
+}
+
+async function saveBookingRules(){
+  const alertBox = document.getElementById("mb-alert");
+  const num = id => document.getElementById(id).value.trim();
+
+  const maxDay = parseInt(num("mb-max-day"));
+  const lead   = parseInt(num("mb-lead"));
+  const gap    = parseInt(num("mb-gap"));
+  const opens  = num("mb-opens");
+
+  if([maxDay, lead, gap].some(v => isNaN(v) || v < 0)){
+    alertBox.className = "alert alert-error";
+    alertBox.textContent = "القيم يجب أن تكون أرقامًا موجبة";
+    return;
+  }
+
+  const rows = [
+    { key: "max_bookings_per_day",  value: String(maxDay) },
+    { key: "booking_lead_minutes",  value: String(lead) },
+    { key: "same_mentor_gap_hours", value: String(gap) },
+    { key: "allow_same_mentor_gap", value: gap > 0 ? "1" : "0" },
+    { key: "booking_opens_at",      value: opens ? new Date(opens).toISOString() : "" }
+  ];
+
+  const { error } = await sb.from("platform_settings").upsert(rows, { onConflict: "key" });
+  if(error){
+    alertBox.className = "alert alert-error";
+    alertBox.textContent = "تعذّر الحفظ: " + error.message;
+    return;
+  }
+
+  logActivity("تعديل ضوابط حجز الإرشاد", "platform_settings", null,
+    { max_day: maxDay, lead_minutes: lead, gap_hours: gap });
+
+  alertBox.className = "alert alert-success";
+  alertBox.textContent = "حُفظت الضوابط";
+  setTimeout(() => { alertBox.className = "alert"; alertBox.textContent = ""; }, 3000);
 }
 
 let cachedPrepData = [];
@@ -7545,6 +7664,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r139</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r140</div>
 </body>
 </html>
