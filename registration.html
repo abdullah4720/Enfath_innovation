@@ -607,7 +607,8 @@ async function handleActivate(){
   // التفعيل نجح — ندخل مباشرة بالكلمة الجديدة
   const { error: loginErr } = await sb.auth.signInWithPassword({ email, password: p1 });
   if(loginErr){
-    showAlert("فُعّل حسابكم. سجّلوا الدخول الآن", "success");
+    console.error("فشل الدخول بعد التفعيل:", loginErr.message);
+    showAlert("فُعّل حسابكم. سجّلوا الدخول من تبويب «لدي حساب»", "success");
     switchAuthTab("login");
     document.getElementById("li-email").value = email;
     btn.disabled = false; btn.textContent = "تفعيل والدخول";
@@ -3033,6 +3034,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r133</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r134</div>
 </body>
 </html>
