@@ -2008,8 +2008,6 @@ async function openResourceFileModal(f=null){
   const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
   const { data: teams } = await sb.from("teams")
     .select("id,team_name,team_code,status").order("team_name");
-  const { data: people } = await sb.from("profiles")
-    .select("id,full_name,email").order("full_name");
   const initialScope = f.team_id ? "team" : (f.track_id ? "track" : "all");
 
   openModal(`
@@ -3807,7 +3805,11 @@ async function openAnnouncementModal(a=null){
   const isEdit = !!a;
   a = a || {title:"",body:"",file_url:"",track_id:"",team_id:"",is_pinned:false};
   const { data: tracks } = await sb.from("tracks").select("id,name_ar");
-  const { data: teams } = await sb.from("teams").select("id,team_name,team_code").eq("status","confirmed").order("team_name");
+  // كل الفرق لا المؤكَّدة فقط — الفرق الجديدة pending فتختفي من القائمة
+  const { data: teams } = await sb.from("teams")
+    .select("id,team_name,team_code,status").order("team_name");
+  const { data: people } = await sb.from("profiles")
+    .select("id,full_name,email").order("full_name");
   const initialScope = a.user_id ? "user" : (a.team_id ? "team" : (a.track_id ? "track" : "all"));
   openModal(`
     <h3>${isEdit ? "تعديل تحديث" : "إضافة تحديث جديد"}</h3>
@@ -7664,6 +7666,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r140</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r141</div>
 </body>
 </html>
