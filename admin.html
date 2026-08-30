@@ -1586,6 +1586,62 @@ async function saveMilestone(id){
    ============================================================ */
 
 
+
+/* ---------------- رسائل التفعيل ---------------- */
+// المستورَد لا يصله شيء تلقائيًا — أوقفنا الترحيب لأن رابط
+// الدعوة لا معنى له لمن فريقه كامل. هذه رسالة بديلة بأمر الإدارة.
+
+async function previewInvites(){
+  const box = document.getElementById("inv-result");
+  box.innerHTML = `<p class="hint">جارٍ الفحص...</p>`;
+
+  const { data, error } = await sb.rpc("send_activation_invites", { p_dry_run: true });
+  if(error || !data?.success){
+    box.innerHTML = `<div class="alert alert-error">${esc(data?.error || error?.message)}</div>`;
+    return;
+  }
+
+  const list = data.recipients || [];
+  if(!list.length){
+    box.innerHTML = `<div class="alert alert-success">كل المستوردين فعّلوا حساباتهم — لا رسائل مطلوبة</div>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <div class="alert" style="margin-bottom:10px">سيستلم <strong>${list.length}</strong> مشاركًا</div>
+    <table><thead><tr><th>المشارك</th><th>البريد</th><th>الفريق</th></tr></thead><tbody>
+      ${list.map(r => `<tr>
+        <td>${esc(r.name || "—")}</td>
+        <td>${esc(r.email || "—")}</td>
+        <td>${esc(r.team || "—")}</td>
+      </tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function sendInvites(){
+  const box = document.getElementById("inv-result");
+
+  const { data: prev } = await sb.rpc("send_activation_invites", { p_dry_run: true });
+  const n = prev?.count || 0;
+  if(!n){
+    box.innerHTML = `<div class="alert alert-success">لا مستوردين بانتظار التفعيل</div>`;
+    return;
+  }
+  if(!confirm(`إرسال رسالة تفعيل إلى ${n} مشاركًا؟\n\nتصلهم بالبريد فورًا.`)) return;
+
+  box.innerHTML = `<p class="hint">جارٍ الإرسال...</p>`;
+  const { data, error } = await sb.rpc("send_activation_invites");
+
+  if(error || !data?.success){
+    box.innerHTML = `<div class="alert alert-error">${esc(data?.error || error?.message)}</div>`;
+    return;
+  }
+
+  logActivity("إرسال رسائل تفعيل", "profiles", null, { count: data.count });
+  box.innerHTML = `<div class="alert alert-success">
+    أُرسلت <strong>${data.count}</strong> رسالة تفعيل</div>`;
+}
+
 /* ---------------- استيراد الفرق والمشاريع ---------------- */
 // يقرأ ملف Excel بالبنية الأفقية: كل صف فريق كامل — القائد
 // والمشروع وحتى خمسة أعضاء إضافيين. المعاينة تسبق التنفيذ
@@ -1607,6 +1663,20 @@ async function renderImportTeams(){
       </p>
       <input type="file" id="imp-file" accept=".xlsx,.xls" onchange="parseImportFile()">
       <div id="imp-summary" style="margin-top:16px"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin:0 0 6px">رسائل التفعيل</h3>
+      <p class="hint" style="margin:0 0 14px">
+        المستورَد لا تصله رسالة تلقائيًا. أرسل له تعليمات التفعيل حين تكون جاهزًا.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-outline" style="width:auto" onclick="previewInvites()">
+          معاينة المستلمين</button>
+        <button class="btn btn-primary" style="width:auto" onclick="sendInvites()">
+          إرسال رسائل التفعيل</button>
+      </div>
+      <div id="inv-result" style="margin-top:14px"></div>
     </div>
 
     <div class="card" style="margin-top:14px"><div id="imp-preview"></div></div>`;
@@ -7720,6 +7790,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r145</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r146</div>
 </body>
 </html>
