@@ -2660,6 +2660,19 @@ async function renderMentorshipOverview(){
 let mentorsStatusFilter = "";   // "" = الكل | "active" | "inactive"
 let mentorsCache = null;        // نحتفظ بآخر جلب لإعادة الفلترة بلا استعلام جديد
 
+async function toggleMentorPresenceAdmin(userId, present){
+  const { data, error } = await sb.rpc("set_mentor_presence", {
+    p_user_id: userId, p_present: present
+  });
+  if(error || !data?.success){
+    showToast(data?.error || error?.message || "تعذّر الإجراء", true);
+    return;
+  }
+  logActivity(present ? "تسجيل حضور مرشد" : "تسجيل انصراف مرشد", "profiles", userId);
+  showToast(present ? "سُجّل الحضور" : "سُجّل الانصراف");
+  renderMentorshipMentorsList();
+}
+
 async function renderMentorshipMentorsList(){
   const body = document.getElementById("mentorship-body");
   body.innerHTML = `<div class="card">
@@ -2679,7 +2692,7 @@ async function renderMentorshipMentorsList(){
   if(sel) sel.value = mentorsStatusFilter;
 
   const { data: mentorRoles } = await sb.from("user_roles")
-    .select("id, user_id, profiles!user_roles_user_id_fkey(full_name, email, specialization, current_position, bio, is_active, deactivation_reason, deactivated_at), roles!inner(key)")
+    .select("id, user_id, profiles!user_roles_user_id_fkey(full_name, email, specialization, current_position, bio, is_active, deactivation_reason, deactivated_at, mentor_present, mentor_present_at), roles!inner(key)")
     .eq("roles.key", "mentor");
 
   const { data: slots } = await sb.from("mentor_slots").select("id, mentor_user_id, is_booked, start_time");
@@ -2717,7 +2730,7 @@ function drawMentorsTable(){
   }
 
   box.innerHTML = `<table><thead><tr>
-    <th>المرشد</th><th>الحالة</th><th>التخصص / المسمى الوظيفي</th><th>إجمالي المواعيد</th><th>المحجوزة</th><th>الجلسات المغلقة</th><th></th>
+    <th>المرشد</th><th>الحالة</th><th>حضور اليوم</th><th>التخصص / المسمى الوظيفي</th><th>إجمالي المواعيد</th><th>المحجوزة</th><th>الجلسات المغلقة</th><th></th>
     </tr></thead><tbody>
     ${rows.map(m => {
       const mySlots = slots.filter(s => s.mentor_user_id === m.user_id);
@@ -2734,6 +2747,17 @@ function drawMentorsTable(){
             ? `<span class="badge badge-green">نشط</span>`
             : `<span class="badge badge-gray">معطَّل</span>${reason ? `<br><span style="color:var(--muted);font-size:11.5px" title="${esc(reason)}">${esc(reason.length > 34 ? reason.slice(0,34)+"…" : reason)}</span>` : ""}`}
         </td>
+        <td>${(() => {
+          // الحضور صالح ليومه فقط — مواعيد المرشد لا تظهر للفرق بدونه
+          const at = m.profiles?.mentor_present_at ? new Date(m.profiles.mentor_present_at) : null;
+          const today = at && at.toDateString() === new Date().toDateString();
+          const here = !!m.profiles?.mentor_present && today;
+          return `${here ? '<span class="badge badge-green">حاضر</span>'
+                         : '<span class="badge badge-gray">غير مسجَّل</span>'}
+            <br><button class="btn btn-outline btn-sm" style="width:auto;padding:3px 10px;margin-top:5px;font-size:11.5px"
+              onclick="toggleMentorPresenceAdmin('${m.user_id}', ${!here})">
+              ${here ? 'تسجيل الانصراف' : 'تسجيل الحضور'}</button>`;
+        })()}</td>
         <td>${esc(m.profiles?.specialization||"—")}<br><span style="color:var(--muted);font-size:12px">${esc(m.profiles?.current_position||"")}</span></td>
         <td>${mySlots.length}</td>
         <td>${myBooked}</td>
@@ -7673,6 +7697,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r143</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r144</div>
 </body>
 </html>
