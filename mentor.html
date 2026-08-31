@@ -772,7 +772,7 @@ async function renderSlots(){
     <div class="card"><div id="slots-list">جارٍ التحميل...</div></div>`;
 
   const { data, error } = await sb.from("mentor_slots")
-    .select("id, start_time, end_time, is_online, location, is_booked, mentor_bookings(id, team_id, status, requested_topic, teams(team_name, team_code, tracks(name_ar)))")
+    .select("id, start_time, end_time, is_online, location, is_booked, mentor_bookings(id, team_id, status, requested_topic, held_at, teams(team_name, team_code, tracks(name_ar)))")
     .eq("mentor_user_id", currentUser.id)
     .order("start_time");
 
@@ -1303,6 +1303,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r112</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r113</div>
 </body>
 </html>
