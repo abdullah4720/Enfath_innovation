@@ -119,6 +119,9 @@
   .slot-meta{font-size:12px; color:var(--muted); margin-top:3px;}
   .badge{display:inline-block; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600;}
   .badge-gray{background:#f0f1f5; color:var(--muted);}
+  .badge-teal{background:rgba(0,189,196,.14);color:#0A7C82}
+  body.dark .badge-teal{background:rgba(0,189,196,.2);color:#5FE8EC}
+
   .badge-green{background:#e6f7f3; color:var(--teal);}
 
   /* كان مستخدمًا بتبويب الشهادات لكنه غير معرَّف بهذه الصفحة */
@@ -779,25 +782,35 @@ async function renderSlots(){
     });
   }
 
-  // تصنيف يقلّل الازدحام: كل مجموعة في تبويب مستقل
+  // تقسيم زمني لا حسب الحالة: المرشد يفكّر بيومه لا بتصنيف
+  // مواعيده. الجلسة المنتهية تبقى أمامه ليكتب ملاحظاتها، لكنها
+  // لا تختلط بجلسات الأسبوع الماضي.
+  const dayKey = d => new Date(d).toLocaleDateString("en-CA");   // YYYY-MM-DD محلي
+  const today  = dayKey(now);
+
   const groupOf = s => {
     const b = (s.mentor_bookings||[])[0];
-    if(b && b.status === "cancelled") return "cancelled";
-    if(new Date(s.end_time) <= now)   return "past";
-    if(b)                              return "booked";
-    return "free";
+    if(b && b.status === "cancelled") return "log";      // الملغاة في السجل
+    const d = dayKey(s.start_time);
+    if(d === today) return "today";
+    return d > today ? "next" : "log";
   };
-  const groups = { booked: [], free: [], past: [], cancelled: [] };
+  const groups = { today: [], next: [], log: [] };
   data.forEach(s => groups[groupOf(s)].push(s));
 
+  // اليوم تصاعديًا (ما هو قادم أولًا)، والسجل تنازليًا (الأحدث أولًا)
+  groups.today.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  groups.next .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  groups.log  .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+
   const TABS = [
-    ["booked",    "محجوزة",   "calendar-check"],
-    ["free",      "متاحة",    "calendar-plus"],
-    ["past",      "منتهية",   "history"],
-    ["cancelled", "ملغاة",    "calendar-x"],
+    ["today", "اليوم",  "calendar-clock"],
+    ["next",  "قادمة",  "calendar-days"],
+    ["log",   "السجل",  "history"],
   ];
-  if(!window._slotFilter || !groups[window._slotFilter]?.length){
-    window._slotFilter = TABS.find(t => groups[t[0]].length)?.[0] || "booked";
+  if(!window._slotFilter || !TABS.some(t => t[0] === window._slotFilter)){
+    window._slotFilter = groups.today.length ? "today"
+                       : groups.next.length  ? "next" : "log";
   }
 
   document.getElementById("slot-filters").innerHTML = TABS.map(([k, label, icon]) => `
@@ -856,7 +869,7 @@ async function renderSlots(){
       <div style="text-align:left">
         ${(() => {
           // الحالة من الوقت لا من إجراء المرشد — أقلّ خطوات وأدقّ
-          if(!booking) return '<span class="badge badge-gray">متاح للحجز</span>';
+          if(!booking) return '<span class="badge badge-teal">متاح للحجز</span>';
           if(booking.status === "cancelled") return '<span class="badge badge-red">ملغاة</span>';
           const now = new Date(), en = new Date(s.end_time), st = new Date(s.start_time);
           if(en <= now)  return '<span class="badge badge-gray">منتهية</span>';
@@ -1229,6 +1242,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r104</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r105</div>
 </body>
 </html>
