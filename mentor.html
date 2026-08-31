@@ -748,6 +748,17 @@ async function saveMyProfile(){
 }
 
 /* ---------------- مواعيدي ---------------- */
+async function setSessionHeld(bookingId, held){
+  const { data, error } = await sb.rpc("confirm_session_held", {
+    p_booking_id: bookingId, p_held: held
+  });
+  if(error || !data?.success){
+    alert(data?.error || error?.message || "تعذّر الإجراء");
+    return;
+  }
+  renderSlots();
+}
+
 function setSlotFilter(k){
   window._slotFilter = k;
   renderSlots();
@@ -783,6 +794,7 @@ async function renderSlots(){
   if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد مواعيد مضافة بعد — أضف موعدك الأول من التبويب الثاني</div>`; return; }
 
   const teamIds = [...new Set(data.map(s => (s.mentor_bookings||[])[0]?.team_id).filter(Boolean))];
+
   let submissionsByTeam = {};
   if(teamIds.length){
     const { data: submissions } = await sb.from("submissions")
@@ -826,7 +838,7 @@ async function renderSlots(){
   const TABS = [
     ["sessions",  "الجلسات",        "calendar-check"],
     ["free",      "مواعيد متاحة",   "calendar-plus"],
-    ["expired",   "انقضت",          "calendar-x"],
+    ["expired",   "انتهت",          "calendar-x"],
     ["cancelled", "ملغاة",          "circle-slash"],
   ];
   if(!window._slotFilter || !TABS.some(t => t[0] === window._slotFilter)){
@@ -899,16 +911,24 @@ async function renderSlots(){
           const now = new Date(), en = new Date(s.end_time), st = new Date(s.start_time);
           if(booking && booking.status === "cancelled")
             return '<span class="badge badge-red">ملغاة</span>';
-          if(en <= now)
-            return booking
-              ? '<span class="badge badge-gray">منتهية</span>'
-              : '<span class="badge badge-gray">انقضى وقتها</span>';
+          if(en <= now){
+            if(!booking) return '<span class="badge badge-gray">لم يتم حجزها</span>';
+            // التأكيد يضيف معلومة، وغيابه لا يعطّل شيئًا
+            return booking.held_at
+              ? '<span class="badge badge-green">تمت الاستشارة</span>'
+              : '<span class="badge badge-gray">لم تُؤكَّد</span>';
+          }
           if(!booking) return '<span class="badge badge-teal">متاح للحجز</span>';
           if(st <= now) return '<span class="badge badge-gold">جارية الآن</span>';
           return '<span class="badge badge-green">محجوزة</span>';
         })()}
         ${booking && booking.status === "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
         ${booking && booking.status !== "cancelled" ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            ${new Date(s.end_time) <= new Date()
+              ? (booking.held_at
+                 ? `<button class="btn btn-outline btn-sm" onclick="setSessionHeld('${booking.id}', false)">تراجع عن التأكيد</button>`
+                 : `<button class="btn btn-primary btn-sm" onclick="setSessionHeld('${booking.id}', true)">تمت الاستشارة</button>`)
+              : ""}
             <button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name, startTime: s.start_time, endTime: s.end_time})})'>ملاحظات الجلسة</button>
             ${new Date(s.end_time) > new Date()
               ? `<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء الحجز</button>`
@@ -1273,6 +1293,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r106</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r110</div>
 </body>
 </html>

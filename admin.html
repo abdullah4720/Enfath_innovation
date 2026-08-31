@@ -3205,9 +3205,61 @@ async function renderMentorshipSettings(){
     <div class="card" style="margin-top:14px">
       <h3 style="margin:0 0 10px">حالة الإرشاد الآن</h3>
       <div id="mb-health"><p class="hint">جارٍ الفحص...</p></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3 style="margin:0 0 6px">جلسات تنتظر تأكيدًا</h3>
+      <p class="hint" style="margin:0 0 14px">
+        مضى وقتها ولم يؤكّد المرشد انعقادها — تابعها معه أو أكّدها نيابةً عنه
+      </p>
+      <div id="mb-unconfirmed"><p class="hint">جارٍ التحميل...</p></div>
     </div>`;
 
   loadMentorshipHealth();
+  loadUnconfirmedSessions();
+}
+
+async function loadUnconfirmedSessions(){
+  const box = document.getElementById("mb-unconfirmed");
+  if(!box) return;
+
+  const { data, error } = await sb.from("unconfirmed_sessions").select("*").limit(30);
+  if(error){
+    box.innerHTML = `<p class="hint">${esc(error.message)}</p>`;
+    return;
+  }
+  if(!data.length){
+    box.innerHTML = `<div class="alert alert-success">كل الجلسات المنتهية مؤكَّدة</div>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <table class="table"><thead><tr>
+      <th>الموعد</th><th>المرشد</th><th>الفريق</th><th>ملاحظات</th><th></th>
+    </tr></thead><tbody>
+    ${data.map(r => `<tr>
+      <td>${esc(r.الموعد)}</td>
+      <td>${esc(r.المرشد || "—")}</td>
+      <td>${esc(r.الفريق || "—")}
+        ${r.رمز_الفريق ? `<code style="font-size:10.5px;margin-right:5px">${esc(r.رمز_الفريق)}</code>` : ""}</td>
+      <td>${r.لها_ملاحظات ? '<span class="badge badge-green">مكتوبة</span>' : '<span class="badge badge-gray">لا</span>'}</td>
+      <td><button class="btn btn-outline btn-sm" onclick="adminConfirmSession('${r.booking_id}')">
+        تأكيد الانعقاد</button></td>
+    </tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function adminConfirmSession(bookingId){
+  const { data, error } = await sb.rpc("confirm_session_held", {
+    p_booking_id: bookingId, p_held: true
+  });
+  if(error || !data?.success){
+    showToast(data?.error || error?.message || "تعذّر التأكيد", true);
+    return;
+  }
+  logActivity("تأكيد انعقاد جلسة إرشاد", "mentor_bookings", bookingId);
+  showToast("أُكّد انعقاد الجلسة");
+  loadUnconfirmedSessions();
 }
 
 async function loadMentorshipHealth(){
@@ -7790,6 +7842,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r147</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r148</div>
 </body>
 </html>
