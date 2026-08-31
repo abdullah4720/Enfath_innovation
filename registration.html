@@ -115,8 +115,34 @@
   .bk-cancelled .bk-tag{background:#FDECEB;color:#C0392B}
   body.dark .bk-live{background:rgba(201,146,42,.1)}
 
-  /* بطاقات المرشدين */
-  .mentors-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  /* قائمة المرشدين — مطويّة لتناسب العدد الكبير */
+  .mn-list{border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .mn-item{border-bottom:1px solid var(--border)}
+  .mn-item:last-child{border-bottom:none}
+  .mn-item summary{cursor:pointer;list-style:none;display:block}
+  .mn-item summary::-webkit-details-marker{display:none}
+  .mn-item summary:hover{background:#F7F9FB}
+  body.dark .mn-item summary:hover{background:rgba(255,255,255,.04)}
+  .mn-row{display:flex;align-items:center;padding:13px 14px}
+  .mn-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;
+    margin-left:12px;margin-inline-end:12px;border:1px solid var(--border)}
+  .mn-ini{display:flex;align-items:center;justify-content:center;
+    background:var(--teal);color:#001938;font-weight:800;font-size:16px}
+  .mn-main{flex:1;min-width:0}
+  .mn-name{display:block;font-weight:700;font-size:14px;line-height:1.4}
+  .mn-spec{display:block;font-size:12px;color:var(--muted);margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mn-slots{font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:7px;
+    background:rgba(0,189,196,.12);color:#0A7C82;white-space:nowrap;flex-shrink:0}
+  .mn-slots.none{background:#F0F1F5;color:var(--muted)}
+  .mn-body{padding:0 14px 15px 14px;animation:mnf .22s ease}
+  @keyframes mnf{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  .mn-line{font-size:12.5px;color:var(--ink);margin-bottom:5px}
+  .mn-line span{display:inline-block;min-width:56px;color:var(--muted);font-size:11.5px}
+  .mn-bio{font-size:12.5px;color:var(--muted);line-height:1.75;margin:8px 0 0}
+  .mn-item[open] summary{background:#F7F9FB}
+  body.dark .mn-item[open] summary{background:rgba(255,255,255,.04)}
+
   .mentor-card{border:1px solid var(--border);border-radius:12px;padding:14px;background:#fff;transition:.2s}
   .mentor-card:hover{border-color:var(--teal);box-shadow:0 6px 18px rgba(0,25,56,.08)}
   body.dark .mentor-card{background:rgba(255,255,255,.04)}
@@ -1801,37 +1827,51 @@ async function buildMentorsSection(){
   const { data: mentors, error } = await sb.from("mentor_profiles")
     .select("*").order("مواعيد_متاحة", { ascending: false });
 
-  if(error || !mentors || !mentors.length) return "";   // لا نعرض قسمًا فارغًا
+  if(error || !mentors || !mentors.length) return "";
 
   const initials = n => (n || "؟").trim().charAt(0);
 
+  // قائمة مطويّة بدل بطاقات كاملة: مع كثرة المرشدين تصير البطاقات
+  // جدارًا يخفي المواعيد أسفلها. السطر يكفي للاختيار، والتفاصيل
+  // عند الطلب.
+  const row = m => {
+    const avail = m.مواعيد_متاحة || 0;
+    const hasDetail = m.نبذة || m.المنصب || m.الجهة || m.فرق_أرشدها;
+    const head = `
+      <span class="mn-row">
+        ${m.الصورة
+          ? `<img src="${esc(m.الصورة)}" alt="" class="mn-ava">`
+          : `<span class="mn-ava mn-ini">${esc(initials(m.الاسم))}</span>`}
+        <span class="mn-main">
+          <span class="mn-name">${esc(m.الاسم || "مرشد")}</span>
+          ${m.التخصص ? `<span class="mn-spec">${esc(m.التخصص)}</span>` : ""}
+        </span>
+        <span class="mn-slots ${avail ? "" : "none"}">
+          ${avail ? `<bdi>${avail}</bdi> موعد` : "لا مواعيد"}
+        </span>
+      </span>`;
+
+    if(!hasDetail) return `<div class="mn-item">${head}</div>`;
+
+    return `
+      <details class="mn-item">
+        <summary>${head}</summary>
+        <div class="mn-body">
+          ${m.المنصب ? `<div class="mn-line"><span>المنصب</span>${esc(m.المنصب)}</div>` : ""}
+          ${m.الجهة  ? `<div class="mn-line"><span>الجهة</span>${esc(m.الجهة)}</div>` : ""}
+          ${m.نبذة   ? `<p class="mn-bio">${esc(m.نبذة)}</p>` : ""}
+          ${m.فرق_أرشدها ? `<div class="mn-line"><span>الخبرة</span>أرشد <bdi>${m.فرق_أرشدها}</bdi> فريقًا</div>` : ""}
+        </div>
+      </details>`;
+  };
+
   return `
   <div class="card" style="margin-top:14px">
-    <h2 style="margin:0 0 4px">تعرّف على المرشدين</h2>
-    <p class="sub" style="margin:0 0 14px">اختر المرشد الأنسب لمجال مشروعكم</p>
-    <div class="mentors-grid">
-      ${mentors.map(m => `
-        <div class="mentor-card">
-          <div class="mentor-head">
-            ${m.الصورة
-              ? `<img src="${esc(m.الصورة)}" alt="" class="mentor-avatar">`
-              : `<div class="mentor-avatar mentor-initial">${esc(initials(m.الاسم))}</div>`}
-            <div style="flex:1;min-width:0">
-              <div class="mentor-name">${esc(m.الاسم || "مرشد")}</div>
-              ${m.المنصب ? `<div class="mentor-role">${esc(m.المنصب)}</div>` : ""}
-              ${m.الجهة ? `<div class="mentor-org">${esc(m.الجهة)}</div>` : ""}
-            </div>
-          </div>
-          ${m.التخصص ? `<div class="mentor-tag">${esc(m.التخصص)}</div>` : ""}
-          ${m.نبذة ? `<p class="mentor-bio">${esc(m.نبذة)}</p>` : ""}
-          <div class="mentor-foot">
-            <span>${m.مواعيد_متاحة > 0
-              ? `<bdi>${m.مواعيد_متاحة}</bdi> موعد متاح`
-              : "لا مواعيد متاحة"}</span>
-            ${m.فرق_أرشدها > 0 ? `<span>أرشد <bdi>${m.فرق_أرشدها}</bdi> فريقًا</span>` : ""}
-          </div>
-        </div>`).join("")}
-    </div>
+    <h2 style="margin:0 0 4px">المرشدون</h2>
+    <p class="sub" style="margin:0 0 14px">
+      <bdi>${mentors.length}</bdi> مرشدًا — اضغطوا على الاسم للتفاصيل
+    </p>
+    <div class="mn-list">${mentors.map(row).join("")}</div>
   </div>`;
 }
 
@@ -3038,6 +3078,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r135</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r136</div>
 </body>
 </html>
