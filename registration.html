@@ -463,7 +463,7 @@
     <!-- نسيت كلمة المرور -->
     <div id="forgot-password-form" style="display:none">
       <h2>استعادة كلمة المرور</h2>
-      <p class="sub">أدخل بريدك وراح يوصلك رابط لتعيين كلمة مرور جديدة</p>
+      <p class="sub">أدخلوا بريدكم وسيصلكم رابط لتعيين كلمة مرور جديدة</p>
       <div class="field"><label>البريد الإلكتروني</label><input type="email" id="fp-email"></div>
       <button class="btn btn-primary" onclick="handleForgotPassword()">إرسال رابط الاستعادة</button>
       <button class="btn-link" style="margin-top:12px;display:block;text-align:center;width:100%" onclick="switchAuthTab('login')">رجوع لتسجيل الدخول</button>
@@ -911,7 +911,7 @@ function showSignupSuccessThenDashboard(teamResult, teamError){
       <div style="font-size:40px;margin-bottom:10px">✅</div>
       <h2 style="margin-bottom:6px">${teamResult?.created ? `تم إنشاء فريق "${esc(teamResult.team_name)}" بنجاح` : (teamResult?.joined ? `انضممت لفريق "${esc(teamResult.team_name)}"` : "تم إنشاء حسابك بنجاح")}</h2>
       ${inviteLink ? `
-        <p class="sub" style="margin-bottom:14px">شارك رابط الدعوة مع زملائك للانضمام مباشرة — أرسلناه لبريدك الإلكتروني كمان</p>
+        <p class="sub" style="margin-bottom:14px">شاركوا رابط الدعوة مع زملائكم للانضمام — وقد أُرسل إلى بريدكم أيضًا</p>
         <div style="display:flex;gap:8px;max-width:420px;margin:0 auto 22px">
           <input id="invite-link-box" value="${inviteLink}" readonly style="flex:1;font-size:12.5px;text-align:left;direction:ltr">
           <button class="btn btn-outline" style="width:auto;padding:9px 16px;white-space:nowrap" onclick="copyInviteLink()">نسخ الرابط</button>
@@ -1904,7 +1904,6 @@ async function renderMentorshipTab(membership){
             ${b.status === "completed" ? `<button class="btn-link" style="font-size:12px;margin-top:4px" onclick='bookFollowUpWithMentor("${b.mentor_slots?.mentor_user_id}", ${JSON.stringify(b.mentor_slots?.profiles?.full_name||"")})'>احجز موعد آخر مع نفس المرشد</button>` : ""}
           </div>
           <div style="text-align:left">
-            <span class="status-badge ${cls}">${label}</span>
             ${b.status !== "completed" && b.status !== "no_show_team" && b.status !== "no_show_mentor" ? `<div style="margin-top:6px"><button class="btn-link" style="color:var(--danger);font-size:12px" onclick="cancelMyMentorBooking('${b.id}')">إلغاء</button></div>` : ""}
             ${b.status === "confirmed" && sessionEnded ? `<div style="margin-top:6px"><button class="btn-link" style="color:var(--danger);font-size:12px" onclick="markMentorNoShow('${b.id}')">المرشد لم يحضر</button></div>` : ""}
           </div>
@@ -1917,19 +1916,24 @@ async function renderMentorshipTab(membership){
   const mentorshipMode = modeSetting?.value || "self";
 
   if(mentorshipMode === "admin_only"){
-    body.innerHTML = bookingHtml + (cachedTeamBookings.length ? "" : `<div class="card"><h2>الإرشاد</h2><p class="sub">فريق تنسيق البرنامج بيتولى تحديد المرشد المناسب لفريقكم حسب مسار مشروعكم — بيصلكم إشعار فور تحديد الموعد.</p></div>`);
+    body.innerHTML = bookingHtml + (cachedTeamBookings.length ? "" : `<div class="card"><h2>الإرشاد</h2><p class="sub">يتولّى فريق تنسيق البرنامج تحديد المرشد المناسب لفريقكم حسب مسار مشروعكم، وسيصلكم إشعار فور تحديد الموعد.</p></div>`);
     return;
   }
 
-  // بوابة: ما نسمح بحجز جديد إلا بعد تقييم كل الجلسات المكتملة السابقة
-  const unratedCompleted = cachedTeamBookings.filter(b => b.status === "completed" && !ratedBookingIds.has(b.id));
-  if(unratedCompleted.length){
-    body.innerHTML = bookingHtml + `<div class="card" style="background:#fef8ed;border-color:#f0d9a8">
-      <h2 style="margin-bottom:6px">⏸ يرجى تقييم جلستكم الأخيرة أولًا</h2>
-      <p class="sub" style="margin-bottom:0">يجب تقييم جلسة الإرشاد المكتملة أعلاه قبل التمكّن من حجز موعد جديد — يساعدنا ذلك على تحسين جودة الإرشاد المقدَّم</p>
-    </div>`;
-    return;
-  }
+  // التقييم اختياري: كان بوابة تمنع الحجز، فيُحبس الفريق لو تعذّر
+  // عليه التقييم أو نسيه. صار تذكيرًا لطيفًا لا يعطّل شيئًا.
+  const unrated = cachedTeamBookings.filter(b => {
+    const ended = b.mentor_slots && new Date(b.mentor_slots.end_time) <= new Date();
+    return ended && b.status !== "cancelled" && !ratedBookingIds.has(b.id);
+  });
+  const rateReminder = unrated.length
+    ? `<div class="card" style="background:#F2F7F9;border-color:rgba(0,189,196,.28);margin-bottom:14px">
+         <p style="margin:0;font-size:13.5px;color:var(--ink)">
+           لديكم <bdi>${unrated.length}</bdi> جلسة بانتظار التقييم.
+           تقييمكم اختياري ويساعدنا على تحسين جودة الإرشاد.
+         </p>
+       </div>`
+    : "";
 
   // mentor_present في الاستعلام: مواعيد المرشد لا تظهر حتى يسجّل
   // المنظّم حضوره، فلا يُحجز موعد مع غائب.
@@ -2006,7 +2010,7 @@ async function renderMentorshipTab(membership){
       </div>`;
 
   const mentorsHtml = await buildMentorsSection();
-  body.innerHTML = bookingHtml + followUpBanner + mentorsHtml + slotsHtml;
+  body.innerHTML = bookingHtml + rateReminder + followUpBanner + mentorsHtml + slotsHtml;
   if(window.lucide) lucide.createIcons();
   renderMentorSlotsList(displaySlots, team.id, isRecommended);
 }
@@ -2117,7 +2121,7 @@ function renderRatingPrompt(bookingId, mentorId, teamId){
         <button type="button" class="btn-link" style="font-size:12.5px;color:var(--muted)"
           onclick="markSessionNotHeld('${bookingId}','${mentorId}','${teamId}')">لم تُعقد الجلسة</button>
       </div>
-      <p class="hint" style="margin:8px 0 0;font-size:11.5px">اختر «لم تُعقد» إن تعذّر انعقاد الجلسة — يُسجَّل ذلك ولا يُطلب منكم تقييمها</p>
+      <p class="hint" style="margin:8px 0 0;font-size:11.5px">التقييم اختياري. اختاروا «لم تُعقد» إن تعذّر انعقاد الجلسة.</p>
     </div>
   `;
 }
@@ -2846,7 +2850,7 @@ async function renderTeamView(membership){
         <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
           <button class="btn-link" style="color:var(--danger);font-size:12.5px" onclick="leaveTeam('${membership.id}')">مغادرة الفريق</button>
         </div>
-      ` : `<p class="hint" style="margin-top:14px">قائد الفريق لا يقدر يغادر مباشرة — تواصل مع الإدارة لنقل القيادة أو حذف الفريق</p>`}
+      ` : `<p class="hint" style="margin-top:14px">لا يستطيع قائد الفريق مغادرته مباشرة — تواصلوا مع الإدارة لنقل القيادة أو حذف الفريق</p>`}
     </div>
 
     <div class="card">
@@ -3034,6 +3038,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r134</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r135</div>
 </body>
 </html>

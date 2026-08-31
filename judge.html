@@ -916,7 +916,7 @@ function judgeCardHtml(c, autoOpen){
           }).join("")}
           <div id="live-total-${a.team_id}"></div>
           <div class="field" style="margin-top:14px"><label>تغذية راجعة للفريق</label>
-            <textarea id="comments-${a.team_id}" rows="3" placeholder="اكتب ملاحظاتك — راح تظهر للفريق بعد إعلان النتائج" ${isLocked ? 'disabled' : ''}>${esc(teamScores[0]?.comments||"")}</textarea>
+            <textarea id="comments-${a.team_id}" rows="3" placeholder="اكتب ملاحظاتك — تظهر للفريق بعد إعلان النتائج" ${isLocked ? 'disabled' : ''}>${esc(teamScores[0]?.comments||"")}</textarea>
           </div>
           <div id="submit-alert-${a.team_id}" class="alert"></div>
           ${!isLocked ? `<button class="btn btn-primary" onclick='openConfirmSubmit("${a.team_id}", ${JSON.stringify(teamName)})'>${alreadyScored ? "تحديث التقييم" : "إرسال التقييم"}</button>` : ""}
@@ -1047,6 +1047,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r120</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r121</div>
 </body>
 </html>

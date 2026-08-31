@@ -2892,7 +2892,7 @@ async function confirmDeactivateMentor(mentorId, mentorName){
 }
 
 async function reactivateMentor(mentorId, mentorName){
-  if(!confirm(`إعادة تفعيل ${mentorName}؟ راح يقدر يدخل لوحة الإرشاد ويضيف مواعيد، وتقدر الفرق تحجز معه.`)) return;
+  if(!confirm(`إعادة تفعيل ${mentorName}؟ سيتمكّن من دخول لوحة الإرشاد وإضافة المواعيد، وتقدر الفرق تحجز معه.`)) return;
 
   const { error } = await sb.from("profiles").update({
     is_active: true,
@@ -2969,7 +2969,7 @@ async function removeMentorRole(userRoleId, userName){
   renderMentorshipMentorsList();
 }
 async function markMentorUnavailable(mentorId, mentorName){
-  if(!confirm(`متأكد إن ${mentorName} غير متاح؟ راح تُلغى كل مواعيده القادمة المحجوزة تلقائيًا، وتوصل الفرق المتأثرة إشعار فوري.`)) return;
+  if(!confirm(`تأكيد أن ${mentorName} غير متاح؟ ستُلغى كل مواعيده القادمة المحجوزة تلقائيًا، وتوصل الفرق المتأثرة إشعار فوري.`)) return;
   const { data, error } = await sb.rpc("cancel_mentor_future_bookings", { p_mentor_id: mentorId });
   if(error || !data.success){ showToast("خطأ: " + (data?.error || error?.message), true); return; }
   logActivity("إلغاء مواعيد مرشد القادمة", "user", mentorId, {name: mentorName, cancelled_bookings: data.cancelled_count});
@@ -4553,7 +4553,7 @@ async function toggleRoundActive(id, value){
   renderJudgingRounds();
 }
 async function togglePublishResults(id, value){
-  if(value && !confirm("نشر النتائج راح يخلي كل فريق يشوف درجاته والتغذية الراجعة من المحكّمين. متأكد؟")) return;
+  if(value && !confirm("نشر النتائج يتيح لكل فريق الاطّلاع على درجاته والملاحظات من المحكّمين. متأكد؟")) return;
   const { error } = await sb.from("judging_rounds").update({results_published:value}).eq("id", id);
   if(error) return showToast("خطأ: " + error.message, true);
   logActivity(value ? "نشر نتائج جولة تحكيم" : "إخفاء نتائج جولة تحكيم", "judging_round", id);
@@ -4952,7 +4952,7 @@ async function approveResults(keys){
 }
 
 async function unapproveResults(teamId, roundId, teamName){
-  if(!confirm(`إلغاء اعتماد نتيجة ${teamName}؟ راح يقدر المحكّمون يعدّلون درجاتهم مرة أخرى.`)) return;
+  if(!confirm(`إلغاء اعتماد نتيجة ${teamName}؟ سيتمكّن المحكّمون من تعديل درجاتهم مرة أخرى.`)) return;
   const { error } = await sb.from("judging_approvals").delete().eq("team_id", teamId).eq("round_id", roundId);
   if(error) return showToast("خطأ: " + error.message, true);
   logActivity("إلغاء اعتماد نتيجة", "judging", teamId, {team: teamName});
@@ -7790,6 +7790,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-30-r146</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r147</div>
 </body>
 </html>

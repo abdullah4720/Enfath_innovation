@@ -708,7 +708,7 @@ async function saveMyProfile(){
 /* ---------------- مواعيدي ---------------- */
 async function renderSlots(){
   const main = document.getElementById("main-content");
-  main.innerHTML = `<div id="bulk-close-box"></div>
+  main.innerHTML = `
     <div id="slots-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px"></div>
     <div class="card"><div id="slots-list">جاري التحميل...</div></div>`;
 
@@ -730,25 +730,7 @@ async function renderSlots(){
     <div class="stat-card"><div class="num" style="color:var(--teal)">${closedCount}</div><div class="label">جلسات مغلقة</div></div>
   `;
 
-  // زر الإقفال الجماعي — يشمل فقط الجلسات المؤكدة التي تجاوزت وقت نهايتها فعليًا
   const now = new Date();
-  window._endedUnclosedBookings = data
-    .filter(s => (s.mentor_bookings||[])[0]?.status === "confirmed" && new Date(s.end_time) < now)
-    .map(s => ({
-      bookingId: s.mentor_bookings[0].id,
-      teamId: s.mentor_bookings[0].team_id,
-      teamName: s.mentor_bookings[0].teams?.team_name || "",
-      endTime: s.end_time
-    }));
-  const bulkBox = document.getElementById("bulk-close-box");
-  if(window._endedUnclosedBookings.length){
-    bulkBox.innerHTML = `<div class="card" style="border-color:var(--gold);background:#fbf3e2;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-      <div style="font-size:13.5px"><strong>${window._endedUnclosedBookings.length}</strong> جلسة انتهى وقتها ولسا ما أُقفلت — أقفلها دفعة واحدة قبل ما تبدأ يوم جديد</div>
-      <button class="btn btn-primary btn-sm" onclick="openBulkCloseModal()">إقفال كل الجلسات المنتهية</button>
-    </div>`;
-  } else {
-    bulkBox.innerHTML = "";
-  }
 
   if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد مواعيد مضافة بعد — أضف موعدك الأول من التبويب الثاني</div>`; return; }
 
@@ -801,17 +783,21 @@ async function renderSlots(){
         ` : ""}
       </div>
       <div style="text-align:left">
-        ${!booking ? '<span class="badge badge-gray">غير محجوز</span>' :
-          booking.status === "completed" ? '<span class="badge badge-green">✓ جلسة مغلقة</span>' :
-          booking.status === "no_show_team" ? '<span class="badge badge-red">لم يحضر الفريق</span>' :
-          booking.status === "no_show_mentor" ? '<span class="badge badge-red">لم تحضر (مسجَّل من الفريق)</span>' :
-          booking.status === "confirmed" ? '<span class="badge badge-gold">مؤكد</span>' :
-          '<span class="badge badge-gray">قيد الانتظار — بانتظار تأكيدك</span>'}
+        ${(() => {
+          // الحالة من الوقت لا من إجراء المرشد — أقلّ خطوات وأدقّ
+          if(!booking) return '<span class="badge badge-gray">متاح للحجز</span>';
+          if(booking.status === "cancelled") return '<span class="badge badge-red">ملغاة</span>';
+          const now = new Date(), en = new Date(s.end_time), st = new Date(s.start_time);
+          if(en <= now)  return '<span class="badge badge-gray">منتهية</span>';
+          if(st <= now)  return '<span class="badge badge-gold">جارية الآن</span>';
+          return '<span class="badge badge-green">محجوزة</span>';
+        })()}
         ${booking && booking.status === "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
-        ${booking && booking.status === "confirmed" ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-            <button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name, startTime: s.start_time, endTime: s.end_time})})'>✓ إنهاء الجلسة + ملاحظات</button>
-            <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="markNoShow('${booking.id}','no_show_team')">لم يحضر الفريق</button>
-            <button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء الحجز</button>
+        ${booking && booking.status !== "cancelled" ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="btn btn-outline btn-sm" onclick='openFeedbackModal(${JSON.stringify({bookingId: booking.id, teamId: booking.team_id, teamName: booking.teams?.team_name, startTime: s.start_time, endTime: s.end_time})})'>ملاحظات الجلسة</button>
+            ${new Date(s.end_time) > new Date()
+              ? `<button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء الحجز</button>`
+              : ""}
           </div>` : ""}
         ${!booking ? `<div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
             <button class="btn btn-outline btn-sm" onclick='openEditSlotModal(${JSON.stringify({id:s.id, start_time:s.start_time, end_time:s.end_time, is_online:s.is_online, location:s.location})})'>تعديل</button>
@@ -864,12 +850,6 @@ async function saveEditSlot(slotId){
   }).eq("id", slotId);
   if(error){ alert("خطأ: " + error.message); return; }
   closeModal();
-  renderSlots();
-}
-async function markNoShow(bookingId, statusValue){
-  if(!confirm("متأكد؟ هذا الإجراء يسجّل عدم حضور بشكل نهائي بسجل هذا الموعد.")) return;
-  const { error } = await sb.from("mentor_bookings").update({ status: statusValue }).eq("id", bookingId);
-  if(error){ alert("خطأ: " + error.message); return; }
   renderSlots();
 }
 async function confirmBooking(bookingId){
@@ -925,54 +905,6 @@ function openFeedbackModal({bookingId, teamId, teamName, startTime, endTime}){
       <button class="btn btn-primary" style="flex:1" onclick="saveFeedback('${bookingId}','${teamId}','${startTime}')">حفظ الملاحظة</button>
     </div>
   `);
-}
-function openBulkCloseModal(){
-  const list = window._endedUnclosedBookings || [];
-  if(!list.length){ closeModal(); return; }
-  openModal(`
-    <h3 style="margin:0 0 4px">إقفال ${list.length} جلسة منتهية دفعة واحدة</h3>
-    <p style="color:var(--muted);font-size:13px;margin:0 0 14px">
-      ${list.map(b => esc(b.teamName)).join("، ")}
-    </p>
-    <div class="field"><label>ملاحظة عامة (تُضاف لكل الجلسات المُقفلة دفعة واحدة)</label>
-      <textarea id="bulk-fb-notes" rows="3" placeholder=""></textarea>
-      <p class="hint" style="margin-top:4px">لإرسال ملاحظة خاصة بفريق معيّنّن، الأفضل ترجع تسجّلها له لحاله من القائمة بدل الإقفال الجماعي</p>
-    </div>
-    <div id="bulk-fb-alert" class="alert"></div>
-    <div style="display:flex; gap:10px; margin-top:10px">
-      <button class="btn btn-outline" style="flex:1" onclick="closeModal()">إلغاء</button>
-      <button class="btn btn-primary" style="flex:1" onclick="confirmBulkClose()">تأكيد إقفال ${list.length} جلسة</button>
-    </div>
-  `);
-}
-async function confirmBulkClose(){
-  const alertBox = document.getElementById("bulk-fb-alert");
-  alertBox.className = "alert";
-  const notes = document.getElementById("bulk-fb-notes").value.trim() || "تم إقفال الجلسة ضمن إقفال جماعي لجلسات اليوم المنتهية";
-  const list = window._endedUnclosedBookings || [];
-  const now = new Date();
-
-  // إعادة تحقق أخير (دفاعي): نستبعد أي جلسة ما انتهت وقتها فعليًا لو تغيّرت الحالة أثناء فتح النافذة
-  const stillValid = list.filter(b => new Date(b.endTime) < now);
-
-  let successCount = 0, failCount = 0;
-  for(const b of stillValid){
-    const { error: fbError } = await sb.from("mentor_feedback").insert({
-      booking_id: b.bookingId, mentor_user_id: currentUser.id, team_id: b.teamId,
-      notes, team_readiness_score: 3
-    });
-    if(fbError){ failCount++; continue; }
-    const { error: upError } = await sb.from("mentor_bookings").update({ status: "completed" }).eq("id", b.bookingId);
-    if(upError){ failCount++; } else { successCount++; }
-  }
-
-  if(failCount === 0){
-    closeModal();
-  } else {
-    alertBox.textContent = `تم إقفال ${successCount} جلسة، وفشل ${failCount} — حاول تقفلها فرديًا من القائمة`;
-    alertBox.className = "alert error";
-  }
-  renderSlots();
 }
 async function saveFeedback(bookingId, teamId, startTime){
   const alertBox = document.getElementById("fb-alert");
@@ -1226,6 +1158,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-29-r102</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r103</div>
 </body>
 </html>
