@@ -919,12 +919,15 @@ async function renderSlots(){
               : '<span class="badge badge-gray">لم تُؤكَّد</span>';
           }
           if(!booking) return '<span class="badge badge-teal">متاح للحجز</span>';
-          if(st <= now) return '<span class="badge badge-gold">جارية الآن</span>';
+          if(st <= now)
+            return booking.held_at
+              ? '<span class="badge badge-gold">جارية الآن</span> <span class="badge badge-green">تمت الاستشارة</span>'
+              : '<span class="badge badge-gold">جارية الآن</span>';
           return '<span class="badge badge-green">محجوزة</span>';
         })()}
         ${booking && booking.status === "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
         ${booking && booking.status !== "cancelled" ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-            ${new Date(s.end_time) <= new Date()
+            ${new Date(s.start_time) <= new Date()
               ? (booking.held_at
                  ? `<button class="btn btn-outline btn-sm" onclick="setSessionHeld('${booking.id}', false)">تراجع عن التأكيد</button>`
                  : `<button class="btn btn-primary btn-sm" onclick="setSessionHeld('${booking.id}', true)">تمت الاستشارة</button>`)
@@ -995,7 +998,14 @@ async function confirmBooking(bookingId){
 async function cancelBookingByMentor(bookingId){
   if(!confirm("هل أنت متأكد من إلغاء هذا الحجز؟")) return;
   const { error } = await sb.from("mentor_bookings").update({ status: "cancelled" }).eq("id", bookingId);
-  if(error){ alert("تعذّر الإلغاء: " + error.message); return; }
+  if(error){
+    // رسالة القاعدة الخام مربكة — نوضّح المقصود
+    const msg = /يتداخل|overlap/.test(error.message)
+      ? "تعذّر الإلغاء: يوجد موعدان متداخلان في جدولكم. تواصلوا مع الإدارة لحذف أحدهما."
+      : "تعذّر الإلغاء: " + error.message;
+    alert(msg);
+    return;
+  }
   renderSlots();
 }
 
@@ -1293,6 +1303,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r110</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r112</div>
 </body>
 </html>
