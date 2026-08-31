@@ -24,6 +24,18 @@
     background:#0f1826 !important; color:var(--ink) !important; border-color:var(--border) !important;
   }
   body.dark .slot-row{ background:var(--card); }
+  /* تمييز حالة الموعد بخط جانبي — أوضح من الشارة وحدها */
+  .slot-row{border-right:3px solid transparent;transition:.18s}
+  .sl-booked{border-right-color:#00BDC4}
+  .sl-live{border-right-color:#C9922A;background:rgba(201,146,42,.045)}
+  .sl-done{border-right-color:#8FA6BC;background:#FAFBFC}
+  .sl-done .slot-time{color:var(--muted)}
+  .sl-free{border-right-color:#D5DBE3}
+  .sl-expired{border-right-color:#D5DBE3;opacity:.62}
+  .sl-cancelled{border-right-color:#C0392B;opacity:.6}
+  body.dark .sl-done{background:rgba(255,255,255,.02)}
+  body.dark .sl-live{background:rgba(201,146,42,.08)}
+
   body.dark .project-box{ background:#0f1826; }
   /* طيّ تفاصيل المشروع — بعضها طويل ويملأ الصفحة */
   .proj-fold{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
@@ -119,6 +131,9 @@
   .slot-meta{font-size:12px; color:var(--muted); margin-top:3px;}
   .badge{display:inline-block; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600;}
   .badge-gray{background:#f0f1f5; color:var(--muted);}
+  .badge-teal{background:rgba(0,189,196,.14);color:#0A7C82}
+  body.dark .badge-teal{background:rgba(0,189,196,.2);color:#5FE8EC}
+
   .badge-green{background:#e6f7f3; color:var(--teal);}
 
   /* كان مستخدمًا بتبويب الشهادات لكنه غير معرَّف بهذه الصفحة */
@@ -779,25 +794,43 @@ async function renderSlots(){
     });
   }
 
-  // تصنيف يقلّل الازدحام: كل مجموعة في تبويب مستقل
+  // تقسيم زمني لا حسب الحالة: المرشد يفكّر بيومه لا بتصنيف
+  // مواعيده. الجلسة المنتهية تبقى أمامه ليكتب ملاحظاتها، لكنها
+  // لا تختلط بجلسات الأسبوع الماضي.
+  const dayKey = d => new Date(d).toLocaleDateString("en-CA");   // YYYY-MM-DD محلي
+  const today  = dayKey(now);
+
+  // الجلسات (محجوزة + منتهية) معًا: المرشد يتابع فرقه في مكان
+  // واحد، ويميّزها باللون. المواعيد الفارغة منفصلة لأنها إدارة
+  // جدول لا متابعة فرق.
   const groupOf = s => {
     const b = (s.mentor_bookings||[])[0];
     if(b && b.status === "cancelled") return "cancelled";
-    if(new Date(s.end_time) <= now)   return "past";
-    if(b)                              return "booked";
-    return "free";
+    if(b) return "sessions";                                  // محجوزة أو منتهية
+    return new Date(s.end_time) <= now ? "expired" : "free";
   };
-  const groups = { booked: [], free: [], past: [], cancelled: [] };
+  const groups = { sessions: [], free: [], expired: [], cancelled: [] };
   data.forEach(s => groups[groupOf(s)].push(s));
 
+  // الجلسات: القادمة أولًا ثم الأحدث انتهاءً
+  groups.sessions.sort((a, b) => {
+    const ea = new Date(a.end_time) <= now, eb = new Date(b.end_time) <= now;
+    if(ea !== eb) return ea ? 1 : -1;                         // غير المنتهية أولًا
+    return ea ? new Date(b.start_time) - new Date(a.start_time)
+              : new Date(a.start_time) - new Date(b.start_time);
+  });
+  groups.free     .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+  groups.expired  .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+  groups.cancelled.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
+
   const TABS = [
-    ["booked",    "محجوزة",   "calendar-check"],
-    ["free",      "متاحة",    "calendar-plus"],
-    ["past",      "منتهية",   "history"],
-    ["cancelled", "ملغاة",    "calendar-x"],
+    ["sessions",  "الجلسات",        "calendar-check"],
+    ["free",      "مواعيد متاحة",   "calendar-plus"],
+    ["expired",   "انقضت",          "calendar-x"],
+    ["cancelled", "ملغاة",          "circle-slash"],
   ];
-  if(!window._slotFilter || !groups[window._slotFilter]?.length){
-    window._slotFilter = TABS.find(t => groups[t[0]].length)?.[0] || "booked";
+  if(!window._slotFilter || !TABS.some(t => t[0] === window._slotFilter)){
+    window._slotFilter = TABS.find(t => groups[t[0]].length)?.[0] || "sessions";
   }
 
   document.getElementById("slot-filters").innerHTML = TABS.map(([k, label, icon]) => `
@@ -816,9 +849,15 @@ async function renderSlots(){
 
   box.innerHTML = shown.map(s => {
     const booking = (s.mentor_bookings||[])[0];
+    const _en = new Date(s.end_time), _st = new Date(s.start_time);
+    const rowCls =
+        (booking && booking.status === "cancelled") ? "sl-cancelled"
+      : (_en <= now)  ? (booking ? "sl-done" : "sl-expired")
+      : !booking      ? "sl-free"
+      : (_st <= now)  ? "sl-live" : "sl-booked";
     const submission = booking ? submissionsByTeam[booking.team_id] : null;
     return `
-    <div class="slot-row ${booking ? 'is-booked' : ''}">
+    <div class="slot-row ${rowCls}">
       <div style="flex:1">
         <div class="slot-time"><i data-lucide="calendar-clock"></i> ${fmtDate(s.start_time)}</div>
         <div class="slot-meta">${esc(s.location || (s.is_online ? "عبر الإنترنت" : ""))}</div>
@@ -855,12 +894,17 @@ async function renderSlots(){
       </div>
       <div style="text-align:left">
         ${(() => {
-          // الحالة من الوقت لا من إجراء المرشد — أقلّ خطوات وأدقّ
-          if(!booking) return '<span class="badge badge-gray">متاح للحجز</span>';
-          if(booking.status === "cancelled") return '<span class="badge badge-red">ملغاة</span>';
+          // الوقت يُفحص أولًا: الموعد الذي مضى وقته لم يعد متاحًا
+          // للحجز حتى لو لم يحجزه أحد — كان يظهر «متاح» بالخطأ.
           const now = new Date(), en = new Date(s.end_time), st = new Date(s.start_time);
-          if(en <= now)  return '<span class="badge badge-gray">منتهية</span>';
-          if(st <= now)  return '<span class="badge badge-gold">جارية الآن</span>';
+          if(booking && booking.status === "cancelled")
+            return '<span class="badge badge-red">ملغاة</span>';
+          if(en <= now)
+            return booking
+              ? '<span class="badge badge-gray">منتهية</span>'
+              : '<span class="badge badge-gray">انقضى وقتها</span>';
+          if(!booking) return '<span class="badge badge-teal">متاح للحجز</span>';
+          if(st <= now) return '<span class="badge badge-gold">جارية الآن</span>';
           return '<span class="badge badge-green">محجوزة</span>';
         })()}
         ${booking && booking.status === "pending" ? `<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-primary btn-sm" onclick="confirmBooking('${booking.id}')">تأكيد الحجز</button><button class="btn btn-outline btn-sm" style="color:var(--danger)" onclick="cancelBookingByMentor('${booking.id}')">إلغاء</button></div>` : ""}
@@ -1229,6 +1273,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r104</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r106</div>
 </body>
 </html>
