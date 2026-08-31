@@ -103,8 +103,30 @@
   .bar-track{height:8px;background:var(--border-light,#EEF0F5);border-radius:5px;overflow:hidden}
   /* حالة موعد الإرشاد */
   .bk-row{position:relative;padding-right:14px;border-right:3px solid transparent}
-  .bk-tag{position:absolute;top:10px;left:0;font-size:11px;font-weight:700;
-          padding:2px 9px;border-radius:999px}
+  .bk-tag{font-size:11px;font-weight:700;padding:3px 11px;border-radius:8px}
+  /* بطاقة الموعد — الشارة والإلغاء في صف مستقل لا يتراكبان */
+  .bk-card{border:1px solid var(--border);border-right-width:3px;border-radius:11px;
+    padding:13px 15px;margin-bottom:10px;background:#fff}
+  body.dark .bk-card{background:rgba(255,255,255,.04)}
+  .bk-head{display:flex;align-items:center;justify-content:space-between;
+    gap:10px;margin-bottom:9px;min-height:22px}
+  .bk-cancel{background:none;border:0;padding:0;cursor:pointer;
+    font-family:inherit;font-size:12px;font-weight:600;color:#C0392B}
+  .bk-cancel:hover{text-decoration:underline}
+  /* تبويبات الإرشاد */
+  .mtabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .mtab{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:11px;
+    border:1px solid var(--border);background:#fff;color:var(--muted);
+    font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:.18s}
+  .mtab:hover{border-color:var(--teal);color:var(--navy)}
+  .mtab.active{background:var(--navy);border-color:var(--navy);color:#fff}
+  .mtab i,.mtab svg{width:15px;height:15px}
+  .mtab .cnt{background:rgba(0,0,0,.08);padding:1px 8px;border-radius:20px;font-size:11.5px}
+  .mtab.active .cnt{background:rgba(255,255,255,.2)}
+  body.dark .mtab{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14)}
+  body.dark .mtab.active{background:var(--teal);border-color:var(--teal);color:#001938}
+
+
   .bk-upcoming{border-right-color:var(--teal)}
   .bk-upcoming .bk-tag{background:rgba(0,189,196,.13);color:#0A7C82}
   .bk-live{border-right-color:#C9922A;background:rgba(201,146,42,.05)}
@@ -1827,6 +1849,7 @@ async function buildMentorsSection(){
   const { data: mentors, error } = await sb.from("mentor_profiles")
     .select("*").order("مواعيد_متاحة", { ascending: false });
 
+  window._mentorCount = (mentors || []).length;
   if(error || !mentors || !mentors.length) return "";
 
   const initials = n => (n || "؟").trim().charAt(0);
@@ -1873,6 +1896,11 @@ async function buildMentorsSection(){
     </p>
     <div class="mn-list">${mentors.map(row).join("")}</div>
   </div>`;
+}
+
+function setMentorView(k){
+  window._mentorView = k;
+  renderMentorshipTab(cachedMembership);
 }
 
 async function renderMentorshipTab(membership){
@@ -1926,8 +1954,13 @@ async function renderMentorshipTab(membership){
           : live                   ? ["جارية الآن", "bk-live"]
           : ["قادمة", "bk-upcoming"];
         return `
-        <div class="member-row bk-row ${cls}" style="align-items:flex-start">
-          <span class="bk-tag">${label}</span>
+        <div class="bk-card ${cls}">
+          <div class="bk-head">
+            <span class="bk-tag">${label}</span>
+            ${b.status !== "cancelled" && !sessionEnded
+              ? `<button class="bk-cancel" onclick="cancelMyMentorBooking('${b.id}')">إلغاء الحجز</button>`
+              : ""}
+          </div>
           <div>
             <strong>${fmtDate(b.mentor_slots?.start_time)}</strong> — ${esc(b.mentor_slots?.profiles?.full_name||"مرشد")}<br>
             <span class="hint">${esc(b.mentor_slots?.location || (b.mentor_slots?.is_online ? "عبر الإنترنت" : ""))}</span>
@@ -1942,10 +1975,6 @@ async function renderMentorshipTab(membership){
                 : renderRatingPrompt(b.id, b.mentor_slots?.mentor_user_id, team.id);
             })()}
             ${b.status === "completed" ? `<button class="btn-link" style="font-size:12px;margin-top:4px" onclick='bookFollowUpWithMentor("${b.mentor_slots?.mentor_user_id}", ${JSON.stringify(b.mentor_slots?.profiles?.full_name||"")})'>احجز موعد آخر مع نفس المرشد</button>` : ""}
-          </div>
-          <div style="text-align:left">
-            ${b.status !== "completed" && b.status !== "no_show_team" && b.status !== "no_show_mentor" ? `<div style="margin-top:6px"><button class="btn-link" style="color:var(--danger);font-size:12px" onclick="cancelMyMentorBooking('${b.id}')">إلغاء</button></div>` : ""}
-            ${b.status === "confirmed" && sessionEnded ? `<div style="margin-top:6px"><button class="btn-link" style="color:var(--danger);font-size:12px" onclick="markMentorNoShow('${b.id}')">المرشد لم يحضر</button></div>` : ""}
           </div>
         </div>`;
       }).join("")}
@@ -2050,7 +2079,34 @@ async function renderMentorshipTab(membership){
       </div>`;
 
   const mentorsHtml = await buildMentorsSection();
-  body.innerHTML = bookingHtml + rateReminder + followUpBanner + mentorsHtml + slotsHtml;
+  // ثلاثة أقسام في تبويبات بدل تكديسها رأسيًا — القائمة كانت
+  // تطول فيضيع ما تحتها.
+  const mv = window._mentorView || (cachedTeamBookings.length ? "mine" : "slots");
+  window._mentorView = mv;
+
+  const counts = {
+    mine:  cachedTeamBookings.filter(b => b.status !== "cancelled").length,
+    slots: displaySlots.length,
+    who:   window._mentorCount || 0
+  };
+  const NAV = [
+    ["mine",  "مواعيدك",         "calendar-check"],
+    ["slots", "المواعيد المتاحة", "calendar-plus"],
+    ["who",   "المرشدون",        "users-round"],
+  ];
+  const nav = `<div class="mtabs">${NAV.map(([k, label, icon]) => `
+    <button class="mtab ${mv === k ? "active" : ""}" onclick="setMentorView('${k}')">
+      <i data-lucide="${icon}"></i> ${label}
+      ${counts[k] ? `<span class="cnt">${counts[k]}</span>` : ""}
+    </button>`).join("")}</div>`;
+
+  const pane =
+      mv === "mine"  ? (bookingHtml || `<div class="card"><p class="hint">لا مواعيد محجوزة بعد — اختاروا موعدًا من «المواعيد المتاحة»</p></div>`)
+    : mv === "slots" ? (followUpBanner + slotsHtml)
+    :                  (mentorsHtml || `<div class="card"><p class="hint">لا مرشدين معتمدين بعد</p></div>`);
+
+  body.innerHTML = nav + rateReminder + pane;
+  if(window.lucide) lucide.createIcons();
   if(window.lucide) lucide.createIcons();
   renderMentorSlotsList(displaySlots, team.id, isRecommended);
 }
@@ -3078,6 +3134,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r136</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r137</div>
 </body>
 </html>
