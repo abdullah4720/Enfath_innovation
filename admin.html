@@ -4145,8 +4145,8 @@ async function renderCommittees(){
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-outline" style="width:auto" onclick="openFormCommitteesModal()">
             تشكيل تلقائي</button>
-          <button class="btn btn-outline" style="width:auto" onclick="openDistributeModal()">
-            توزيع على المشاريع</button>
+          <button class="btn btn-outline" style="width:auto" onclick="openAssignProjectsModal()">
+            إسناد المشاريع</button>
           <button class="btn btn-primary" style="width:auto" onclick="openCommitteeModal()">
             + لجنة جديدة</button>
         </div>
@@ -4190,6 +4190,77 @@ async function renderCommittees(){
   if(window.lucide) lucide.createIcons();
 }
 
+async function openAssignProjectsModal(){
+  const [coms, teams] = await Promise.all([
+    sb.from("judging_committees").select("id, name_ar, track_id, committee_members(id)"),
+    sb.from("teams").select("id, track_id, submissions(id)").eq("status","confirmed")
+  ]);
+
+  const ready = (coms.data || []).filter(c => (c.committee_members||[]).length);
+  const withProject = (teams.data || []).filter(t => (t.submissions||[]).length);
+
+  openModal(`
+    <h3>إسناد المشاريع على اللجان</h3>
+    <p class="hint" style="margin:0 0 14px">
+      تُسنَد مشاريع كل مسار للجان مساره بالتناوب. المسار بلا لجان خاصة
+      يأخذ من اللجان العامة.
+    </p>
+
+    <div class="fit-summary">
+      <div class="fit-row"><span>لجان جاهزة</span>
+        <span class="${ready.length ? "ok" : "no"}"><bdi>${ready.length}</bdi></span></div>
+      <div class="fit-row"><span>مشاريع مقدَّمة</span>
+        <span class="${withProject.length ? "ok" : "no"}"><bdi>${withProject.length}</bdi></span></div>
+    </div>
+
+    ${!ready.length ? `<div class="alert alert-error" style="margin-bottom:12px">
+      لا لجان بأعضاء — شكّل اللجان أولًا</div>` : ""}
+
+    <div class="field"><label>الجولة *</label>
+      <select id="ap-round">
+        ${(window._rounds||[]).map(r => `<option value="${r.id}">${esc(r.name_ar)}</option>`).join("")}
+      </select></div>
+
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="ap-replace">
+        <span>استبدال الإسنادات القائمة</span>
+      </label>
+      <p class="hint" style="margin-top:4px">
+        ما بدأ تحكيمه يُتخطّى دائمًا ولا يُمسّ
+      </p>
+    </div>
+
+    <div id="ap-alert" class="alert"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" ${!ready.length ? "disabled" : ""}
+        onclick="doAutoAssignProjects()">إسناد</button>
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+    </div>`);
+}
+
+async function doAutoAssignProjects(){
+  const alertBox = document.getElementById("ap-alert");
+  const { data, error } = await sb.rpc("auto_assign_projects", {
+    p_round_id: document.getElementById("ap-round").value,
+    p_replace:  document.getElementById("ap-replace").checked
+  });
+
+  if(error || !data?.success){
+    alertBox.className = "alert alert-error";
+    alertBox.textContent = data?.error || error?.message || "تعذّر الإسناد";
+    return;
+  }
+
+  logActivity("إسناد تلقائي للمشاريع", "judge_assignments", null, data);
+  closeModal();
+  showToast(
+    `أُسنِد ${data.projects_assigned} مشروعًا` +
+    (data.skipped_scored ? ` · تُخطّي ${data.skipped_scored} بدأ تحكيمه` : "")
+  );
+  renderCommittees();
+}
+
 async function openFormCommitteesModal(){
   const { data: fit } = await sb.from("judge_track_fit").select("*");
   const byTrack = {};
@@ -4202,7 +4273,8 @@ async function openFormCommitteesModal(){
   openModal(`
     <h3>تشكيل اللجان تلقائيًا</h3>
     <p class="hint" style="margin:0 0 14px">
-      يوزّع المحكّمين على لجان متوازنة، ويراعي ملاءمة تخصص كل محكّم للمسار
+      يوزّع المحكّمين على لجان متوازنة، ويراعي ملاءمة تخصص كل محكّم للمسار.
+      كل محكّم في لجنة واحدة فقط — اللجان تجتمع بالتزامن.
     </p>
 
     ${Object.keys(byTrack).length ? `
@@ -4425,53 +4497,7 @@ async function doAssignCommittee(committeeId){
   renderCommittees();
 }
 
-async function openDistributeModal(){
-  openModal(`
-    <h3>توزيع تلقائي</h3>
-    <p class="hint" style="margin:0 0 14px">
-      توزّع اللجان على المشاريع بالتناوب، فيتوزّع العبء بالتساوي
-    </p>
-    <div class="field"><label>الجولة *</label>
-      <select id="dt-round">
-        ${(window._rounds||[]).map(r => `<option value="${r.id}">${esc(r.name_ar)}</option>`).join("")}
-      </select></div>
-    <div class="field"><label>المسار</label>
-      <select id="dt-track">
-        <option value="">كل المسارات</option>
-        ${(window._tracks||[]).map(t => `<option value="${t.id}">${esc(t.name_ar)}</option>`).join("")}
-      </select></div>
-    <div class="field">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="dt-replace">
-        <span>استبدال الإسنادات القائمة (ما لم تُسجَّل له درجات)</span>
-      </label>
-    </div>
-    <div id="dt-alert" class="alert"></div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-primary" onclick="doAutoDistribute()">توزيع</button>
-      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
-    </div>`);
-}
 
-async function doAutoDistribute(){
-  const alertBox = document.getElementById("dt-alert");
-  const { data, error } = await sb.rpc("auto_distribute_committees", {
-    p_round_id: document.getElementById("dt-round").value,
-    p_track_id: document.getElementById("dt-track").value || null,
-    p_replace:  document.getElementById("dt-replace").checked
-  });
-
-  if(error || !data?.success){
-    alertBox.className = "alert alert-error";
-    alertBox.textContent = data?.error || error?.message || "تعذّر التوزيع";
-    return;
-  }
-
-  logActivity("توزيع تلقائي للجان", "judge_assignments", null, data);
-  closeModal();
-  showToast(`وُزّعت ${data.committees} لجنة على ${data.teams} مشروعًا`);
-  renderCommittees();
-}
 
 
 /* ---------------- سير التحكيم ---------------- */
@@ -8312,6 +8338,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r151</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r152</div>
 </body>
 </html>
