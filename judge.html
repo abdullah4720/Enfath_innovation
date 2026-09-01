@@ -133,6 +133,31 @@
   .pd-body{margin-top:9px;font-size:12.5px;line-height:1.85;color:var(--ink);
     overflow-wrap:break-word;word-break:break-word;max-width:100%}
   .pd-empty{font-size:12px;color:var(--muted);margin:10px 0 0}
+  /* دليل المعايير — ثابت أعلى الصفحة بدل التكرار في كل بطاقة */
+  .crit-guide{background:#fff;border:1px solid var(--border);border-radius:13px;
+    padding:13px 16px;margin-bottom:14px}
+  body.dark .crit-guide{background:rgba(255,255,255,.04)}
+  .crit-guide summary{cursor:pointer;list-style:none;display:block}
+  .crit-guide summary::-webkit-details-marker{display:none}
+  .cg-row{display:flex;align-items:center;gap:9px}
+  .cg-row i,.cg-row svg{width:17px;height:17px;color:var(--teal);flex-shrink:0;
+    margin-left:9px;margin-inline-end:9px}
+  .cg-title{font-size:14px;font-weight:700;color:var(--navy)}
+  .cg-count{flex:1;font-size:12px;color:var(--muted);margin-right:8px;margin-inline-start:8px}
+  .cg-more{font-size:11.5px;color:var(--teal);background:rgba(0,189,196,.1);
+    padding:3px 11px;border-radius:7px;font-weight:600;white-space:nowrap}
+  .crit-guide[open] .cg-more{visibility:hidden}
+  .cg-body{margin-top:12px;padding-top:12px;border-top:1px solid var(--border)}
+  .cg-item{padding:10px 0;border-bottom:1px solid var(--border);max-width:100%}
+  .cg-item:last-child{border-bottom:0;padding-bottom:0}
+  .cg-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;
+    flex-wrap:wrap}
+  .cg-name{font-size:13.5px;font-weight:600;color:var(--navy);min-width:0}
+  .cg-w{font-size:11.5px;color:var(--gold);font-weight:600;white-space:nowrap}
+  .cg-desc{font-size:12.5px;color:var(--muted);line-height:1.8;margin-top:5px;
+    overflow-wrap:break-word;word-break:break-word;max-width:100%}
+  .cg-item{max-width:100%;overflow:hidden}
+
 
   .project-card-file{display:inline-flex;align-items:center;gap:6px;background:#e6f7f3;color:var(--teal);font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:20px;text-decoration:none;}
 
@@ -171,7 +196,6 @@
   .criteria-row:last-of-type{border-bottom:none;}
   .criteria-row .c-name{font-size:13.5px;}
   .criteria-row .c-hint{font-size:11.5px; color:var(--muted);}
-  .criteria-row .c-desc{font-size:11.5px; color:var(--muted); margin-top:4px; line-height:1.6; max-width:340px;}
   .criteria-row input{width:100%; padding:9px; border:1px solid var(--border); border-radius:8px; text-align:center; font-family:inherit;}
 
   /* ---------------- شريط الفلترة ---------------- */
@@ -503,6 +527,36 @@ async function submitApplication(){
 /* ---------------- بطاقة اللجنة ---------------- */
 // المحكّم يحتاج معرفة زملائه في اللجنة: الجلسات تُعقد معًا،
 // والتنسيق بينهم أسهل حين يعرف من معه.
+
+/* ---------------- دليل المعايير ---------------- */
+// كان شرح كل معيار يتكرر داخل بطاقة كل مشروع — يطيلها بلا
+// فائدة. المعايير ثابتة للجولة، فمكانها الطبيعي أعلى الصفحة
+// مرة واحدة.
+
+function buildCriteriaGuide(){
+  if(!criteriaList.length) return "";
+  const total = criteriaList.reduce((a, c) => a + (c.weight || 0), 0);
+
+  return `
+    <details class="crit-guide">
+      <summary><span class="cg-row">
+        <i data-lucide="clipboard-list"></i>
+        <span class="cg-title">معايير التقييم</span>
+        <span class="cg-count"><bdi>${criteriaList.length}</bdi> معايير · <bdi>${total}</bdi>%</span>
+        <span class="cg-more">عرض التفاصيل</span>
+      </span></summary>
+      <div class="cg-body">
+        ${criteriaList.map(cr => `
+          <div class="cg-item">
+            <div class="cg-head">
+              <span class="cg-name">${esc(cr.name_ar)}</span>
+              <span class="cg-w"><bdi>${cr.weight}</bdi>% · من <bdi>${cr.max_score}</bdi></span>
+            </div>
+            ${cr.description ? `<div class="cg-desc">${esc(cr.description)}</div>` : ""}
+          </div>`).join("")}
+      </div>
+    </details>`;
+}
 
 async function buildCommitteeCard(committeeId){
   if(!committeeId) return "";
@@ -900,7 +954,7 @@ function renderJudgeCards(){
     </div>`;
 
   if(!visible.length){
-    main.innerHTML = (window._comCard || "") + bar + `<div class="card"><div class="empty-state">${
+    main.innerHTML = (window._comCard || "") + buildCriteriaGuide() + bar + `<div class="card"><div class="empty-state">${
       judgeFilter === "pending"
         ? "أنهيت تقييم كل الفرق المسندة لك. شكرًا لك."
         : "لا توجد فرق بهذا التصنيف"
@@ -912,7 +966,7 @@ function renderJudgeCards(){
   // نفتح البطاقة تلقائيًا لو كانت وحيدة فقط — غير ذلك تبقى مطويّة
   const autoOpen = visible.length === 1;
 
-  main.innerHTML = (window._comCard || "") + bar + visible.map(c => judgeCardHtml(c, autoOpen)).join("");
+  main.innerHTML = (window._comCard || "") + buildCriteriaGuide() + bar + visible.map(c => judgeCardHtml(c, autoOpen)).join("");
   if(window.lucide) lucide.createIcons();
   visible.forEach(c => { updateLiveTotal(c.a.team_id); });
 }
@@ -993,7 +1047,7 @@ function judgeCardHtml(c, autoOpen){
           ${criteriaList.map(cr => {
             const existing = teamScores.find(s => s.criteria_id === cr.id);
             return `<div class="criteria-row">
-              <div><div class="c-name">${esc(cr.name_ar)}</div><div class="c-hint">الوزن ${cr.weight}% · من ${cr.max_score}</div>${cr.description ? `<div class="c-desc">${esc(cr.description)}</div>` : ""}</div>
+              <div><div class="c-name">${esc(cr.name_ar)}</div><div class="c-hint">الوزن ${cr.weight}% · من ${cr.max_score}</div></div>
               <div class="score-scale" data-team="${a.team_id}" data-criteria="${cr.id}" data-max="${cr.max_score}">
                 ${Array.from({length: cr.max_score}, (_, i) => i+1).map(n => `
                   <button type="button" class="score-btn ${Number(existing?.score)===n?'selected':''}" ${isLocked?'disabled':''}
@@ -1136,6 +1190,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r125</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r126</div>
 </body>
 </html>
