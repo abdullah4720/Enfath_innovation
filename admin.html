@@ -181,6 +181,20 @@
   .pill-member .nm{font-weight:600}
   .pill-member .org{color:var(--muted);font-size:11px;margin-right:8px;
     margin-inline-start:8px}
+  /* مشاريع اللجنة */
+  .com-teams{margin-top:12px;background:rgba(0,189,196,.055);
+    border:1px solid rgba(0,189,196,.18);border-radius:11px;padding:11px 13px}
+  .ct-head{display:flex;align-items:center;gap:7px;font-size:12.5px;
+    font-weight:700;color:#0A7C82;margin-bottom:9px}
+  .ct-head i,.ct-head svg{width:15px;height:15px;flex-shrink:0;
+    margin-left:7px;margin-inline-end:7px}
+  .ct-list{display:flex;gap:7px;flex-wrap:wrap}
+  .ct-item{display:inline-block;background:#fff;border:1px solid var(--border);
+    border-radius:8px;padding:5px 11px;font-size:12px;white-space:nowrap}
+  .ct-item code{font-size:10.5px;color:var(--gold);margin-right:6px;
+    margin-inline-start:6px}
+  body.dark .ct-item{background:rgba(255,255,255,.06)}
+
   .fit-summary{background:var(--bg,#F7F8FA);border-radius:10px;padding:10px 14px;margin-bottom:16px}
   .fit-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:12.5px}
   .fit-row .ok{color:#0A7C82;font-weight:600}
@@ -4161,8 +4175,16 @@ async function renderCommittees(){
   const readyComs    = list.filter(c => (c.committee_members||[]).length).length;
 
   const { data: asg } = await sb.from("judge_assignments")
-    .select("team_id, committee_id", { count: "exact" });
+    .select("team_id, committee_id, round_id, teams(team_name, team_code)");
   const assignedTeams = new Set((asg||[]).map(a => a.team_id)).size;
+
+  // مشاريع كل لجنة: صف لكل محكّم، فنجمّعها بالفريق
+  const teamsByCommittee = {};
+  (asg || []).forEach(a => {
+    if(!a.committee_id) return;
+    (teamsByCommittee[a.committee_id] ||= new Map())
+      .set(a.team_id, a.teams);
+  });
 
   // submissions تحوي نسخة لكل حفظ — نعدّ الفرق الفريدة
   const { data: subs } = await sb.from("submissions").select("team_id");
@@ -4228,6 +4250,23 @@ async function renderCommittees(){
                   <button class="btn btn-danger btn-sm" onclick='deleteCommittee("${c.id}", ${JSON.stringify(c.name_ar)})'>حذف</button>
                 </div>
               </div>
+              ${(() => {
+                const tm = teamsByCommittee[c.id];
+                if(!tm || !tm.size) return `<p class="hint" style="margin:10px 0 0">
+                  لا مشاريع مسنَدة — استخدم «إسناد لمشاريع»</p>`;
+                return `<div class="com-teams">
+                  <div class="ct-head">
+                    <i data-lucide="folder-check"></i>
+                    <bdi>${tm.size}</bdi> مشروعًا مسنَدًا
+                  </div>
+                  <div class="ct-list">
+                    ${[...tm.values()].map(t => `<span class="ct-item">
+                      ${esc(t?.team_name || "—")}
+                      ${t?.team_code ? `<code>${esc(t.team_code)}</code>` : ""}
+                    </span>`).join("")}
+                  </div>
+                </div>`;
+              })()}
               ${mem.length ? `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
                 ${mem.map(m => `<span class="pill-member">
                   ${m.is_head ? '<span class="head">رئيس</span>' : ""}<span class="nm">${esc(m.profiles?.full_name || "—")}</span>${m.profiles?.organization ? `<span class="org">${esc(m.profiles.organization)}</span>` : ""}
@@ -8387,6 +8426,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r153</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r154</div>
 </body>
 </html>
