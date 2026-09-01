@@ -165,6 +165,17 @@
   .grid-stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:26px;}
   .stat-card{background:var(--border-light); border-radius:12px; padding:20px 20px; border:none;}
   .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}
+  /* التنبيهات — كانت مستخدمة في 40 موضعًا بلا تعريف */
+  .alert{padding:11px 14px;border-radius:10px;font-size:13px;line-height:1.7;
+    border:1px solid transparent;margin-bottom:12px}
+  .alert:empty{display:none;margin:0;padding:0;border:0}
+  .alert-error{background:#FDECEB;border-color:rgba(192,57,43,.25);color:#A93226}
+  .alert-success{background:#E6F7F3;border-color:rgba(0,189,196,.28);color:#0A7C82}
+  .alert-warn{background:#FBF3E2;border-color:rgba(201,146,42,.35);color:#8A6A1E}
+  body.dark .alert-error{background:rgba(192,57,43,.14);color:#F0938A}
+  body.dark .alert-success{background:rgba(0,189,196,.14);color:#5FE8EC}
+  body.dark .alert-warn{background:rgba(201,146,42,.14);color:#E8BA63}
+
   /* لجان التحكيم */
   .judge-picker{max-height:230px;overflow-y:auto;border:1px solid var(--border);
     border-radius:10px;padding:8px}
@@ -4278,14 +4289,42 @@ async function renderCommittees(){
   if(window.lucide) lucide.createIcons();
 }
 
+async function makeAllGeneral(){
+  // اللجنة المرتبطة بمسار لا تحكّم غيره، فيبقى مشروع بلا لجنة.
+  // تحويلها عامة يضمن تغطية كل المسارات.
+  if(!confirm("جعل كل اللجان عامة؟\n\nستحكّم كل المسارات بدل مسار واحد — يضمن ألّا يبقى مشروع بلا لجنة.")) return;
+
+  const { error } = await sb.from("judging_committees")
+    .update({ track_id: null })
+    .not("track_id", "is", null);
+
+  if(error){ showToast(error.message, true); return; }
+  logActivity("تحويل اللجان إلى عامة", "judging_committees", null);
+  showToast("صارت كل اللجان عامة");
+  renderCommittees();
+}
+
 async function openAssignProjectsModal(){
   const [coms, teams] = await Promise.all([
     sb.from("judging_committees").select("id, name_ar, track_id, committee_members(id)"),
-    sb.from("teams").select("id, track_id, submissions(id)").eq("status","confirmed")
+    sb.from("teams").select("id, track_id, status, submissions(id)").eq("status","confirmed")
   ]);
 
   const ready = (coms.data || []).filter(c => (c.committee_members||[]).length);
   const withProject = (teams.data || []).filter(t => (t.submissions||[]).length);
+
+  // لماذا لا تُسنَد كل المشاريع؟ نكشف الأسباب قبل التنفيذ
+  const all = teams.data || [];
+  const blockers = {
+    noProject: all.filter(t => !(t.submissions||[]).length).length,
+    noTrack:   withProject.filter(t => !t.track_id).length,
+  };
+  const comTracks = new Set((coms.data||[]).filter(c => (c.committee_members||[]).length)
+                             .map(c => c.track_id));
+  const hasGeneral = comTracks.has(null);
+  blockers.noCommittee = hasGeneral ? 0
+    : withProject.filter(t => t.track_id && !comTracks.has(t.track_id)).length;
+  const assignable = withProject.length - blockers.noTrack - blockers.noCommittee;
 
   openModal(`
     <h3>إسناد المشاريع على اللجان</h3>
@@ -4299,7 +4338,17 @@ async function openAssignProjectsModal(){
         <span class="${ready.length ? "ok" : "no"}"><bdi>${ready.length}</bdi></span></div>
       <div class="fit-row"><span>مشاريع مقدَّمة</span>
         <span class="${withProject.length ? "ok" : "no"}"><bdi>${withProject.length}</bdi></span></div>
+      <div class="fit-row"><span>قابلة للإسناد</span>
+        <span class="${assignable > 0 ? "ok" : "no"}"><bdi>${assignable}</bdi></span></div>
     </div>
+
+    ${(blockers.noProject || blockers.noTrack || blockers.noCommittee) ? `
+      <div class="alert alert-warn" style="margin-bottom:12px;font-size:12.5px">
+        <strong>مشاريع لن تُسنَد:</strong><br>
+        ${blockers.noProject ? `• <bdi>${blockers.noProject}</bdi> فريقًا لم يقدّم مشروعًا<br>` : ""}
+        ${blockers.noTrack ? `• <bdi>${blockers.noTrack}</bdi> فريقًا بلا مسار محدَّد<br>` : ""}
+        ${blockers.noCommittee ? `• <bdi>${blockers.noCommittee}</bdi> فريقًا مساره بلا لجنة — أنشئ لجنة عامة أو للمسار` : ""}
+      </div>` : ""}
 
     ${!ready.length ? `<div class="alert alert-error" style="margin-bottom:12px">
       لا لجان بأعضاء — شكّل اللجان أولًا</div>` : ""}
@@ -4386,11 +4435,12 @@ async function openFormCommitteesModal(){
 
     <div class="field">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-        <input type="checkbox" id="fc-per-track" checked>
+        <input type="checkbox" id="fc-per-track">
         <span>لجنة لكل مسار (يراعي التخصص)</span>
       </label>
       <p class="hint" style="margin-top:4px">
-        بإلغائها تُشكَّل لجان عامة تصلح لكل المسارات
+        <strong>موصى به الآن:</strong> اتركها فارغة لتُشكَّل لجان عامة تحكّم كل المسارات —
+        فلا يبقى مشروع بلا لجنة. فعّلها لاحقًا حين تكتمل بيانات التخصصات.
       </p>
     </div>
 
@@ -8002,9 +8052,39 @@ async function renderParticipants(){
         <br>تُطابَق العناوين بالكلمة المفتاحية، فـ«اسم قائد الفريق» و«الاسم الثلاثي» كلاهما يعمل.
         <br><strong>لاستيراد الفرق والمشاريع كاملة، استخدم تبويب «استيراد الفرق».</strong>
       </p>
-      <div class="field" style="margin:0"><label>بحث بالاسم أو البريد أو الجهة</label><input id="participants-search" placeholder="اكتب للبحث..." oninput="filterParticipantsView()"></div>
+      <div class="field" style="margin:0;flex:1;min-width:190px"><label>بحث بالاسم أو البريد أو الجهة</label>
+        <input id="participants-search" placeholder="اكتب للبحث..." oninput="filterParticipantsView()"></div>
+      <div class="field" style="margin:0;min-width:150px"><label>الفريق</label>
+        <select id="pf-team" onchange="filterParticipantsView()">
+          <option value="">الكل</option>
+          <option value="has">له فريق</option>
+          <option value="none">بلا فريق</option>
+          <option value="leader">قائد فريق</option>
+        </select></div>
+      <div class="field" style="margin:0;min-width:150px"><label>الحالة</label>
+        <select id="pf-status" onchange="filterParticipantsView()">
+          <option value="">الكل</option>
+          <option value="active">مفعّل</option>
+          <option value="pending">بانتظار التفعيل</option>
+          <option value="imported">مستورد لم يسجّل</option>
+        </select></div>
+      <div class="field" style="margin:0;min-width:150px"><label>الدور</label>
+        <select id="pf-role" onchange="filterParticipantsView()">
+          <option value="">الكل</option>
+          <option value="participant">مشارك فقط</option>
+          <option value="judge">محكّم</option>
+          <option value="mentor">مرشد</option>
+          <option value="admin">إداري / منسّق</option>
+        </select></div>
+      <div class="field" style="margin:0;min-width:150px"><label>المسار</label>
+        <select id="pf-track" onchange="filterParticipantsView()">
+          <option value="">الكل</option>
+        </select></div>
     </div>
-    <div class="card"><div id="participants-table">${skeletonRows(4)}</div></div>`;
+    <div class="card">
+      <p class="hint" id="pf-count" style="margin:0 0 10px"></p>
+      <div id="participants-table">${skeletonRows(4)}</div>
+    </div>`;
 
   const { data: profiles, error } = await sb.from("profiles")
     .select("id, full_name, email, phone, organization, category, city, age_range, gender, project_role, activation_status, created_at, user_roles!user_roles_user_id_fkey(roles(name_ar)), team_members(is_leader, teams(team_name, team_code, tracks(name_ar)))")
@@ -8025,6 +8105,7 @@ async function renderParticipants(){
       user_roles: [], team_members: [], _imported: true, _track: r.track_name
     }))
   ];
+  fillTrackFilter();
   filterParticipantsView();
 }
 async function handleRosterImport(event){
@@ -8083,14 +8164,64 @@ async function handleRosterImport(event){
   event.target.value = "";
 }
 function filterParticipantsView(){
-  const term = (document.getElementById("participants-search")?.value || "").trim().toLowerCase();
-  const filtered = allParticipantsCache.filter(p =>
-    !term ||
-    (p.full_name||"").toLowerCase().includes(term) ||
-    (p.email||"").toLowerCase().includes(term) ||
-    (p.organization||"").toLowerCase().includes(term)
-  );
+  const val  = id => document.getElementById(id)?.value || "";
+  const term = val("participants-search").trim().toLowerCase();
+  const fTeam = val("pf-team"), fStatus = val("pf-status");
+  const fRole = val("pf-role"), fTrack = val("pf-track");
+
+  const roleKeys = p => (p.user_roles || [])
+    .map(r => r.roles?.name_ar || "").join(" ");
+
+  const filtered = allParticipantsCache.filter(p => {
+    if(term && !(
+      (p.full_name||"").toLowerCase().includes(term) ||
+      (p.email||"").toLowerCase().includes(term) ||
+      (p.organization||"").toLowerCase().includes(term)
+    )) return false;
+
+    const mem = (p.team_members || [])[0];
+
+    if(fTeam === "has"    && !mem) return false;
+    if(fTeam === "none"   && mem)  return false;
+    if(fTeam === "leader" && !mem?.is_leader) return false;
+
+    if(fStatus === "active"   && p.activation_status !== "active") return false;
+    if(fStatus === "pending"  && p.activation_status !== "pending") return false;
+    if(fStatus === "imported" && !p._imported) return false;
+
+    if(fRole){
+      const rk = roleKeys(p);
+      if(fRole === "participant" && rk.trim()) return false;
+      if(fRole === "judge"  && !rk.includes("محكّم") && !rk.includes("محكم")) return false;
+      if(fRole === "mentor" && !rk.includes("مرشد")) return false;
+      if(fRole === "admin"  && !rk.includes("إداري") && !rk.includes("منسّق") && !rk.includes("منسق")) return false;
+    }
+
+    if(fTrack && mem?.teams?.tracks?.name_ar !== fTrack) return false;
+    return true;
+  });
+
+  // عدّاد النتائج: يخبر المستخدم أن الفلتر يعمل
+  const cnt = document.getElementById("pf-count");
+  if(cnt){
+    const total = allParticipantsCache.length;
+    cnt.textContent = filtered.length === total
+      ? `${total} مشاركًا`
+      : `${filtered.length} من ${total}`;
+  }
+
   renderParticipantsTable(filtered);
+}
+
+// نملأ قائمة المسارات من البيانات المحمّلة
+function fillTrackFilter(){
+  const sel = document.getElementById("pf-track");
+  if(!sel) return;
+  const tracks = [...new Set(allParticipantsCache
+    .map(p => (p.team_members||[])[0]?.teams?.tracks?.name_ar)
+    .filter(Boolean))].sort();
+  sel.innerHTML = `<option value="">الكل</option>` +
+    tracks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
 }
 function renderParticipantsTable(data){
   const box = document.getElementById("participants-table");
@@ -8426,6 +8557,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r154</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r157</div>
 </body>
 </html>

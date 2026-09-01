@@ -830,10 +830,10 @@ async function renderSlots(){
   const groupOf = s => {
     const b = (s.mentor_bookings||[])[0];
     if(b && b.status === "cancelled") return "cancelled";
-    if(b) return "sessions";                                  // محجوزة أو منتهية
+    if(b) return b.held_at ? "done" : "sessions";   // المؤكَّدة تنتقل للمنجزة
     return new Date(s.end_time) <= now ? "expired" : "free";
   };
-  const groups = { sessions: [], free: [], expired: [], cancelled: [] };
+  const groups = { sessions: [], done: [], free: [], expired: [], cancelled: [] };
   data.forEach(s => groups[groupOf(s)].push(s));
 
   // الجلسات: القادمة أولًا ثم الأحدث انتهاءً
@@ -843,15 +843,17 @@ async function renderSlots(){
     return ea ? new Date(b.start_time) - new Date(a.start_time)
               : new Date(a.start_time) - new Date(b.start_time);
   });
+  groups.done     .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
   groups.free     .sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
   groups.expired  .sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
   groups.cancelled.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
 
   const TABS = [
-    ["sessions",  "الجلسات",        "calendar-check"],
-    ["free",      "مواعيد متاحة",   "calendar-plus"],
-    ["expired",   "انتهت",          "calendar-x"],
-    ["cancelled", "ملغاة",          "circle-slash"],
+    ["sessions",  "الجلسات",            "calendar-check"],
+    ["done",      "استشارات منجزة",     "circle-check"],
+    ["free",      "مواعيد متاحة",       "calendar-plus"],
+    ["expired",   "انتهت",              "calendar-x"],
+    ["cancelled", "ملغاة",              "circle-slash"],
   ];
   if(!window._slotFilter || !TABS.some(t => t[0] === window._slotFilter)){
     window._slotFilter = TABS.find(t => groups[t[0]].length)?.[0] || "sessions";
@@ -1315,6 +1317,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r114</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r115</div>
 </body>
 </html>
