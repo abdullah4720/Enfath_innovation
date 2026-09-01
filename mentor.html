@@ -767,7 +767,7 @@ function setSlotFilter(k){
 async function renderSlots(){
   const main = document.getElementById("main-content");
   main.innerHTML = `
-    <div id="slots-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px"></div>
+    <div id="slots-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px"></div>
     <div class="subtabs" id="slot-filters"></div>
     <div class="card"><div id="slots-list">جارٍ التحميل...</div></div>`;
 
@@ -780,16 +780,28 @@ async function renderSlots(){
   if(error){ box.innerHTML = `<div class="empty-state">خطأ: ${esc(error.message)}</div>`; return; }
 
   // إحصائيات سريعة — البند 4: عدد الجلسات المغلقة
-  const allBookings = data.flatMap(s => s.mentor_bookings || []);
-  const closedCount = allBookings.filter(b => b.status === "completed").length;
-  const upcomingCount = allBookings.filter(b => b.status === "confirmed" && data.find(s => (s.mentor_bookings||[])[0]?.id === b.id && new Date(s.end_time) > new Date())).length;
-  document.getElementById("slots-stats").innerHTML = `
-    <div class="stat-card"><div class="num">${data.length}</div><div class="label">إجمالي المواعيد</div></div>
-    <div class="stat-card"><div class="num">${allBookings.filter(b=>b.status==="confirmed"||b.status==="pending").length}</div><div class="label">قادمة / بانتظار التأكيد</div></div>
-    <div class="stat-card"><div class="num" style="color:var(--teal)">${closedCount}</div><div class="label">جلسات مغلقة</div></div>
-  `;
-
   const now = new Date();
+
+  // العدّادات من الوقت لا من status: الحالة تبقى confirmed بعد
+  // انقضاء الموعد، والقديم كان يعدّ المنتهية ضمن «القادمة».
+  // و«جلسات مغلقة» كانت صفرًا دائمًا بعد إلغاء زر الإغلاق.
+  let cUpcoming = 0, cHeld = 0, cPending = 0, cFree = 0;
+  data.forEach(sl => {
+    const b  = (sl.mentor_bookings || [])[0];
+    const en = new Date(sl.end_time);
+    if(b && b.status === "cancelled") return;
+    if(!b){ if(en > now) cFree++; return; }
+    if(en > now)        cUpcoming++;
+    else if(b.held_at)  cHeld++;
+    else                cPending++;
+  });
+
+  document.getElementById("slots-stats").innerHTML = `
+    <div class="stat-card"><div class="num">${cUpcoming}</div><div class="label">جلسات قادمة</div></div>
+    <div class="stat-card"><div class="num" style="color:var(--teal)">${cHeld}</div><div class="label">تمت الاستشارة</div></div>
+    <div class="stat-card"><div class="num" style="${cPending ? "color:var(--gold)" : ""}">${cPending}</div><div class="label">تنتظر تأكيدك</div></div>
+    <div class="stat-card"><div class="num">${cFree}</div><div class="label">مواعيد متاحة</div></div>
+  `;
 
   if(!data.length){ box.innerHTML = `<div class="empty-state">لا توجد مواعيد مضافة بعد — أضف موعدك الأول من التبويب الثاني</div>`; return; }
 
@@ -1303,6 +1315,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r113</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r114</div>
 </body>
 </html>
