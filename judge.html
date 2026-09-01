@@ -18,6 +18,30 @@
     --bg:#0d1520; --card:#151f30; --ink:#e5e9f0; --muted:#8b96a8; --border:#26324a; --border-light:#1c2536;
   }
   body.dark .stat-card, body.dark .card{ color:var(--ink); }
+  /* بطاقة اللجنة */
+  .com-card{margin-bottom:16px;border-right:3px solid var(--teal)}
+  .cc-head{display:flex;align-items:center;margin-bottom:12px}
+  .cc-head i,.cc-head svg{width:22px;height:22px;color:var(--teal);flex-shrink:0;
+    margin-left:12px;margin-inline-end:12px}
+  .cc-title{font-size:16px;font-weight:700;color:var(--navy)}
+  .cc-sub{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .cc-desc{font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.7}
+  .cc-members{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px}
+  .cc-member{display:flex;align-items:center;background:var(--bg,#F7F9FB);
+    border:1px solid var(--border);border-radius:11px;padding:10px 12px}
+  .cc-member.me{background:rgba(0,189,196,.08);border-color:rgba(0,189,196,.3)}
+  .cc-ava{width:34px;height:34px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--teal);color:#001938;font-weight:800;font-size:14px;
+    margin-left:10px;margin-inline-end:10px}
+  .cc-info{display:flex;flex-direction:column;min-width:0}
+  .cc-name{font-size:13.5px;font-weight:600;color:var(--navy)}
+  .cc-spec{font-size:11.5px;color:var(--muted);margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cc-tag{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:6px;
+    background:rgba(201,146,42,.16);color:#8A6A1E;margin-right:6px;margin-inline-start:6px}
+  .cc-tag.me{background:rgba(0,189,196,.18);color:#0A7C82}
+
   body.dark input, body.dark select, body.dark textarea{
     background:#0f1826 !important; color:var(--ink) !important; border-color:var(--border) !important;
   }
@@ -462,6 +486,54 @@ async function submitApplication(){
   setTimeout(() => location.reload(), 1600);
 }
 
+/* ---------------- بطاقة اللجنة ---------------- */
+// المحكّم يحتاج معرفة زملائه في اللجنة: الجلسات تُعقد معًا،
+// والتنسيق بينهم أسهل حين يعرف من معه.
+
+async function buildCommitteeCard(committeeId){
+  if(!committeeId) return "";
+
+  const { data: com, error } = await sb.from("judging_committees")
+    .select("name_ar, description, tracks(name_ar), committee_members(is_head, profiles(id, full_name, specialization, organization))")
+    .eq("id", committeeId).maybeSingle();
+
+  if(error || !com) return "";
+
+  const mem = com.committee_members || [];
+  const me  = currentUser.id;
+
+  return `
+    <div class="card com-card">
+      <div class="cc-head">
+        <i data-lucide="users-round"></i>
+        <div>
+          <div class="cc-title">${esc(com.name_ar)}</div>
+          <div class="cc-sub">
+            ${com.tracks?.name_ar ? esc(com.tracks.name_ar) : "كل المسارات"} ·
+            <bdi>${mem.length}</bdi> محكّمًا
+          </div>
+        </div>
+      </div>
+      ${com.description ? `<p class="cc-desc">${esc(com.description)}</p>` : ""}
+      <div class="cc-members">
+        ${mem.map(m => {
+          const p = m.profiles || {};
+          const isMe = p.id === me;
+          return `<div class="cc-member ${isMe ? "me" : ""}">
+            <span class="cc-ava">${esc((p.full_name || "؟").trim().charAt(0))}</span>
+            <span class="cc-info">
+              <span class="cc-name">${esc(p.full_name || "—")}
+                ${m.is_head ? '<span class="cc-tag">رئيس اللجنة</span>' : ""}
+                ${isMe ? '<span class="cc-tag me">أنت</span>' : ""}
+              </span>
+              ${p.specialization ? `<span class="cc-spec">${esc(p.specialization)}</span>` : ""}
+            </span>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>`;
+}
+
 async function showContent(){
   document.getElementById("auth-gate-screen").style.display = "none";
   document.getElementById("content-screen").style.display = "block";
@@ -730,12 +802,15 @@ async function loadAssignments(){
   criteriaList = criteria || [];
 
   const { data: assignments, error } = await sb.from("judge_assignments")
-    .select("id, has_conflict, conflict_reason, team_id, teams(team_name, team_code, tracks(name_ar))")
+    .select("id, has_conflict, conflict_reason, team_id, committee_id, teams(team_name, team_code, tracks(name_ar))")
     .eq("judge_user_id", currentUser.id)
     .eq("round_id", round.id);
 
   if(error){ main.innerHTML = `<div class="card"><div class="empty-state">خطأ: ${esc(error.message)}</div></div>`; return; }
   if(!assignments.length){ main.innerHTML = `<div class="card"><div class="empty-state">لم يتم تعيين أي فرق لك بهذه الجولة بعد</div></div>`; return; }
+
+  // بطاقة اللجنة تُبنى هنا (داخل async) وتُقرأ عند الرسم
+  window._comCard = await buildCommitteeCard(assignments[0]?.committee_id);
 
   const { data: myScores } = await sb.from("scores").select("*").eq("judge_user_id", currentUser.id).eq("round_id", round.id);
 
@@ -804,6 +879,7 @@ function renderJudgeCards(){
     return true;
   });
 
+
   const bar = `<div class="filter-bar">
       <button class="filter-chip ${judgeFilter==='pending'?'active':''}" onclick="setJudgeFilter('pending')">بانتظار التقييم (${pendingCount})</button>
       <button class="filter-chip ${judgeFilter==='done'?'active':''}" onclick="setJudgeFilter('done')">تم التقييم (${doneCount})</button>
@@ -811,7 +887,7 @@ function renderJudgeCards(){
     </div>`;
 
   if(!visible.length){
-    main.innerHTML = bar + `<div class="card"><div class="empty-state">${
+    main.innerHTML = (window._comCard || "") + bar + `<div class="card"><div class="empty-state">${
       judgeFilter === "pending"
         ? "أنهيت تقييم كل الفرق المسندة لك. شكرًا لك."
         : "لا توجد فرق بهذا التصنيف"
@@ -823,7 +899,7 @@ function renderJudgeCards(){
   // نفتح البطاقة تلقائيًا لو كانت وحيدة فقط — غير ذلك تبقى مطويّة
   const autoOpen = visible.length === 1;
 
-  main.innerHTML = bar + visible.map(c => judgeCardHtml(c, autoOpen)).join("");
+  main.innerHTML = (window._comCard || "") + bar + visible.map(c => judgeCardHtml(c, autoOpen)).join("");
   if(window.lucide) lucide.createIcons();
   visible.forEach(c => { if(!c.a.has_conflict) updateLiveTotal(c.a.team_id); });
 }
@@ -1047,6 +1123,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r121</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r122</div>
 </body>
 </html>
