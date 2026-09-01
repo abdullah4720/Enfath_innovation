@@ -4162,7 +4162,7 @@ async function renderCommittees(){
   body.innerHTML = `<div class="card"><p class="hint">جارٍ التحميل...</p></div>`;
 
   const [coms, judges, tracks, rounds] = await Promise.all([
-    sb.from("judging_committees").select("*, committee_members(id, is_head, profiles(id, full_name, organization))").order("name_ar"),
+    sb.from("judging_committees").select("*, committee_members(id, profiles(id, full_name, organization))").order("name_ar"),
     sb.from("user_roles").select("user_id, profiles!user_roles_user_id_fkey(id, full_name, organization), roles!inner(key)").eq("roles.key","judge"),
     sb.from("tracks").select("id,name_ar").eq("is_active", true).order("display_order"),
     sb.from("judging_rounds").select("id,name_ar").eq("is_active", true).order("round_order")
@@ -4189,17 +4189,24 @@ async function renderCommittees(){
     .select("team_id, committee_id, round_id, teams(team_name, team_code)");
   const assignedTeams = new Set((asg||[]).map(a => a.team_id)).size;
 
-  // مشاريع كل لجنة: صف لكل محكّم، فنجمّعها بالفريق
+  // مشاريع كل لجنة: صف لكل محكّم، فنجمّعها بالفريق.
+  // الإسنادات بلا committee_id من التوزيع القديم — نعرضها
+  // منفصلة بدل تجاهلها، وإلا بدت الصفحة فارغة بلا سبب.
   const teamsByCommittee = {};
+  const orphanTeams = new Map();
   (asg || []).forEach(a => {
-    if(!a.committee_id) return;
-    (teamsByCommittee[a.committee_id] ||= new Map())
-      .set(a.team_id, a.teams);
+    if(a.committee_id){
+      (teamsByCommittee[a.committee_id] ||= new Map()).set(a.team_id, a.teams);
+    } else {
+      orphanTeams.set(a.team_id, a.teams);
+    }
   });
 
   // submissions تحوي نسخة لكل حفظ — نعدّ الفرق الفريدة
   const { data: subs } = await sb.from("submissions").select("team_id");
   const projectCount = new Set((subs || []).map(x => x.team_id)).size;
+
+  window._orphanTeams = [...orphanTeams.values()];
 
   const step = (n, title, done, desc, actions) => `
     <div class="jstep ${done ? "done" : ""}">
@@ -4231,6 +4238,14 @@ async function renderCommittees(){
           : `<bdi>${projectCount}</bdi> مشروعًا بانتظار الإسناد`,
         `<button class="btn ${readyComs ? "btn-primary" : "btn-outline"} btn-sm"
            ${!readyComs ? "disabled" : ""} onclick="openAssignProjectsModal()">إسناد تلقائي</button>`)}
+
+      ${orphanTeams.size ? `
+        <div class="alert alert-warn" style="margin-top:12px">
+          <bdi>${orphanTeams.size}</bdi> مشروعًا مسنَدًا بالتوزيع القديم (بلا لجنة).
+          التحكيم يعمل عليها، لكنها لا تظهر تحت أي لجنة.
+          <button class="btn btn-outline btn-sm" style="width:auto;margin-top:8px"
+            onclick="showOrphanAssignments()">عرضها</button>
+        </div>` : ""}
 
       ${step(3, "متابعة التحكيم", false,
         "حالة كل مشروع ومحكّم، وأين يتعثّر التحكيم",
@@ -4280,7 +4295,7 @@ async function renderCommittees(){
               })()}
               ${mem.length ? `<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
                 ${mem.map(m => `<span class="pill-member">
-                  ${m.is_head ? '<span class="head">رئيس</span>' : ""}<span class="nm">${esc(m.profiles?.full_name || "—")}</span>${m.profiles?.organization ? `<span class="org">${esc(m.profiles.organization)}</span>` : ""}
+                  <span class="nm">${esc(m.profiles?.full_name || "—")}</span>${m.profiles?.organization ? `<span class="org">${esc(m.profiles.organization)}</span>` : ""}
                 </span>`).join("")}
               </div>` : `<p class="hint" style="margin:10px 0 0">لا أعضاء — أضف محكّمين من «تعديل»</p>`}
             </div>`;
@@ -4302,6 +4317,27 @@ async function makeAllGeneral(){
   logActivity("تحويل اللجان إلى عامة", "judging_committees", null);
   showToast("صارت كل اللجان عامة");
   renderCommittees();
+}
+
+// الإسنادات القديمة: أُنشئت قبل نظام اللجان فلا committee_id لها
+function showOrphanAssignments(){
+  const list = window._orphanTeams || [];
+  openModal(`
+    <h3>مشاريع مسنَدة بلا لجنة</h3>
+    <p class="hint" style="margin:0 0 14px">
+      أُسنِدت بالتوزيع القديم قبل نظام اللجان. التحكيم يعمل عليها بشكل
+      طبيعي — لكنها لا تظهر تحت أي لجنة في الصفحة.
+    </p>
+    <div class="judge-picker">
+      ${list.map(t => `<div class="jp-item">
+        <span>${esc(t?.team_name || "—")}
+          ${t?.team_code ? `<span class="org">${esc(t.team_code)}</span>` : ""}</span>
+      </div>`).join("") || '<p class="hint">لا شيء</p>'}
+    </div>
+    <p class="hint" style="margin:14px 0">
+      لربطها باللجان: استخدم «إسناد تلقائي» مع تفعيل «استبدال الإسنادات القائمة».
+    </p>
+    <button class="btn btn-outline" onclick="closeModal()">إغلاق</button>`);
 }
 
 async function openAssignProjectsModal(){
@@ -4482,11 +4518,10 @@ async function openCommitteeModal(id){
   let c = { name_ar:"", description:"", track_id:"", is_active:true, committee_members:[] };
   if(id){
     const { data } = await sb.from("judging_committees")
-      .select("*, committee_members(judge_user_id, is_head)").eq("id", id).maybeSingle();
+      .select("*, committee_members(judge_user_id)").eq("id", id).maybeSingle();
     if(data) c = data;
   }
   const picked = new Set((c.committee_members||[]).map(m => m.judge_user_id));
-  const head   = (c.committee_members||[]).find(m => m.is_head)?.judge_user_id || "";
 
   openModal(`
     <h3>${id ? "تعديل اللجنة" : "لجنة جديدة"}</h3>
@@ -4510,12 +4545,6 @@ async function openCommitteeModal(id){
           </label>`).join("") || '<p class="hint">لا محكّمون معتمدون بعد</p>'}
       </div>
     </div>
-
-    <div class="field"><label>رئيس اللجنة (اختياري)</label>
-      <select id="cm-head">
-        <option value="">بلا رئيس</option>
-        ${(window._allJudges||[]).map(j => `<option value="${j.id}" ${head===j.id?"selected":""}>${esc(j.full_name)}</option>`).join("")}
-      </select></div>
 
     <div id="cm-alert" class="alert"></div>
     <div style="display:flex;gap:8px">
@@ -4551,11 +4580,10 @@ async function saveCommittee(id){
 
   // الأعضاء: نستبدلهم بالكامل — أبسط من المقارنة وأقل خطأً
   const chosen = [...document.querySelectorAll(".cm-judge:checked")].map(x => x.value);
-  const headId = document.getElementById("cm-head").value;
   await sb.from("committee_members").delete().eq("committee_id", cid);
   if(chosen.length){
     await sb.from("committee_members").insert(
-      chosen.map(j => ({ committee_id: cid, judge_user_id: j, is_head: j === headId }))
+      chosen.map(j => ({ committee_id: cid, judge_user_id: j }))
     );
   }
 
@@ -8557,6 +8585,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r157</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r159</div>
 </body>
 </html>
