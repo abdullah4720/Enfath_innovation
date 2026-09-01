@@ -185,6 +185,25 @@
   .fit-row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:12.5px}
   .fit-row .ok{color:#0A7C82;font-weight:600}
   .fit-row .no{color:var(--gold);font-weight:600}
+  /* مراحل التحكيم */
+  .jstep{display:flex;align-items:center;gap:14px;padding:15px 0;
+    border-bottom:1px solid var(--border)}
+  .jstep:last-of-type{border-bottom:0}
+  .jstep-num{width:32px;height:32px;border-radius:50%;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--bg,#F0F1F5);color:var(--muted);font-weight:700;font-size:14px}
+  .jstep.done .jstep-num{background:rgba(0,189,196,.15);color:#0A7C82}
+  .jstep-body{flex:1;min-width:0}
+  .jstep-title{font-weight:700;font-size:14.5px;color:var(--navy)}
+  .jstep.done .jstep-title{color:var(--navy)}
+  .jstep-desc{font-size:12.5px;color:var(--muted);margin-top:3px}
+  .jstep-actions{display:flex;gap:7px;flex-wrap:wrap;flex-shrink:0}
+  .jstep-actions .btn{width:auto}
+  @media (max-width:700px){
+    .jstep{flex-wrap:wrap}
+    .jstep-actions{width:100%;padding-right:46px}
+  }
+
 
 
   .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px;margin-bottom:14px}
@@ -4135,31 +4154,61 @@ async function renderCommittees(){
 
   const list = coms.data || [];
 
+  // مراحل مرقّمة: تشكيل → إسناد → متابعة. الخطوة المكتملة
+  // تُعلَّم، فيعرف المستخدم أين هو وما التالي.
+  const totalJudges  = window._allJudges.length;
+  const inCommittee  = list.reduce((a,c) => a + (c.committee_members||[]).length, 0);
+  const readyComs    = list.filter(c => (c.committee_members||[]).length).length;
+
+  const { data: asg } = await sb.from("judge_assignments")
+    .select("team_id, committee_id", { count: "exact" });
+  const assignedTeams = new Set((asg||[]).map(a => a.team_id)).size;
+
+  // submissions تحوي نسخة لكل حفظ — نعدّ الفرق الفريدة
+  const { data: subs } = await sb.from("submissions").select("team_id");
+  const projectCount = new Set((subs || []).map(x => x.team_id)).size;
+
+  const step = (n, title, done, desc, actions) => `
+    <div class="jstep ${done ? "done" : ""}">
+      <div class="jstep-num">${done ? "✓" : n}</div>
+      <div class="jstep-body">
+        <div class="jstep-title">${title}</div>
+        <div class="jstep-desc">${desc}</div>
+      </div>
+      <div class="jstep-actions">${actions}</div>
+    </div>`;
+
   body.innerHTML = `
     <div class="card" style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-        <div>
-          <h3 style="margin:0 0 4px">لجان التحكيم</h3>
-          <p class="hint" style="margin:0">شكّل اللجان أولًا، ثم وزّعها على المشاريع</p>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-outline" style="width:auto" onclick="openFormCommitteesModal()">
-            تشكيل تلقائي</button>
-          <button class="btn btn-outline" style="width:auto" onclick="openAssignProjectsModal()">
-            إسناد المشاريع</button>
-          <button class="btn btn-primary" style="width:auto" onclick="openCommitteeModal()">
-            + لجنة جديدة</button>
-        </div>
-      </div>
+      <h3 style="margin:0 0 4px">اللجان وتعيين المحكّمين</h3>
+      <p class="hint" style="margin:0 0 16px">
+        ثلاث خطوات: شكّل اللجان، ثم أسند إليها المشاريع، ثم تابع السير
+      </p>
+
+      ${step(1, "تشكيل اللجان", readyComs > 0,
+        readyComs
+          ? `<bdi>${readyComs}</bdi> لجنة · <bdi>${inCommittee}</bdi> من <bdi>${totalJudges}</bdi> محكّمًا موزّع`
+          : `<bdi>${totalJudges}</bdi> محكّمًا بانتظار التوزيع`,
+        `<button class="btn btn-outline btn-sm" onclick="openFormCommitteesModal()">تشكيل تلقائي</button>
+         <button class="btn btn-outline btn-sm" onclick="openCommitteeModal()">+ لجنة يدويًا</button>`)}
+
+      ${step(2, "إسناد المشاريع", assignedTeams > 0,
+        assignedTeams
+          ? `<bdi>${assignedTeams}</bdi> من <bdi>${projectCount}</bdi> مشروعًا مسنَد`
+          : `<bdi>${projectCount}</bdi> مشروعًا بانتظار الإسناد`,
+        `<button class="btn ${readyComs ? "btn-primary" : "btn-outline"} btn-sm"
+           ${!readyComs ? "disabled" : ""} onclick="openAssignProjectsModal()">إسناد تلقائي</button>`)}
+
+      ${step(3, "متابعة التحكيم", false,
+        "حالة كل مشروع ومحكّم، وأين يتعثّر التحكيم",
+        `<button class="btn btn-outline btn-sm" onclick="judgingTab='progress';renderJudging()">
+           فتح سير التحكيم</button>`)}
     </div>
 
     ${!list.length
-      ? `<div class="card"><div class="empty-state">لا لجان بعد — أنشئ لجنة وأضف إليها المحكّمين</div></div>`
-      : `<div class="stats-grid" style="margin-bottom:14px">
-           ${statCard(list.length, "لجنة")}
-           ${statCard(list.reduce((a,c) => a + (c.committee_members||[]).length, 0), "عضوية")}
-           ${statCard(window._allJudges.length, "محكّمًا معتمدًا")}
-         </div>
+      ? `<div class="card"><div class="empty-state">
+           لا لجان بعد — ابدأ بـ«تشكيل تلقائي» أعلاه</div></div>`
+      : `<h3 style="margin:18px 0 12px;font-size:16px">اللجان المشكَّلة</h3>
          ${list.map(c => {
             const mem = c.committee_members || [];
             const track = window._tracks.find(t => t.id === c.track_id);
@@ -4593,8 +4642,7 @@ async function renderJudging(){
     ${judgingWindowNote}
     <div class="tabs" id="judging-tabs">
       <div class="tab ${judgingTab==='rounds'?'active':''}" data-t="rounds">الجولات والمعايير</div>
-      <div class="tab ${judgingTab==='committees'?'active':''}" data-t="committees">لجان التحكيم</div>
-      <div class="tab ${judgingTab==='assignments'?'active':''}" data-t="assignments">تعيين المحكّمين</div>
+      <div class="tab ${judgingTab==='committees'?'active':''}" data-t="committees">اللجان والتعيين</div>
       <div class="tab ${judgingTab==='judges'?'active':''}" data-t="judges">المحكّمون</div>
       <div class="tab ${judgingTab==='results'?'active':''}" data-t="results">النتائج المجمّعة</div>
       <div class="tab ${judgingTab==='progress'?'active':''}" data-t="progress">سير التحكيم</div>
@@ -4612,6 +4660,7 @@ async function renderJudging(){
   });
 
   if(judgingTab === "committees") renderCommittees();
+  else if(judgingTab === "assignments") renderCommittees();
   else if(judgingTab === "progress") renderJudgingProgress();
   else if(judgingTab === "rounds") renderJudgingRounds();
   else if(judgingTab === "assignments") renderJudgingAssignments();
@@ -8338,6 +8387,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r152</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r153</div>
 </body>
 </html>
