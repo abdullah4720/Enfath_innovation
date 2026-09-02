@@ -1382,14 +1382,28 @@ async function renderSurveysTab(){
   const body = document.getElementById("dash-tab-body");
   body.innerHTML = `<div class="card">جاري التحميل...</div>`;
 
-  const { data: surveys, error } = await sb.from("surveys").select("*").eq("is_active", true);
+  // my_surveys يطبّق الشروط في القاعدة: مفعّل · داخل نافذته ·
+  // والمشارك حضر ما يكفي. فلا نعرض ما لا يستطيع تعبئته.
+  const { data: surveys, error } = await sb.from("my_surveys").select("*");
   if(error){ body.innerHTML = `<div class="card"><p class="hint">خطأ: ${esc(error.message)}</p></div>`; return; }
 
   const { data: myResponses } = await sb.from("survey_responses").select("survey_id").eq("user_id", currentUser.id);
   const answeredIds = new Set((myResponses||[]).map(r => r.survey_id));
 
   if(!surveys || !surveys.length){
-    body.innerHTML = `<div class="card"><h2>الاستبيانات</h2><p class="hint">لا توجد استبيانات متاحة حاليًا</p></div>`;
+    // نفرّق بين «لا استبيانات» و«لم تحضر بعد» — الرسالة الأولى
+    // تُوهم المشارك أن لا شيء مطلوب منه.
+    const { data: gate } = await sb.rpc("can_take_survey", { p_user_id: currentUser.id });
+    const { count: attended } = await sb.from("prep_attendance")
+      .select("id", { count: "exact", head: true }).eq("user_id", currentUser.id);
+
+    body.innerHTML = `<div class="card"><h2>الاستبيانات</h2>
+      <p class="hint">${gate === false
+        ? "يُتاح الاستبيان بعد حضور جلسات التحضير. سجّلوا حضوركم ثم عودوا."
+        : "لا توجد استبيانات متاحة حاليًا"}</p>
+      ${gate === false && attended ? `<p class="hint" style="margin-top:6px">
+        حضوركم المسجَّل: <bdi>${attended}</bdi> جلسة</p>` : ""}
+    </div>`;
     return;
   }
 
@@ -3134,6 +3148,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r137</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r138</div>
 </body>
 </html>
