@@ -1399,7 +1399,7 @@ async function renderSurveysTab(){
 
     body.innerHTML = `<div class="card"><h2>الاستبيانات</h2>
       <p class="hint">${gate === false
-        ? "يُتاح الاستبيان بعد حضور جلسات التحضير. سجّلوا حضوركم ثم عودوا."
+        ? "يُتاح الاستبيان بعد تسجيل حضوركم في جلسات التحضير."
         : "لا توجد استبيانات متاحة حاليًا"}</p>
       ${gate === false && attended ? `<p class="hint" style="margin-top:6px">
         حضوركم المسجَّل: <bdi>${attended}</bdi> جلسة</p>` : ""}
@@ -3148,6 +3148,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r138</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r139</div>
 </body>
 </html>
