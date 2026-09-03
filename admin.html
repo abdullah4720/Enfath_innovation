@@ -8208,7 +8208,8 @@ async function handleRosterImport(event){
   reader.readAsArrayBuffer(file);
   event.target.value = "";
 }
-function filterParticipantsView(){
+// منطق واحد للعرض والتصدير — فلا يختلف ما يُصدَّر عمّا يُرى
+function getFilteredParticipants(){
   const val  = id => document.getElementById(id)?.value || "";
   const term = val("participants-search").trim().toLowerCase();
   const fTeam = val("pf-team"), fStatus = val("pf-status");
@@ -8245,6 +8246,12 @@ function filterParticipantsView(){
     if(fTrack && mem?.teams?.tracks?.name_ar !== fTrack) return false;
     return true;
   });
+
+  return filtered;
+}
+
+function filterParticipantsView(){
+  const filtered = getFilteredParticipants();
 
   // عدّاد النتائج: يخبر المستخدم أن الفلتر يعمل
   const cnt = document.getElementById("pf-count");
@@ -8517,10 +8524,9 @@ async function safeRemoveParticipant(userId, userName){
 }
 
 function exportParticipantsExcel(){
-  const term = (document.getElementById("participants-search")?.value || "").trim().toLowerCase();
-  const filtered = allParticipantsCache.filter(p =>
-    !term || (p.full_name||"").toLowerCase().includes(term) || (p.email||"").toLowerCase().includes(term) || (p.organization||"").toLowerCase().includes(term)
-  );
+  // نفس منطق الفلترة المعروض: كان يعيد الفلترة بالبحث وحده،
+  // فيُصدَّر أكثر مما يراه المستخدم.
+  const filtered = getFilteredParticipants();
   const rows = filtered.map(p => {
     const membership = (p.team_members||[])[0];
     return {
@@ -8529,7 +8535,16 @@ function exportParticipantsExcel(){
       "الفئة العمرية": p.age_range || "", "الجنس": p.gender || "", "دور المشروع": p.project_role || "",
       "الأدوار": (p.user_roles||[]).map(r=>r.roles?.name_ar).join("، "),
       "الفريق": membership?.teams?.team_name || "", "رمز الفريق": membership?.teams?.team_code || "", "المسار": membership?.teams?.tracks?.name_ar || "",
-      "قائد فريق": membership?.is_leader ? "نعم" : "لا", "تاريخ التسجيل": fmtDate(p.created_at)
+      "قائد فريق": membership?.is_leader ? "نعم" : "لا",
+      "حالة الحساب":
+          p._imported                          ? "مستورد — لم يسجّل"
+        : p.activation_status === "active"      ? "مفعّل"
+        : p.activation_status === "pending"     ? "بانتظار التفعيل"
+        : p.activation_status === "reset_requested" ? "نافذة تعيين مفتوحة"
+        : "—",
+      "فعّل حسابه": p.activation_status === "active" ? "نعم" : "لا",
+      "تاريخ التفعيل": p.activated_at ? fmtDate(p.activated_at) : "",
+      "تاريخ التسجيل": fmtDate(p.created_at)
     };
   });
   const ws = XLSX.utils.json_to_sheet(rows);
