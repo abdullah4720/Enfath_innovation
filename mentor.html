@@ -20,6 +20,32 @@
     --bg:#0d1520; --card:#151f30; --ink:#e5e9f0; --muted:#8b96a8; --border:#26324a; --border-light:#1c2536;
   }
   body.dark .stat-card, body.dark .card{ color:var(--ink); }
+  /* كل المشاريع */
+  .ap-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .ap-card{margin-bottom:12px}
+  .ap-head{display:flex;align-items:flex-start;gap:12px}
+  .ap-title{font-size:15.5px;font-weight:700;color:var(--navy)}
+  .ap-meta{font-size:12.5px;color:var(--muted);margin-top:4px}
+  .ap-meta code{font-size:10.5px;color:var(--gold);background:#FBF3E2;
+    padding:2px 8px;border-radius:6px;margin-left:7px;margin-inline-end:7px}
+  .ap-fold{margin-top:11px;padding-top:11px;border-top:1px solid var(--border)}
+  .ap-fold summary{cursor:pointer;list-style:none;display:block;padding:2px 0}
+  .ap-fold summary::-webkit-details-marker{display:none}
+  .ap-row{display:flex;align-items:center;gap:7px;font-size:12.5px;
+    font-weight:600;color:var(--navy)}
+  .ap-row i,.ap-row svg{width:14px;height:14px;color:var(--teal);flex-shrink:0;
+    margin-left:7px;margin-inline-end:7px}
+  .ap-row>span:first-of-type{flex:1;min-width:0}
+  .ap-more{font-size:11px;color:var(--teal);background:rgba(0,189,196,.1);
+    padding:2px 10px;border-radius:6px;font-weight:600;white-space:nowrap}
+  .ap-fold[open] .ap-more{visibility:hidden}
+  .ap-body{margin-top:9px;font-size:12.5px;line-height:1.85;color:var(--ink);
+    white-space:pre-line;overflow-wrap:break-word;word-break:break-word}
+  .ap-file{display:inline-flex;align-items:center;gap:7px;margin-top:11px;
+    font-size:12.5px;color:var(--teal);text-decoration:none;font-weight:600}
+  .ap-file i,.ap-file svg{width:14px;height:14px;margin-left:7px;margin-inline-end:7px}
+  .ap-file:hover{text-decoration:underline}
+
   body.dark input, body.dark select, body.dark textarea{
     background:#0f1826 !important; color:var(--ink) !important; border-color:var(--border) !important;
   }
@@ -230,6 +256,7 @@
       <div class="tab" data-t="add"><i data-lucide="calendar-plus" style="width:14px;height:14px;vertical-align:-2px"></i> إضافة موعد جديد</div>
       <div class="tab" data-t="bulk"><i data-lucide="calendar-range" style="width:14px;height:14px;vertical-align:-2px"></i> إضافة مواعيد بالجملة</div>
       <div class="tab" data-t="profile"><i data-lucide="user-round" style="width:14px;height:14px;vertical-align:-2px"></i> ملفي الشخصي</div>
+      <div class="tab" data-t="projects"><i data-lucide="folder-open" style="width:14px;height:14px;vertical-align:-2px"></i> كل المشاريع</div>
       <div class="tab" data-t="certs"><i data-lucide="award" style="width:14px;height:14px;vertical-align:-2px"></i> شهاداتي</div>
     </div>
     <div id="main-content">جاري التحميل...</div>
@@ -247,6 +274,109 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let currentUser = null;
 let currentTab = "slots";
+
+/* ---------------- كل المشاريع ---------------- */
+// اطّلاع عام على مشاريع البرنامج. السياسة في القاعدة تسمح
+// للمرشد والمحكّم بقراءتها، والعرض هنا بلا درجات ولا ملاحظات.
+
+let allProjectsCache = [];
+
+async function renderAllProjects(){
+  const box = document.getElementById("main-content");
+  box.innerHTML = `<div class="card"><p class="hint">جارٍ التحميل...</p></div>`;
+
+  const { data, error } = await sb.from("submissions")
+    .select("id, title, description, file_url, version, submitted_at, team_id, teams(team_name, team_code, tracks(name_ar))")
+    .order("submitted_at", { ascending: false });
+
+  if(error){
+    box.innerHTML = `<div class="card"><p class="hint">تعذّر التحميل: ${esc(error.message)}</p></div>`;
+    return;
+  }
+
+  // نسخة واحدة لكل فريق: الأحدث
+  const latest = new Map();
+  (data || []).forEach(p => {
+    const cur = latest.get(p.team_id);
+    if(!cur || (p.version || 0) > (cur.version || 0)) latest.set(p.team_id, p);
+  });
+  allProjectsCache = [...latest.values()];
+
+  const tracks = [...new Set(allProjectsCache
+    .map(p => p.teams?.tracks?.name_ar).filter(Boolean))].sort();
+
+  box.innerHTML = `
+    <div class="card" style="margin-bottom:14px">
+      <div class="ap-bar">
+        <div class="field" style="margin:0;flex:1;min-width:190px">
+          <label>بحث بالمشروع أو الفريق أو رقمه</label>
+          <input id="ap-search" placeholder="اكتب للبحث..." oninput="filterAllProjects()">
+        </div>
+        <div class="field" style="margin:0;min-width:170px">
+          <label>المسار</label>
+          <select id="ap-track" onchange="filterAllProjects()">
+            <option value="">كل المسارات</option>
+            ${tracks.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <p class="hint" id="ap-count" style="margin:12px 0 0"></p>
+    </div>
+    <div id="ap-list"></div>`;
+
+  filterAllProjects();
+}
+
+function filterAllProjects(){
+  const term  = (document.getElementById("ap-search")?.value || "").trim().toLowerCase();
+  const track = document.getElementById("ap-track")?.value || "";
+
+  const shown = allProjectsCache.filter(p => {
+    if(track && p.teams?.tracks?.name_ar !== track) return false;
+    if(!term) return true;
+    return (p.title || "").toLowerCase().includes(term)
+        || (p.teams?.team_name || "").toLowerCase().includes(term)
+        || (p.teams?.team_code || "").toLowerCase().includes(term);
+  });
+
+  const cnt = document.getElementById("ap-count");
+  if(cnt) cnt.textContent = shown.length === allProjectsCache.length
+    ? `${allProjectsCache.length} مشروعًا`
+    : `${shown.length} من ${allProjectsCache.length}`;
+
+  const list = document.getElementById("ap-list");
+  if(!shown.length){
+    list.innerHTML = `<div class="card"><div class="empty-state">لا مشاريع مطابقة</div></div>`;
+    return;
+  }
+
+  list.innerHTML = shown.map(p => `
+    <div class="card ap-card">
+      <div class="ap-head">
+        <div style="flex:1;min-width:0">
+          <div class="ap-title">${esc(p.title || "بلا عنوان")}</div>
+          <div class="ap-meta">
+            ${p.teams?.team_code ? `<code>${esc(p.teams.team_code)}</code>` : ""}
+            ${esc(p.teams?.team_name || "—")}
+            ${p.teams?.tracks?.name_ar ? ` · ${esc(p.teams.tracks.name_ar)}` : ""}
+          </div>
+        </div>
+      </div>
+      ${p.description ? `
+        <details class="ap-fold">
+          <summary><span class="ap-row">
+            <i data-lucide="file-text"></i>
+            <span>وصف المشروع</span>
+            <span class="ap-more">عرض</span>
+          </span></summary>
+          <div class="ap-body">${esc(p.description)}</div>
+        </details>` : ""}
+      ${p.file_url ? `<a class="ap-file" href="${esc(p.file_url)}" target="_blank" rel="noopener">
+        <i data-lucide="paperclip"></i> فتح ملف المشروع</a>` : ""}
+    </div>`).join("");
+
+  if(window.lucide) lucide.createIcons();
+}
 
 function esc(str){
   if(str === null || str === undefined) return "";
@@ -473,6 +603,7 @@ function renderTab(){
   if(currentTab === "slots") renderSlots();
   else if(currentTab === "add") renderAddSlot();
   else if(currentTab === "bulk") renderBulkAddSlots();
+  else if(currentTab === "projects") renderAllProjects();
   else if(currentTab === "certs") renderMentorCertsTab();
   else renderMyProfile();
 }
@@ -1317,6 +1448,6 @@ async function saveNewSlot(){
   }, 800);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-31-r115</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r116</div>
 </body>
 </html>
