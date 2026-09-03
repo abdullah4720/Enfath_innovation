@@ -101,6 +101,21 @@
   .track-sep{background:var(--navy);color:#fff;padding:8px 16px;
     font-size:12.5px;font-weight:700;letter-spacing:.3px;
     position:sticky;right:0;z-index:2}
+  /* مؤشرات الميسّر */
+  .fx-stats{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .fx-card{background:var(--card,#fff);border:1px solid var(--border);border-radius:12px;
+    padding:12px 18px;text-align:center;min-width:96px}
+  .fx-card .n{font-size:22px;font-weight:800;color:var(--navy);line-height:1.15}
+  .fx-card .l{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .fx-act{margin-right:auto;margin-inline-start:auto}
+  .fx-act .btn{width:auto}
+  .fx-act i,.fx-act svg{width:14px;height:14px;margin-left:6px;margin-inline-end:6px}
+  /* زر تحضير الفريق دفعة */
+  .tm-all{background:none;border:1px solid var(--border);border-radius:7px;
+    padding:3px 11px;font-family:inherit;font-size:11px;font-weight:600;
+    color:var(--teal);cursor:pointer;margin-right:9px;margin-inline-start:9px}
+  .tm-all:hover{background:rgba(0,189,196,.1);border-color:var(--teal)}
+
 
   body.dark .tm-code{background:rgba(201,146,42,.18);color:#E8BA63}
 
@@ -414,6 +429,7 @@ async function renderAttendanceMatrix(){
   currentView = "matrix";
   const box = document.getElementById("main-view");
   box.innerHTML = mainModeSwitcherHtml() + `
+    <div id="fx-stats" class="fx-stats"></div>
     <div class="card" style="padding:14px 16px;margin-bottom:14px">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <input id="matrix-search" placeholder="بحث بالاسم أو المشروع أو الجوال..." style="flex:1;min-width:180px" oninput="renderMatrixTable()">
@@ -563,6 +579,29 @@ function renderMatrixTable(){
     (b.is_leader?1:0) - (a.is_leader?1:0) ||
     (a.profiles?.full_name||"").localeCompare(b.profiles?.full_name||"","ar")));
 
+  // ── المؤشرات: الميسّر يعرف حالته بلا عدّ يدوي ──
+  const sessIds = shown.map(x => x.id);
+  let total = 0, present = 0;
+  filtered.forEach(m => {
+    sessIds.forEach(sid => {
+      total++;
+      if(matrixAttendanceMap[`${sid}|${m.user_id}`]) present++;
+    });
+  });
+  const pct = total ? Math.round(present / total * 100) : 0;
+  const teamsCount = Object.keys(groups).length;
+
+  const st = document.getElementById("fx-stats");
+  if(st) st.innerHTML = `
+    <div class="fx-card"><div class="n">${pct}%</div><div class="l">نسبة الحضور</div></div>
+    <div class="fx-card"><div class="n" style="color:#0A7C82">${present}</div><div class="l">حاضر</div></div>
+    <div class="fx-card"><div class="n" style="${total - present ? "color:var(--gold)" : ""}">${total - present}</div><div class="l">غائب</div></div>
+    <div class="fx-card"><div class="n">${teamsCount}</div><div class="l">مشروعًا</div></div>
+    <div class="fx-act">
+      <button class="btn btn-outline btn-sm" onclick="exportAttendanceCSV()">
+        <i data-lucide="download"></i> تصدير الكشف</button>
+    </div>`;
+
   const NAME_W = 180, PHONE_W = 120;
 
   container.innerHTML = `<table style="min-width:${NAME_W + PHONE_W + 150 + shown.length*96}px;border-collapse:separate;border-spacing:0">
@@ -601,6 +640,9 @@ function renderMatrixTable(){
         return trackBar + `<tr>
             <td colspan="2" style="position:sticky;right:0;z-index:2;background:#eef1f6;padding:9px 14px;font-weight:800;font-size:13px;color:var(--navy);box-shadow:-1px 0 0 var(--border)">
               ${code ? `<span class="tm-code">${esc(code)}</span>` : ""}${esc(team)}
+              ${shown.length === 1
+                ? `<button class="tm-all" onclick='markTeamPresent("${shown[0].id}", ${JSON.stringify(rows.map(r => r.user_id))})'>الفريق كله حاضر</button>`
+                : ""}
             </td>
             <td colspan="${1 + shown.length}" style="background:#eef1f6;padding:9px 14px;font-size:11.5px;color:var(--muted)">
               ${esc(track)} · ${rows.length} أعضاء
@@ -638,6 +680,100 @@ const FAC_BADGE = {
   prep:  { label:"تحضيري", color:"#7C6FE0" },
   event: { label:"فعالية", color:"#C9922A" },
 };
+
+/* ---------------- تحضير الفريق دفعة ---------------- */
+// خمسة أعضاء = خمس ضغطات. زر واحد يختصرها.
+
+async function markTeamPresent(sessionId, userIds){
+  const ses = matrixSessions.find(x => x.id === sessionId);
+  if(ses && !ses.attendance_open){
+    alert(`التحضير مغلق لجلسة «${ses.title}». تفتحه الإدارة من لوحة التحكم.`);
+    return;
+  }
+
+  // من لم يُسجَّل بعد فقط — فلا نكرّر ولا نفشل على القيد الفريد
+  const missing = userIds.filter(u => !matrixAttendanceMap[`${sessionId}|${u}`]);
+  if(!missing.length){
+    showToastF("كل أعضاء الفريق حاضرون");
+    return;
+  }
+
+  const { error } = await sb.from("prep_attendance").insert(
+    missing.map(u => ({ session_id: sessionId, user_id: u }))
+  );
+  if(error){ alert("خطأ: " + error.message); return; }
+
+  missing.forEach(u => { matrixAttendanceMap[`${sessionId}|${u}`] = true; });
+  showToastF(`سُجّل حضور ${missing.length}`);
+  renderMatrixTable();
+}
+
+function showToastF(msg){
+  let t = document.getElementById("fx-toast");
+  if(!t){
+    t = document.createElement("div");
+    t.id = "fx-toast";
+    t.style.cssText = "position:fixed;bottom:22px;left:50%;transform:translateX(-50%);" +
+      "background:#001938;color:#fff;padding:11px 22px;border-radius:10px;" +
+      "font-size:13.5px;font-family:inherit;z-index:9999;box-shadow:0 4px 18px rgba(0,0,0,.2)";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(window._fxT);
+  window._fxT = setTimeout(() => { t.style.display = "none"; }, 2200);
+}
+
+
+/* ---------------- تصدير الكشف ---------------- */
+// الكشف المعروض بعد الفلترة — للأرشفة والتقرير.
+
+function exportAttendanceCSV(){
+  const term = (document.getElementById("matrix-search")?.value || "").trim().toLowerCase();
+  const tf = matrixTrackFilter;
+
+  const rows = matrixParticipants.filter(m =>
+    (!term
+      || (m.profiles?.full_name||"").toLowerCase().includes(term)
+      || (m.profiles?.email||"").toLowerCase().includes(term)
+      || (m.profiles?.phone||"").includes(term)
+      || (m.teams?.team_name||"").toLowerCase().includes(term)
+      || (m.teams?.team_code||"").toLowerCase().includes(term))
+    && (!tf || m.teams?.track_id === tf)
+  );
+
+  const sess = matrixSessions.filter(x => !matrixFocusSession || x.id === matrixFocusSession);
+
+  const head = ["رقم المشروع","المشروع","المسار","المشارك","قائد","الجوال","البريد",
+                ...sess.map(x => x.title), "الحضور"];
+
+  const body = rows.map(m => {
+    const marks = sess.map(x => matrixAttendanceMap[`${x.id}|${m.user_id}`] ? "حاضر" : "غائب");
+    const n = marks.filter(x => x === "حاضر").length;
+    return [
+      m.teams?.team_code || "",
+      m.teams?.team_name || "",
+      m.teams?.tracks?.name_ar || "",
+      m.profiles?.full_name || "",
+      m.is_leader ? "نعم" : "لا",
+      m.profiles?.phone || "",
+      m.profiles?.email || "",
+      ...marks,
+      `${n} من ${sess.length}`
+    ];
+  });
+
+  // BOM ليقرأ Excel العربية صحيحة
+  const csv = "\ufeff" + [head, ...body]
+    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\r\n");
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `كشف-الحضور-${new Date().toLocaleDateString("en-CA")}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 async function toggleMatrixCell(sessionId, userId){
   // الفرض الحقيقي بالقاعدة (سياسة RLS)، وهذا لرسالة واضحة
@@ -819,6 +955,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r106</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r107</div>
 </body>
 </html>
