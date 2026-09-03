@@ -3274,6 +3274,14 @@ async function renderMentorshipSettings(){
     </div>
 
     <div class="card" style="margin-top:14px">
+      <h3 style="margin:0 0 6px">مسارات الميسّرين</h3>
+      <p class="hint" style="margin:0 0 14px">
+        الميسّر المسنَد لمسار يرى فرق مساره فقط. ومن لم يُسنَد يرى الجميع.
+      </p>
+      <div id="fac-tracks"><p class="hint">جارٍ التحميل...</p></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
       <h3 style="margin:0 0 6px">جلسات تنتظر تأكيدًا</h3>
       <p class="hint" style="margin:0 0 14px">
         مضى وقتها ولم يؤكّد المرشد انعقادها — تابعها معه أو أكّدها نيابةً عنه
@@ -3283,6 +3291,95 @@ async function renderMentorshipSettings(){
 
   loadMentorshipHealth();
   loadUnconfirmedSessions();
+  loadFacilitatorTracks();
+}
+
+/* ---------------- مسارات الميسّرين ---------------- */
+// عدة ميسّرين، كلٌّ لمسار: الميسّر يرى فرق مساره فقط بدل قائمة
+// كل الفرق.
+
+async function loadFacilitatorTracks(){
+  const box = document.getElementById("fac-tracks");
+  if(!box) return;
+
+  const [asg, tracks] = await Promise.all([
+    sb.from("facilitator_assignments").select("*"),
+    sb.from("tracks").select("id,name_ar").eq("is_active", true).order("display_order")
+  ]);
+
+  if(asg.error){
+    box.innerHTML = `<p class="hint">${esc(asg.error.message)}</p>`;
+    return;
+  }
+  window._allTracks = tracks.data || [];
+
+  const list = asg.data || [];
+  if(!list.length){
+    box.innerHTML = `<div class="empty-state">لا ميسّرون معتمدون بعد</div>`;
+    return;
+  }
+
+  box.innerHTML = `
+    <table class="table"><thead><tr>
+      <th>الميسّر</th><th>البريد</th><th>المسارات</th><th></th>
+    </tr></thead><tbody>
+    ${list.map(f => `<tr>
+      <td><strong>${esc(f.الميسّر)}</strong></td>
+      <td>${esc(f.البريد || "—")}</td>
+      <td>${f.عدد_المسارات
+        ? esc(f.المسارات)
+        : '<span class="badge badge-gray">كل المسارات</span>'}</td>
+      <td><button class="btn btn-outline btn-sm"
+        onclick='openFacTracksModal("${f.facilitator_id}", ${JSON.stringify(f.الميسّر)})'>
+        تحديد المسارات</button></td>
+    </tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function openFacTracksModal(userId, name){
+  const { data: current } = await sb.from("facilitator_tracks")
+    .select("track_id").eq("facilitator_user_id", userId);
+  const picked = new Set((current || []).map(x => x.track_id));
+
+  openModal(`
+    <h3>مسارات ${esc(name)}</h3>
+    <p class="hint" style="margin:0 0 14px">
+      اترك الجميع فارغًا ليرى كل المسارات
+    </p>
+    <div class="judge-picker">
+      ${(window._allTracks || []).map(t => `
+        <label class="jp-item">
+          <input type="checkbox" class="ft-track" value="${t.id}" ${picked.has(t.id) ? "checked" : ""}>
+          <span>${esc(t.name_ar)}</span>
+        </label>`).join("") || '<p class="hint">لا مسارات مفعّلة</p>'}
+    </div>
+    <div id="ft-alert" class="alert"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-primary" onclick="saveFacTracks('${userId}')">حفظ</button>
+      <button class="btn btn-outline" onclick="closeModal()">إلغاء</button>
+    </div>`);
+}
+
+async function saveFacTracks(userId){
+  const chosen = [...document.querySelectorAll(".ft-track:checked")].map(x => x.value);
+
+  await sb.from("facilitator_tracks").delete().eq("facilitator_user_id", userId);
+  if(chosen.length){
+    const { error } = await sb.from("facilitator_tracks").insert(
+      chosen.map(t => ({ facilitator_user_id: userId, track_id: t, created_by: currentUser.id }))
+    );
+    if(error){
+      const a = document.getElementById("ft-alert");
+      a.className = "alert alert-error";
+      a.textContent = error.message;
+      return;
+    }
+  }
+
+  logActivity("تحديد مسارات ميسّر", "facilitator_tracks", userId, { tracks: chosen.length });
+  closeModal();
+  showToast(chosen.length ? `أُسنِد ${chosen.length} مسارًا` : "يرى كل المسارات الآن");
+  loadFacilitatorTracks();
 }
 
 async function loadUnconfirmedSessions(){

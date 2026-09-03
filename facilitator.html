@@ -97,6 +97,11 @@
   .tm-code{display:inline-block;background:#fbf3e2;color:#8A6A1E;
     font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;
     margin-left:9px;margin-inline-end:9px;font-family:inherit}
+  /* فاصل المسار في جدول الحضور */
+  .track-sep{background:var(--navy);color:#fff;padding:8px 16px;
+    font-size:12.5px;font-weight:700;letter-spacing:.3px;
+    position:sticky;right:0;z-index:2}
+
   body.dark .tm-code{background:rgba(201,146,42,.18);color:#E8BA63}
 
   body.dark .badge-green{background:rgba(0,189,196,.16);color:#5FE8EC}
@@ -421,7 +426,14 @@ async function renderAttendanceMatrix(){
     </div>
   `;
 
-  const { data: tracks } = await sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  // مسارات هذا الميسّر: من أُسنِدت له مسارات يرى فرقها فقط،
+  // ومن لم تُسنَد له يرى الجميع.
+  const { data: myTracks } = await sb.rpc("my_facilitator_tracks");
+  window._myTrackIds = (myTracks || []).map(t => t.my_facilitator_tracks || t);
+
+  let tq = sb.from("tracks").select("id,name_ar").eq("is_active", true);
+  if(window._myTrackIds.length) tq = tq.in("id", window._myTrackIds);
+  const { data: tracks } = await tq;
   const trackSelect = document.getElementById("matrix-track-filter");
   (tracks||[]).forEach(t => {
     const opt = document.createElement("option");
@@ -448,6 +460,7 @@ async function loadAttendanceMatrix(){
     .select("user_id, is_leader, profiles(full_name, email, phone), teams!inner(id, team_name, team_code, status, track_id, tracks(name_ar))")
     .eq("teams.status", "confirmed");
   if(matrixTrackFilter) membersQuery = membersQuery.eq("teams.track_id", matrixTrackFilter);
+  else if(window._myTrackIds?.length) membersQuery = membersQuery.in("teams.track_id", window._myTrackIds);
   const { data: members } = await membersQuery;
   matrixParticipants = members || [];
 
@@ -516,14 +529,36 @@ function renderMatrixTable(){
     || (m.teams?.team_code||"").toLowerCase().includes(term)
   );
 
-  // التجميع حسب المشروع: أعضاء الفريق الواحد يجلسون معًا،
-  // فترتيبهم متجاورين يختصر تنقّل الميسّر بين الطاولات
+  // الترتيب: المسار ثم رقم المشروع. الفرق تجلس بمساراتها،
+  // والرقم يتبع تسلسل التسجيل — فترتيب القائمة يطابق ترتيب
+  // القاعة بدل الأبجدية العشوائية.
   const groups = {};
   filtered.forEach(m => {
     const key = m.teams?.team_name || "بلا مشروع";
     (groups[key] = groups[key] || []).push(m);
   });
-  const names = Object.keys(groups).sort((a,b) => a.localeCompare(b,"ar"));
+
+  const meta = k => {
+    const t = groups[k][0]?.teams || {};
+    return {
+      track: t.tracks?.name_ar || "\uffff",     // بلا مسار في الآخر
+      code:  t.team_code || "\uffff",
+      name:  k
+    };
+  };
+  // الرقم قد يكون نصًّا (1001) أو رمزًا (ENF-003): نقارن رقميًا
+  // إن أمكن، وإلا نصيًّا — فلا يأتي 10 قبل 9.
+  const numOf = c => {
+    const d = String(c).match(/\d+/);
+    return d ? parseInt(d[0], 10) : Number.MAX_SAFE_INTEGER;
+  };
+  const names = Object.keys(groups).sort((a, b) => {
+    const A = meta(a), B = meta(b);
+    return A.track.localeCompare(B.track, "ar")
+        || numOf(A.code) - numOf(B.code)
+        || String(A.code).localeCompare(String(B.code), "ar")
+        || A.name.localeCompare(B.name, "ar");
+  });
   names.forEach(k => groups[k].sort((a,b) =>
     (b.is_leader?1:0) - (a.is_leader?1:0) ||
     (a.profiles?.full_name||"").localeCompare(b.profiles?.full_name||"","ar")));
@@ -547,16 +582,23 @@ function renderMatrixTable(){
       }).join("")}
     </tr></thead>
     <tbody>
+      ${(() => { window._lastTrack = null; return ""; })()}
       ${names.map(team => {
         const rows = groups[team];
         const track = rows[0]?.teams?.tracks?.name_ar || "—";
+        // فاصل عند تغيّر المسار: يفصل مجموعات القاعة بصريًا
+        const newTrack = track !== window._lastTrack;
+        window._lastTrack = track;
+        const trackBar = newTrack
+          ? `<tr><td colspan="${2 + shown.length}" class="track-sep">${esc(track)}</td></tr>`
+          : "";
         // رقم المشروع: الميسّر يناديه بالرقم لا بالاسم عند التحضير
         const code = rows[0]?.teams?.team_code || "";
         // صف فاصل باسم المشروع = رأس الطاولة
         // خليتان لا واحدة: الأولى بعرض العمودين المثبَّتين تمامًا
         // فتلتصق معهما يمينًا، والثانية تملأ بقية العرض.
         // خلية واحدة بـcolspan كامل لا تثبت لأن عرضها = عرض الجدول.
-        return `<tr>
+        return trackBar + `<tr>
             <td colspan="2" style="position:sticky;right:0;z-index:2;background:#eef1f6;padding:9px 14px;font-weight:800;font-size:13px;color:var(--navy);box-shadow:-1px 0 0 var(--border)">
               ${code ? `<span class="tm-code">${esc(code)}</span>` : ""}${esc(team)}
             </td>
@@ -661,13 +703,21 @@ function switchSessionSubTab(tab){
 
 async function loadManualAttendance(sessionId, trackId){
   let query = sb.from("team_members")
-    .select("user_id, profiles(full_name, email), teams!inner(status, track_id, team_name, team_code)")
+    .select("user_id, profiles(full_name, email), teams!inner(status, track_id, team_name, team_code, tracks(name_ar))")
     .eq("teams.status", "confirmed");
   if(trackId) query = query.eq("teams.track_id", trackId);
+  else if(window._myTrackIds?.length) query = query.in("teams.track_id", window._myTrackIds);
   const { data: members } = await query;
 
   const { data: attendance } = await sb.from("prep_attendance").select("user_id").eq("session_id", sessionId);
-  prepParticipantsCache = members || [];
+  // الترتيب نفسه: المسار ثم رقم المشروع — فتتطابق القائمتان
+  const num = c => { const d = String(c || "").match(/\d+/);
+                     return d ? parseInt(d[0], 10) : Number.MAX_SAFE_INTEGER; };
+  prepParticipantsCache = (members || []).sort((a, b) =>
+       (a.teams?.tracks?.name_ar || "\uffff").localeCompare(b.teams?.tracks?.name_ar || "\uffff", "ar")
+    || num(a.teams?.team_code) - num(b.teams?.team_code)
+    || (a.teams?.team_name || "").localeCompare(b.teams?.team_name || "", "ar")
+    || (a.profiles?.full_name || "").localeCompare(b.profiles?.full_name || "", "ar"));
   prepPresentIds = new Set((attendance||[]).map(a => a.user_id));
   renderManualAttendanceBody();
 }
@@ -769,6 +819,6 @@ function renderScanLog(){
   box.innerHTML = scanLog.slice(0,15).map(l => `<div class="log-item"><span>${esc(l.name)}${l.already?' (مسبق)':''}</span><span style="color:var(--muted)">${l.time}</span></div>`).join("");
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r103</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.5;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r106</div>
 </body>
 </html>

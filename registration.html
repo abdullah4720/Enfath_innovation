@@ -284,14 +284,6 @@
   .next-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;margin-bottom:14px;position:relative}
   .next-session h2{margin:0 0 6px;font-size:18px;position:relative;color:#fff}
   .next-session .meta{color:#c8d3e8;font-size:12.5px;margin-bottom:16px;position:relative}
-  .qr-toggle-btn{
-    background:var(--gold);color:#1A1300;border:none;border-radius:10px;padding:11px 20px;font-weight:700;
-    font-family:inherit;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;position:relative;
-  }
-  .qr-inline-box{
-    background:#fff;border-radius:14px;padding:20px;margin-top:16px;text-align:center;display:none;position:relative;
-  }
-  .qr-inline-box.open{display:block;}
 
   .timeline{position:relative;padding-right:28px;margin-top:12px;}
   .timeline::before{content:"";position:absolute;right:9px;top:6px;bottom:6px;width:2px;background:var(--border);}
@@ -1774,8 +1766,7 @@ async function renderPrepTab(membership){
       </div>
       <h2 style="margin-bottom:4px">لا توجد جلسات مجدولة بعد</h2>
       <p class="sub">تابع هذه الصفحة — جلسات التحضير الخاصة بمسارك ستظهر هنا فور إضافتها</p>
-    </div>` + qrCardHtml();
-    renderMyQr();
+    </div>`;
     if(window.lucide) lucide.createIcons();
     return;
   }
@@ -1783,7 +1774,8 @@ async function renderPrepTab(membership){
   const now = new Date();
   const nextSession = relevant.find(s => new Date(s.session_date) >= now);
 
-  let html = nextSession ? nextSessionHeroHtml(nextSession) : qrCardHtml();
+  // الحضور يسجّله الميسّر، فلا داعي لعرض الرمز للمشارك
+  let html = nextSession ? nextSessionHeroHtml(nextSession) : "";
 
   html += `<div class="card" style="margin-top:16px">
     <h3 style="margin:0 0 4px;font-size:15px">مسار جلساتك</h3>
@@ -1806,9 +1798,6 @@ async function renderPrepTab(membership){
   </div>`;
 
   body.innerHTML = html;
-  renderMyQr();
-  const toggleBtn = document.getElementById("qr-toggle-btn");
-  if(toggleBtn) toggleBtn.onclick = () => document.getElementById("qr-inline-box").classList.toggle("open");
   if(window.lucide) lucide.createIcons();
 }
 function nextSessionHeroHtml(s){
@@ -1817,39 +1806,7 @@ function nextSessionHeroHtml(s){
     <h2>${esc(s.title)}</h2>
     <div class="meta"><i data-lucide="calendar" style="width:13px;height:13px;vertical-align:-2px;display:inline-block"></i> ${fmtDate(s.session_date)}${s.location || s.is_online ? ' · <i data-lucide="map-pin" style="width:13px;height:13px;vertical-align:-2px;display:inline-block"></i> ' + esc(s.location || 'عبر الإنترنت') : ''}</div>
     ${s.description ? `<p style="font-size:12.5px;color:#c8d3e8;line-height:1.7;position:relative;margin:0 0 16px">${esc(s.description)}</p>` : ""}
-    <button class="qr-toggle-btn" id="qr-toggle-btn"><i data-lucide="qr-code" style="width:15px;height:15px"></i> عرض رمز الحضور</button>
-    <div class="qr-inline-box" id="qr-inline-box">
-      <div id="my-qr-code" style="display:flex; justify-content:center; margin-bottom:10px"></div>
-      <p style="font-size:11.5px;color:var(--muted);margin:0">أظهر هذا الرمز لفريق التنسيق عند الدخول لتسجيل حضورك تلقائيًا</p>
-    </div>
   </div>`;
-}
-function qrCardHtml(){
-  return `<div class="card">
-    <div style="text-align:center">
-      <h2 style="margin-bottom:4px">رمز حضورك الشخصي</h2>
-      <p class="sub" style="margin-bottom:16px">هذا الرمز يميّزك شخصيًا، ويُستخدم لتسجيل حضورك الفعلي بسرعة، دون الحاجة لتوقيع ورقي</p>
-      <div id="my-qr-code" style="display:flex; justify-content:center; margin:14px 0"></div>
-    </div>
-    <div style="background:var(--bg); border-radius:12px; padding:14px 16px; margin-top:8px">
-      <div style="font-size:12px; font-weight:700; color:var(--navy); margin-bottom:8px">آلية العمل</div>
-      <div style="display:flex; flex-direction:column; gap:8px; font-size:12.5px; color:var(--muted)">
-        <div>1️⃣ عند حضورك أي جلسة تحضير أو فعالية بالهاكاثون، افتح هذا الرمز من جوالك</div>
-        <div>2️⃣ يقوم فريق التنسيق بمسحه عبر جهازهم عند الباب</div>
-        <div>3️⃣ يُسجَّل حضورك فورًا في النظام تلقائيًا، دون الحاجة لكتابة اسمك على ورقة</div>
-      </div>
-    </div>
-  </div>`;
-}
-function renderMyQr(){
-  const el = document.getElementById("my-qr-code");
-  if(!el || !window.QRCode) return;
-  el.innerHTML = "";
-  new QRCode(el, {
-    text: "ENFATH-USER:" + currentUser.id,
-    width: 160, height: 160,
-    colorDark: "#0B1F3A", colorLight: "#ffffff"
-  });
 }
 
 /* ---------------- تبويب: الشهادات ---------------- */
@@ -2555,12 +2512,15 @@ async function renderUpdatesTab(membership){
     .order("published_at", {ascending:false});
 
   if(error){ body.innerHTML = `<div class="card"><div class="hint">خطأ: ${esc(error.message)}</div></div>`; return; }
-  // التحديث يظهر لو: عام للجميع، أو لمسار الفريق، أو لفريقنا تحديدًا
-  const relevant = (data||[]).filter(a =>
-    (!a.track_id && !a.team_id) ||
-    (a.team_id && a.team_id === teamId) ||
-    (!a.team_id && a.track_id === trackId)
-  );
+  // التحديث يظهر لو: عام، أو لمسار الفريق، أو لفريقنا، أو لي
+  // شخصيًا. الاستهداف بمشارك واحد لم يكن يُفحص، فيظهر للجميع.
+  const uid = currentUser.id;
+  const relevant = (data||[]).filter(a => {
+    if(a.user_id) return a.user_id === uid;     // موجّه لشخص
+    if(a.team_id) return a.team_id === teamId;  // موجّه لفريق
+    if(a.track_id) return a.track_id === trackId;
+    return true;                                 // عام
+  });
 
   if(!relevant.length){
     body.innerHTML = `<div class="card"><h2>التحديثات</h2><p class="sub">لا توجد تحديثات منشورة حتى الآن</p></div>`;
@@ -3148,6 +3108,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r139</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r141</div>
 </body>
 </html>
