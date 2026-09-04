@@ -4691,9 +4691,15 @@ async function saveCommittee(id){
 }
 
 async function deleteCommittee(id, name){
-  if(!confirm(`حذف لجنة «${name}»؟\n\nالإسنادات القائمة تبقى، لكن يزول ربطها باللجنة.`)) return;
+  // الحذف يزيل الإسنادات معها — وإلا بقيت المشاريع في حسابات
+  // المحكّمين بلا لجنة
+  if(!confirm(`حذف لجنة «${name}»؟\n\nستُزال إسناداتها من حسابات محكّميها.\nوإن كان التحكيم قد بدأ، سيُرفض الحذف.`)) return;
   const { error } = await sb.from("judging_committees").delete().eq("id", id);
-  if(error){ showToast(error.message, true); return; }
+  if(error){
+    // رسالة المُشغّل مفهومة — نعرضها كما هي
+    alert(error.message.replace(/^.*?:\s*/, ""));
+    return;
+  }
   logActivity("حذف لجنة تحكيم", "judging_committees", id, { name });
   showToast("حُذفت اللجنة");
   renderCommittees();
