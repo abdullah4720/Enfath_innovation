@@ -69,24 +69,91 @@
   .notice strong{display:block;font-size:18px;color:#fff;margin-bottom:8px}
 
   /* الفائزون */
-  .winners{display:grid;gap:18px}
+  /* ══ الفائزون ══ */
+  .win-intro{display:flex;align-items:center;gap:18px;margin:6px 0 30px;
+    animation:fadeUp .7s ease both}
+  .wi-line{flex:1;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(201,146,42,.55),transparent)}
+  .wi-txt{font-size:15px;font-weight:800;color:var(--gold);letter-spacing:.24em;
+    white-space:nowrap}
+
+  .winners{display:grid;gap:22px;
+    grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+
   .winner{
-    background:linear-gradient(180deg,rgba(201,146,42,.16),rgba(255,255,255,.05));
-    border:1px solid rgba(201,146,42,.5);border-radius:20px;
-    padding:30px 28px;position:relative;overflow:hidden;
+    background:linear-gradient(165deg,rgba(201,146,42,.19),rgba(255,255,255,.04) 60%);
+    border:1px solid rgba(201,146,42,.42);border-radius:22px;
+    padding:34px 26px 30px;position:relative;overflow:hidden;
+    text-align:center;
+    animation:winIn .75s cubic-bezier(.2,.9,.3,1.3) both;
   }
-  .winner::before{
-    content:"";position:absolute;top:-60px;left:-60px;width:180px;height:180px;
-    background:radial-gradient(circle,rgba(201,146,42,.22),transparent 70%);pointer-events:none;
+
+  /* وميض يمرّ على البطاقة */
+  .winner::after{
+    content:"";position:absolute;top:0;bottom:0;width:55%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.15),transparent);
+    animation:sheen 4.5s ease-in-out infinite;pointer-events:none;
   }
-  .winner .track{
-    display:inline-block;font-size:12px;font-weight:700;color:var(--gold);
-    background:rgba(201,146,42,.16);padding:5px 14px;border-radius:999px;margin-bottom:16px;
+  /* هالة تتنفّس خلف البطاقة */
+  .w-glow{position:absolute;inset:-42% 30%;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(201,146,42,.3),transparent 68%);
+    animation:pulse 3.6s ease-in-out infinite}
+
+  .w-trophy{width:62px;height:62px;margin:0 auto 18px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;position:relative;
+    background:linear-gradient(150deg,#E8BA63,#C9922A);
+    box-shadow:0 0 0 7px rgba(201,146,42,.13), 0 8px 26px rgba(201,146,42,.36);
+    animation:float 3.2s ease-in-out infinite}
+  .w-trophy svg{width:29px;height:29px;color:#2A1B05}
+
+  .winner .track{display:inline-block;font-size:11.5px;font-weight:700;
+    color:var(--gold);background:rgba(201,146,42,.16);
+    padding:5px 15px;border-radius:999px;margin-bottom:14px;position:relative}
+  .winner .crown{font-size:12px;color:var(--gold);font-weight:800;
+    letter-spacing:.2em;margin-bottom:9px;position:relative}
+  .winner .team{font-size:clamp(21px,3.6vw,28px);font-weight:800;
+    line-height:1.35;margin-bottom:11px;position:relative;
+    color:#fff;
+    text-shadow:0 2px 18px rgba(201,146,42,.3)}
+  @supports (-webkit-background-clip:text) or (background-clip:text){
+    .winner .team{
+      background:linear-gradient(180deg,#fff 30%,#E4D3B0);
+      -webkit-background-clip:text;background-clip:text;
+      -webkit-text-fill-color:transparent;
+      text-shadow:none}
   }
-  .winner .crown{font-size:13px;color:var(--gold);font-weight:700;margin-bottom:8px;letter-spacing:.06em}
-  .winner .team{font-size:clamp(21px,4vw,29px);font-weight:800;line-height:1.35;margin-bottom:10px}
-  .winner .proj{font-size:15px;color:var(--teal-soft);font-weight:600;margin-bottom:10px}
-  .winner .desc{font-size:13px;color:#B8C5D3;line-height:1.9}
+  .winner .proj{font-size:14.5px;color:var(--teal-soft);font-weight:600;
+    margin-bottom:11px;position:relative}
+  .winner .desc{font-size:12.5px;color:#B8C5D3;line-height:1.9;position:relative;
+    max-width:100%;overflow-wrap:break-word}
+
+  @keyframes winIn{
+    from{opacity:0;transform:translateY(28px) scale(.94)}
+    to{opacity:1;transform:none}}
+  @keyframes sheen{
+    0%{inset-inline-start:-60%}
+    55%,100%{inset-inline-start:130%}}
+  @keyframes pulse{
+    0%,100%{opacity:.5;transform:scale(.9)}
+    50%{opacity:1;transform:scale(1.06)}}
+  @keyframes float{
+    0%,100%{transform:translateY(0)}
+    50%{transform:translateY(-7px)}}
+  @keyframes fadeUp{
+    from{opacity:0;transform:translateY(14px)}
+    to{opacity:1;transform:none}}
+
+  /* قصاصات الاحتفال */
+  .cfti{position:fixed;top:-14px;width:9px;height:15px;z-index:9999;
+    pointer-events:none;animation:fall linear forwards}
+  @keyframes fall{
+    to{transform:translateY(105vh) rotate(760deg);opacity:0}}
+
+  @media (prefers-reduced-motion:reduce){
+    .winner,.win-intro{animation:none}
+    .winner::after,.w-glow,.w-trophy{animation:none}
+    .cfti{display:none}
+  }
 
   footer{text-align:center;margin-top:44px;color:var(--muted);font-size:12.5px;line-height:2}
   .refresh{font-size:11.5px;color:var(--muted);text-align:center;margin-top:18px}
@@ -164,15 +231,31 @@ async function load(){
     badge.innerHTML = "";
 
     if(winners && winners.length){
-      box.innerHTML = `<div class="winners">
-        ${winners.map(w => `<div class="winner">
+      box.innerHTML = `
+        <div class="win-intro">
+          <div class="wi-line"></div>
+          <div class="wi-txt">الفائزون</div>
+          <div class="wi-line"></div>
+        </div>
+        <div class="winners">
+        ${winners.map((w, i) => `<div class="winner" style="animation-delay:${i * 0.16}s">
+          <div class="w-glow"></div>
+          <div class="w-trophy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+              <path d="M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+              <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+            </svg>
+          </div>
           <div class="track">${esc(w.المسار || "")}</div>
           <div class="crown">المركز الأول</div>
           <div class="team">${esc(w.الفريق)}</div>
           ${w.المشروع ? `<div class="proj">${esc(w.المشروع)}</div>` : ""}
           ${w.الوصف ? `<div class="desc">${esc(w.الوصف)}</div>` : ""}
         </div>`).join("")}
-      </div>`;
+        </div>`;
+      launchConfetti();
       document.getElementById("refresh-note").textContent = "";
       return;
     }
@@ -214,6 +297,26 @@ async function load(){
 load();
 setInterval(load, 30000);
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:rgba(255,255,255,.28);font-family:monospace;z-index:9999;pointer-events:none">build: 2026-08-27-r8</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:rgba(255,255,255,.28);font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r9</div>
 </body>
-</html>
+</html/* قصاصات الاحتفال — مرة واحدة عند أول عرض */
+function launchConfetti(){
+  if(window._cftiDone) return;
+  if(window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  window._cftiDone = true;
+
+  const colors = ["#C9922A", "#E8BA63", "#00BDC4", "#5FE8EC", "#ffffff"];
+  for(let i = 0; i < 70; i++){
+    const d = document.createElement("div");
+    d.className = "cfti";
+    d.style.left = Math.random() * 100 + "vw";
+    d.style.background = colors[i % colors.length];
+    d.style.animationDuration = (2.6 + Math.random() * 2.4) + "s";
+    d.style.animationDelay = (Math.random() * 1.6) + "s";
+    d.style.opacity = 0.5 + Math.random() * 0.5;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 7000);
+  }
+}
+
+>
