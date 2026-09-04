@@ -236,6 +236,7 @@
 
   /* ---------------- بطاقة قابلة للطي ---------------- */
   .team-acc{margin-bottom:12px;}
+
   .team-acc > summary{
     list-style:none; cursor:pointer; padding:14px 18px; border-radius:12px;
     display:flex; align-items:center; gap:12px; flex-wrap:wrap;
@@ -1014,6 +1015,32 @@ async function loadAssignments(){
 
   const { data: myScores } = await sb.from("scores").select("*").eq("judge_user_id", currentUser.id).eq("round_id", round.id);
 
+  // من قيّم هذه المشاريع من المحكّمين الآخرين؟ المحكّم البديل
+  // لا يعيد تقييم ما قيّمه سلفه.
+  const teamIdsAll = assignments.map(a => a.team_id);
+  let scoredByOthers = new Map();
+  if(teamIdsAll.length){
+    // استعلامان منفصلان: اسم المفتاح الأجنبي غير مضمون،
+    // فالربط الصريح أأمن من العلاقة المسمّاة
+    const { data: others } = await sb.from("scores")
+      .select("team_id, judge_user_id")
+      .in("team_id", teamIdsAll)
+      .eq("round_id", round.id)
+      .neq("judge_user_id", currentUser.id);
+
+    const judgeIds = [...new Set((others || []).map(o => o.judge_user_id))];
+    let names = {};
+    if(judgeIds.length){
+      const { data: ppl } = await sb.from("profiles")
+        .select("id, full_name").in("id", judgeIds);
+      (ppl || []).forEach(p => { names[p.id] = p.full_name; });
+    }
+    (others || []).forEach(o => {
+      if(!scoredByOthers.has(o.team_id))
+        scoredByOthers.set(o.team_id, names[o.judge_user_id] || "محكّم آخر");
+    });
+  }
+
   // الفرق المعتمدة إداريًا — درجاتها مقفلة بالقاعدة (ملف 69).
   // نقرأها هنا لنعرض السبب بوضوح بدل رسالة خطأ عند محاولة الحفظ.
   const { data: approvals } = await sb.from("judging_approvals")
@@ -1036,7 +1063,9 @@ async function loadAssignments(){
   }
 
   // نجهّز بيانات كل فريق مرة واحدة، ثم نعيد الرسم عند تغيير الفلتر بلا استعلام جديد
-  judgeCards = assignments.map(a => {
+  // المقيَّم من محكّم آخر لا يُعرض للبديل: إعادة الإسناد قرار
+  // إداري، والإدارة تحذف التقييم أولًا إن أرادت إعادته.
+  judgeCards = assignments.filter(a => !scoredByOthers.has(a.team_id)).map(a => {
     const teamScores = (myScores||[]).filter(s => s.team_id === a.team_id);
     const alreadyScored = teamScores.length === criteriaList.length && criteriaList.length > 0;
     const isApproved = approvedTeams.has(a.team_id);
@@ -1323,6 +1352,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r127</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r129</div>
 </body>
 </html>

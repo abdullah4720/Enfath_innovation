@@ -4675,13 +4675,33 @@ async function saveCommittee(id){
     cid = data.id;
   }
 
-  // الأعضاء: نستبدلهم بالكامل — أبسط من المقارنة وأقل خطأً
+  // نحذف من خرج فقط ونضيف من دخل. الاستبدال الكامل كان يحذف
+  // الجميع ثم يعيدهم — فيُزيل المُشغّل إسنادات من بقي أيضًا.
   const chosen = [...document.querySelectorAll(".cm-judge:checked")].map(x => x.value);
-  await sb.from("committee_members").delete().eq("committee_id", cid);
-  if(chosen.length){
-    await sb.from("committee_members").insert(
-      chosen.map(j => ({ committee_id: cid, judge_user_id: j }))
+
+  const { data: current } = await sb.from("committee_members")
+    .select("judge_user_id").eq("committee_id", cid);
+  const before = new Set((current || []).map(x => x.judge_user_id));
+  const after  = new Set(chosen);
+
+  const removed = [...before].filter(j => !after.has(j));
+  const added   = [...after].filter(j => !before.has(j));
+
+  if(removed.length){
+    await sb.from("committee_members").delete()
+      .eq("committee_id", cid).in("judge_user_id", removed);
+  }
+  if(added.length){
+    const { error: e2 } = await sb.from("committee_members").insert(
+      added.map(j => ({ committee_id: cid, judge_user_id: j }))
     );
+    if(e2){
+      alertBox.className = "alert alert-error";
+      alertBox.textContent = e2.message.includes("judge_unique")
+        ? "أحد المحكّمين في لجنة أخرى — المحكّم في لجنة واحدة فقط"
+        : e2.message;
+      return;
+    }
   }
 
   logActivity(id ? "تعديل لجنة تحكيم" : "إنشاء لجنة تحكيم", "judging_committees", cid, { name });
@@ -4846,6 +4866,10 @@ async function renderJudgingProgress(){
 
     <div class="card">
       <h3 style="margin:0 0 12px">أعباء المحكّمين</h3>
+      <p class="hint" style="margin:0 0 12px">
+        المشروع الذي قيّمه محكّم لا يظهر لمن يحلّ محلّه. لإعادة تقييمه،
+        احذف الدرجات أولًا من تبويب موجز التحكيم.
+      </p>
       <table class="table"><thead><tr>
         <th>المحكّم</th><th>الجهة</th><th>اللجان</th>
         <th>مسنَدة</th><th>قيّمها</th><th>متبقية</th><th>الحالة</th>
@@ -8720,6 +8744,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r161</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r162</div>
 </body>
 </html>
