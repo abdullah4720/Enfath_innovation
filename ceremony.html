@@ -83,6 +83,10 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;color:#fff;
 
 .win-body{display:flex;flex-direction:column;align-items:center}
 .win-body.on{display:flex;animation:pop .85s cubic-bezier(.2,.9,.3,1.35) both}
+  /* لحظة الترقّب: المسار ظاهر والاسم مخفيّ */
+  .reveal-hint{font-size:19px;color:var(--muted);letter-spacing:.1em;
+    animation:pulseOp 1.6s ease-in-out infinite}
+
 
 .trophy{width:104px;height:104px;border-radius:50%;position:relative;
   display:flex;align-items:center;justify-content:center;margin-bottom:30px;
@@ -187,7 +191,7 @@ body{font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;color:#fff;
          stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
   </button>
   <div class="dots" id="dots"></div>
-  <button class="nav" id="next" onclick="show(cur+1)" title="التالي">
+  <button class="nav" id="next" onclick="advance()" title="التالي">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
   </button>
@@ -226,6 +230,20 @@ const ico = n => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 let slides = [], cur = 0, winners = [];
 
 /* ── التنقّل ── */
+// شريحة الفائز على مرحلتين: المسار أولًا، ثم الاسم بضغطة.
+function advance(){
+  const s = slides[cur];
+  const body = document.getElementById(`wb-${cur}`);
+  if(s?.type === "winner" && body && !body.classList.contains("on")){
+    body.classList.add("on");
+    const hint = body.parentElement?.querySelector(".reveal-hint");
+    if(hint) hint.style.display = "none";
+    confetti();
+    return;                      // لا ننتقل: كشفنا الاسم فقط
+  }
+  show(cur + 1);
+}
+
 function show(i){
   if(i < 0 || i >= slides.length) return;
   cur = i;
@@ -237,7 +255,7 @@ function show(i){
   const s = slides[i];
   // القصاصات مرة واحدة لكل شريحة — بسجلّ مستقل لا على body
   window._celebrated = window._celebrated || new Set();
-  if((s.type === "winner" || s.type === "all") && !window._celebrated.has(i)){
+  if(s.type === "all" && !window._celebrated.has(i)){
     window._celebrated.add(i);
     confetti();
   }
@@ -320,7 +338,8 @@ async function build(){
     slides.push({ type: "winner" });
     html += `<div class="slide s-win">
       <div class="track-tag">${esc(w.المسار || "")}</div>
-      <div class="win-body on" id="wb-${idx}">
+      <div class="reveal-hint">اضغط ← لإعلان الفائز</div>
+      <div class="win-body" id="wb-${idx}">
         <div class="trophy">${ico("trophy")}</div>
         <div class="rank-lbl">المركز الأول</div>
         <div class="team-name">${esc(w.الفريق)}</div>
@@ -372,7 +391,7 @@ async function build(){
 
 /* ── لوحة المفاتيح ── */
 document.addEventListener("keydown", e => {
-  if(e.key === "ArrowLeft"  || e.key === " ") { e.preventDefault(); show(cur + 1); }
+  if(e.key === "ArrowLeft"  || e.key === " ") { e.preventDefault(); advance(); }
   if(e.key === "ArrowRight") show(cur - 1);
   if(e.key === "f" || e.key === "F") toggleFs();
   if(e.key === "Home") show(0);
@@ -398,7 +417,7 @@ build();
 </script>
 
 <div style="position:fixed;bottom:6px;right:10px;font-size:9.5px;color:rgba(255,255,255,.16)">
-  build: 2026-09-01-r7
+  build: 2026-09-05-r8
 </div>
 </body>
 </html>
