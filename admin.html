@@ -4445,7 +4445,12 @@ async function renderCommittees(){
           ? `<bdi>${readyComs}</bdi> لجنة · <bdi>${inCommittee}</bdi> من <bdi>${totalJudges}</bdi> محكّمًا موزّع`
           : `<bdi>${totalJudges}</bdi> محكّمًا بانتظار التوزيع`,
         `<button class="btn btn-outline btn-sm" onclick="openFormCommitteesModal()">تشكيل تلقائي</button>
-         <button class="btn btn-outline btn-sm" onclick="openCommitteeModal()">+ لجنة يدويًا</button>`)}
+         <button class="btn btn-outline btn-sm" onclick="openCommitteeModal()">+ لجنة يدويًا</button>
+         ${list.some(c => c.track_id)
+           ? `<button class="btn btn-outline btn-sm" onclick="makeAllGeneral()">جعلها عامة</button>` : ""}
+         ${list.length
+           ? `<button class="btn btn-outline btn-sm" onclick="exportCommitteesCSV()">تصدير Excel</button>
+              <button class="btn btn-outline btn-sm" onclick="printCommittees()">طباعة</button>` : ""}`)}
 
       ${step(2, "إسناد المشاريع", assignedTeams > 0,
         assignedTeams
@@ -9040,6 +9045,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r168</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r169</div>
 </body>
 </html>
