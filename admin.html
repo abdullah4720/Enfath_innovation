@@ -3339,6 +3339,107 @@ async function loadFacilitatorTracks(){
     </tbody></table>`;
 }
 
+/* ---------------- تصدير اللجان ---------------- */
+// للمشاركة مع المنظّمين: ملف للعمل، وصفحة للطباعة والتوزيع.
+
+function exportCommitteesCSV(){
+  const list = window._comExport || [];
+  if(!list.length){ showToast("لا لجان للتصدير", true); return; }
+
+  const head = ["اللجنة", "المسار", "المحكّم", "جهة المحكّم", "رقم المشروع", "المشروع"];
+  const rows = [];
+
+  list.forEach(c => {
+    // صف لكل تقاطع محكّم × مشروع — يسهّل الفرز والتصفية في Excel
+    const js = c.judges.length ? c.judges : [{ name: "— بلا أعضاء", org: "" }];
+    const ts = c.teams.length  ? c.teams  : [{ name: "— بلا مشاريع", code: "" }];
+    js.forEach(j => ts.forEach(t => {
+      rows.push([c.name, c.track, j.name, j.org, t.code, t.name]);
+    }));
+  });
+
+  // BOM ليقرأ Excel العربية صحيحة
+  const csv = "\ufeff" + [head, ...rows]
+    .map(r => r.map(x => `"${String(x ?? "").replace(/"/g, '""')}"`).join(","))
+    .join("\r\n");
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `لجان-التحكيم-${new Date().toLocaleDateString("en-CA")}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`صُدّرت ${list.length} لجنة`);
+}
+
+function printCommittees(){
+  const list = window._comExport || [];
+  if(!list.length){ showToast("لا لجان للطباعة", true); return; }
+
+  const total = list.reduce((a, c) => a + c.teams.length, 0);
+  const html = `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<title>لجان التحكيم</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{font-family:'IBM Plex Sans Arabic',Tahoma,sans-serif;margin:0;padding:26px 30px;
+    color:#1B2A3D;line-height:1.7}
+  h1{font-size:21px;color:#001938;margin:0 0 4px}
+  .sub{font-size:12.5px;color:#6B7A99;margin:0 0 22px;
+    padding-bottom:14px;border-bottom:2px solid #00BDC4}
+  .com{margin-bottom:22px;page-break-inside:avoid;
+    border:1px solid #E4E9EF;border-radius:11px;overflow:hidden}
+  .com-h{background:#001938;color:#fff;padding:11px 16px;
+    display:flex;justify-content:space-between;align-items:center}
+  .com-h .n{font-size:15px;font-weight:700}
+  .com-h .t{font-size:11.5px;color:#8FA6BC}
+  .com-b{padding:14px 18px;display:flex;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .col{flex:1;min-width:230px;max-width:100%;overflow:hidden}
+  .col h3{font-size:11.5px;color:#C9922A;margin:0 0 8px;font-weight:700;
+    white-space:nowrap;overflow:visible}
+  .col ul{margin:0;padding:0 17px 0 0;font-size:12.5px}
+  .col li{margin:4px 0}
+  .col li code{font-size:10.5px;color:#C9922A;background:#FBF3E2;
+    padding:1px 7px;border-radius:5px;margin-left:6px}
+  .col .org{color:#6B7A99;font-size:11px}
+  .none{color:#8FA6BC;font-size:12px;font-style:normal}
+  .foot{margin-top:26px;padding-top:12px;border-top:1px solid #E4E9EF;
+    font-size:11px;color:#8FA6BC;text-align:center}
+  @media print{ body{padding:14px} .com{break-inside:avoid} }
+</style></head><body>
+  <h1>لجان التحكيم — ابتكار إنفاذ</h1>
+  <p class="sub">${list.length} لجنة · ${total} مشروعًا مسنَدًا ·
+     ${new Date().toLocaleDateString("ar-SA")}</p>
+  ${list.map(c => `
+    <div class="com">
+      <div class="com-h">
+        <span class="n">${esc(c.name)}</span>
+        <span class="t">${esc(c.track)}</span>
+      </div>
+      <div class="com-b">
+        <div class="col">
+          <h3>المحكّمون (${c.judges.length})</h3>
+          ${c.judges.length ? `<ul>${c.judges.map(j =>
+            `<li>${esc(j.name)}${j.org ? `<span class="org"> — ${esc(j.org)}</span>` : ""}</li>`
+          ).join("")}</ul>` : `<p class="none">لا أعضاء</p>`}
+        </div>
+        <div class="col">
+          <h3>المشاريع (${c.teams.length})</h3>
+          ${c.teams.length ? `<ul>${c.teams.map(t =>
+            `<li>${t.code ? `<code>${esc(t.code)}</code>` : ""}${esc(t.name)}</li>`
+          ).join("")}</ul>` : `<p class="none">لا مشاريع مسنَدة</p>`}
+        </div>
+      </div>
+    </div>`).join("")}
+  <div class="foot">منصة ابتكار إنفاذ — جامعة القصيم بالشراكة مع إنفاذ</div>
+  <script>window.onload = () => setTimeout(() => window.print(), 500);<\/script>
+</body></html>`;
+
+  const w = window.open("", "_blank");
+  if(!w){ showToast("اسمح بالنوافذ المنبثقة للطباعة", true); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
 async function openFacTracksModal(userId, name){
   const { data: current } = await sb.from("facilitator_tracks")
     .select("track_id").eq("facilitator_user_id", userId);
@@ -4307,6 +4408,20 @@ async function renderCommittees(){
   const projectCount = new Set((subs || []).map(x => x.team_id)).size;
 
   window._orphanTeams = [...orphanTeams.values()];
+
+  // للتصدير: اللجان بأعضائها ومشاريعها
+  window._comExport = list.map(c => ({
+    name: c.name_ar,
+    track: (window._tracks || []).find(t => t.id === c.track_id)?.name_ar || "كل المسارات",
+    judges: (c.committee_members || []).map(m => ({
+      name: m.profiles?.full_name || "—",
+      org:  m.profiles?.organization || ""
+    })),
+    teams: [...(teamsByCommittee[c.id] || new Map()).values()].map(t => ({
+      name: t?.team_name || "—",
+      code: t?.team_code || ""
+    }))
+  }));
 
   const step = (n, title, done, desc, actions) => `
     <div class="jstep ${done ? "done" : ""}">
@@ -8925,6 +9040,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r167</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r168</div>
 </body>
 </html>
