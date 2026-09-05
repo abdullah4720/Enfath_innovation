@@ -1239,8 +1239,14 @@ const JC_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 
 function jcLineHtml(c){
   if(!c?.اللجنة) return "";
-  return `<div class="jc-line">${JC_ICON}
-    <span>سوف يتم تحكيم مشروعكم من <strong>${esc(c.اللجنة)}</strong></span></div>`;
+  const pos = c.ترتيبي && c.إجمالي_اللجنة
+    ? ` · ترتيب مشروعكم رقم ${c.ترتيبي} من ${c.إجمالي_اللجنة}`
+    : "";
+  const st = c.الحالة || "";
+  const cls = st === "اكتمل التحكيم" ? "done" : st === "قيد التحكيم" ? "live" : "";
+  return `<div class="jc-line ${cls}">${JC_ICON}
+    <span>سوف يتم تحكيم مشروعكم من <strong>${esc(c.اللجنة)}</strong>${pos}</span>
+    ${st ? `<span class="jc-state">${esc(st)}</span>` : ""}</div>`;
 }
 
 
@@ -3157,6 +3163,6 @@ async function saveSubmission(teamId, currentVersion){
   setTimeout(()=> renderDashboard(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r144</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-05-r145</div>
 </body>
 </html>
