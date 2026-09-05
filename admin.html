@@ -204,6 +204,10 @@
     border-radius:8px;padding:5px 11px;font-size:12px;white-space:nowrap}
   .ct-item code{font-size:10.5px;color:var(--gold);margin-right:6px;
     margin-inline-start:6px}
+  .ct-ord{display:inline-block;min-width:18px;height:18px;line-height:18px;
+    text-align:center;background:var(--navy);color:#fff;border-radius:5px;
+    font-size:10.5px;font-weight:700;margin-left:7px;margin-inline-end:7px}
+
   body.dark .ct-item{background:rgba(255,255,255,.06)}
 
   .fit-summary{background:var(--bg,#F7F8FA);border-radius:10px;padding:10px 14px;margin-bottom:16px}
@@ -3352,15 +3356,16 @@ function exportCommitteesCSV(){
   const list = window._comExport || [];
   if(!list.length){ showToast("لا لجان للتصدير", true); return; }
 
-  const head = ["اللجنة", "المسار", "المحكّم", "جهة المحكّم", "رقم المشروع", "المشروع"];
+  const head = ["اللجنة", "المسار", "المحكّم", "جهة المحكّم",
+                "ترتيب التحكيم", "رقم المشروع", "المشروع"];
   const rows = [];
 
   list.forEach(c => {
     // صف لكل تقاطع محكّم × مشروع — يسهّل الفرز والتصفية في Excel
     const js = c.judges.length ? c.judges : [{ name: "— بلا أعضاء", org: "" }];
-    const ts = c.teams.length  ? c.teams  : [{ name: "— بلا مشاريع", code: "" }];
+    const ts = c.teams.length  ? c.teams  : [{ name: "— بلا مشاريع", code: "", order: null }];
     js.forEach(j => ts.forEach(t => {
-      rows.push([c.name, c.track, j.name, j.org, t.code, t.name]);
+      rows.push([c.name, c.track, j.name, j.org, t.order ?? "", t.code, t.name]);
     }));
   });
 
@@ -3442,6 +3447,12 @@ function printCommittees(){
   .col li code{font-size:10px;color:#8A6A1E;background:#FBF3E2;
     padding:2px 7px;border-radius:5px;margin-left:7px;font-family:inherit}
   .none{color:#A6B4C6;font-size:11.5px;padding-right:0}
+  .col ul.ordered li{padding-right:0}
+  .col ul.ordered li::before{display:none}
+  .col li b.ord{display:inline-block;min-width:19px;height:19px;line-height:19px;
+    text-align:center;background:#001938;color:#fff;border-radius:5px;
+    font-size:10.5px;font-weight:700;margin-left:8px;margin-inline-end:8px}
+
 
   @page{margin:12mm}
   @media print{
@@ -3488,9 +3499,11 @@ function printCommittees(){
               : `<p class="none">لا أعضاء</p>`}
           </td>
           <td class="col">
-            <h3>المشاريع · ${c.teams.length}</h3>
+            <h3>المشاريع · ${c.teams.length}${
+              c.teams.some(t => t.order) ? " — بترتيب التحكيم" : ""}</h3>
             ${c.teams.length
-              ? `<ul>${c.teams.map(t => `<li>${
+              ? `<ul class="ordered">${c.teams.map(t => `<li>${
+                  t.order ? `<b class="ord">${t.order}</b>` : ""}${
                   t.code ? `<code>${esc(t.code)}</code>` : ""}${esc(t.name)}</li>`).join("")}</ul>`
               : `<p class="none">لا مشاريع مسنَدة</p>`}
           </td>
@@ -4454,7 +4467,7 @@ async function renderCommittees(){
   const readyComs    = list.filter(c => (c.committee_members||[]).length).length;
 
   const { data: asg } = await sb.from("judge_assignments")
-    .select("team_id, committee_id, round_id, teams(team_name, team_code)");
+    .select("team_id, committee_id, round_id, judging_order, teams(team_name, team_code)");
   const assignedTeams = new Set((asg||[]).map(a => a.team_id)).size;
 
   // مشاريع كل لجنة: صف لكل محكّم، فنجمّعها بالفريق.
@@ -4464,7 +4477,8 @@ async function renderCommittees(){
   const orphanTeams = new Map();
   (asg || []).forEach(a => {
     if(a.committee_id){
-      (teamsByCommittee[a.committee_id] ||= new Map()).set(a.team_id, a.teams);
+      (teamsByCommittee[a.committee_id] ||= new Map())
+        .set(a.team_id, { ...a.teams, order: a.judging_order });
     } else {
       orphanTeams.set(a.team_id, a.teams);
     }
@@ -4484,10 +4498,13 @@ async function renderCommittees(){
       name: m.profiles?.full_name || "—",
       org:  m.profiles?.organization || ""
     })),
-    teams: [...(teamsByCommittee[c.id] || new Map()).values()].map(t => ({
-      name: t?.team_name || "—",
-      code: t?.team_code || ""
-    }))
+    teams: [...(teamsByCommittee[c.id] || new Map()).values()]
+      .sort((a, b) => (a?.order ?? 999) - (b?.order ?? 999))
+      .map(t => ({
+        name:  t?.team_name || "—",
+        code:  t?.team_code || "",
+        order: t?.order || null
+      }))
   }));
 
   const step = (n, title, done, desc, actions) => `
@@ -4567,13 +4584,17 @@ async function renderCommittees(){
                 const tm = teamsByCommittee[c.id];
                 if(!tm || !tm.size) return `<p class="hint" style="margin:10px 0 0">
                   لا مشاريع مسنَدة — استخدم «إسناد لمشاريع»</p>`;
+                // مرتّبة بترتيب التحكيم: هذا جدول القاعة الفعلي
+                const sorted = [...tm.values()].sort((a, b) =>
+                  (a?.order ?? 999) - (b?.order ?? 999));
                 return `<div class="com-teams">
                   <div class="ct-head">
                     <i data-lucide="folder-check"></i>
-                    <bdi>${tm.size}</bdi> مشروعًا مسنَدًا
+                    <bdi>${tm.size}</bdi> مشروعًا مسنَدًا — بترتيب التحكيم
                   </div>
                   <div class="ct-list">
-                    ${[...tm.values()].map(t => `<span class="ct-item">
+                    ${sorted.map(t => `<span class="ct-item">
+                      ${t?.order ? `<b class="ct-ord">${t.order}</b>` : ""}
                       ${esc(t?.team_name || "—")}
                       ${t?.team_code ? `<code>${esc(t.team_code)}</code>` : ""}
                     </span>`).join("")}
@@ -9157,6 +9178,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r172</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r173</div>
 </body>
 </html>
