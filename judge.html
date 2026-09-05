@@ -1010,8 +1010,12 @@ async function loadAssignments(){
   if(error){ main.innerHTML = `<div class="card"><div class="empty-state">خطأ: ${esc(error.message)}</div></div>`; return; }
   if(!assignments.length){ main.innerHTML = `<div class="card"><div class="empty-state">لم يتم تعيين أي فرق لك بهذه الجولة بعد</div></div>`; return; }
 
-  // بطاقة اللجنة تُبنى هنا (داخل async) وتُقرأ عند الرسم
-  window._comCard = await buildCommitteeCard(assignments[0]?.committee_id);
+  // لجنتي من عضويتي مباشرة، لا من أول إسناد — فإسناد قديم
+  // بلا committee_id كان يُخفي البطاقة كلها.
+  const { data: myCom } = await sb.from("committee_members")
+    .select("committee_id").eq("judge_user_id", currentUser.id).maybeSingle();
+  window._comCard = await buildCommitteeCard(
+    myCom?.committee_id || assignments.find(a => a.committee_id)?.committee_id);
 
   const { data: myScores } = await sb.from("scores").select("*").eq("judge_user_id", currentUser.id).eq("round_id", round.id);
 
@@ -1352,6 +1356,6 @@ async function submitScores(teamId){
   setTimeout(() => loadAssignments(), 900);
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-01-r129</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r130</div>
 </body>
 </html>
