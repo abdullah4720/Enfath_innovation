@@ -215,6 +215,12 @@
     border-bottom:1px solid var(--border)}
   /* فلاتر التحكيم */
   .jf-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .ord-in{width:52px;padding:5px 7px;text-align:center;font-family:inherit;
+    font-size:13px;font-weight:700;color:var(--navy);
+    border:1px solid var(--border);border-radius:7px;background:#fff}
+  .ord-in:focus{border-color:var(--teal);outline:none}
+  body.dark .ord-in{background:rgba(255,255,255,.06);color:#fff}
+
 
   .jstep:last-of-type{border-bottom:0}
   .jstep-num{width:32px;height:32px;border-radius:50%;flex-shrink:0;
@@ -4997,6 +5003,39 @@ async function doAssignCommittee(committeeId){
 /* ---------------- فلاتر سير التحكيم ---------------- */
 // فلتر واحد يخدم الجدولين: المشاريع والأعباء.
 
+/* ---------------- ترتيب المشاريع ---------------- */
+// الترتيب تلقائي برقم المشروع، وهذا يعدّله يدويًا مع إزاحة
+// ما بينهما.
+
+async function changeOrder(teamId, roundId, newPos, oldPos){
+  const n = parseInt(newPos, 10);
+  if(!n || n === oldPos){ renderJudgingProgress(); return; }
+
+  const { data, error } = await sb.rpc("set_judging_order", {
+    p_team_id: teamId, p_round_id: roundId, p_new_pos: n
+  });
+
+  if(error || !data?.success){
+    showToast(data?.error || error?.message || "تعذّر التعديل", true);
+    renderJudgingProgress();
+    return;
+  }
+  logActivity("تعديل ترتيب التحكيم", "judge_assignments", teamId, { from: oldPos, to: n });
+  showToast(`نُقل من ${oldPos} إلى ${n}`);
+  renderJudgingProgress();
+}
+
+async function renumberAllOrders(){
+  if(!confirm("إعادة الترقيم تلقائيًا برقم المشروع؟\n\nسيُلغى أي ترتيب يدوي.")) return;
+  const { data, error } = await sb.rpc("renumber_committee_order",
+    { p_committee_id: null, p_round_id: null });
+  if(error || !data?.success){
+    showToast(data?.error || error?.message || "تعذّر الترقيم", true); return;
+  }
+  showToast(`رُقّم ${data.updated} مشروعًا`);
+  renderJudgingProgress();
+}
+
 function fillJudgingFilters(){
   const rows = window._progRows || [];
   const coms = [...new Set(rows.map(r => r.اللجنة).filter(Boolean))].sort();
@@ -5037,6 +5076,11 @@ function filterJudgingViews(){
   const jp = document.getElementById("jp-body");
   if(jp){
     jp.innerHTML = rows.length ? rows.map(r => `<tr>
+      <td style="text-align:center">
+        ${r.اللجنة && r.الترتيب
+          ? `<input class="ord-in" type="number" min="1" value="${r.الترتيب}"
+               onchange="changeOrder('${r.team_id}','${r.round_id}',this.value,${r.الترتيب})">`
+          : "—"}</td>
       <td><strong>${esc(r.الفريق)}</strong>
         ${r.رمز_الفريق ? `<code style="font-size:10.5px;margin-right:5px">${esc(r.رمز_الفريق)}</code>` : ""}</td>
       <td>${esc(r.المشروع || "—")}</td>
@@ -5046,7 +5090,7 @@ function filterJudgingViews(){
       <td><span class="badge ${cls(r.الحالة)}">${esc(r.الحالة)}</span></td>
       <td>${r.متوسط_الدرجة ?? "—"}</td>
     </tr>`).join("")
-    : `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:22px">
+    : `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:22px">
          لا مشاريع مطابقة</td></tr>`;
   }
 
@@ -5143,7 +5187,12 @@ async function renderJudgingProgress(){
           </select>
         </div>
       </div>
-      <h3 style="margin:16px 0 12px">حالة المشاريع <span class="hint" id="jf-count"></span></h3>
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  flex-wrap:wrap;gap:10px;margin:16px 0 12px">
+        <h3 style="margin:0">حالة المشاريع <span class="hint" id="jf-count"></span></h3>
+        <button class="btn btn-outline btn-sm" style="width:auto"
+          onclick="renumberAllOrders()">إعادة الترقيم تلقائيًا</button>
+      </div>
       <table class="table"><thead><tr>
         <th>الفريق</th><th>المشروع</th><th>المسار</th><th>اللجنة</th>
         <th>التقدّم</th><th>الحالة</th><th>المتوسط</th>
@@ -9108,6 +9157,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r171</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r172</div>
 </body>
 </html>
