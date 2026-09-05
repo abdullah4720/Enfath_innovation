@@ -213,6 +213,9 @@
   /* مراحل التحكيم */
   .jstep{display:flex;align-items:center;gap:14px;padding:15px 0;
     border-bottom:1px solid var(--border)}
+  /* فلاتر التحكيم */
+  .jf-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+
   .jstep:last-of-type{border-bottom:0}
   .jstep-num{width:32px;height:32px;border-radius:50%;flex-shrink:0;
     display:flex;align-items:center;justify-content:center;
@@ -2058,7 +2061,7 @@ async function viewDeliverableSubs(id){
     <div style="max-height:60vh;overflow:auto;margin-top:10px">
       <table class="table"><thead><tr>
         <th>الفريق</th><th>المسار</th><th>الحالة</th><th>الملف</th><th>المراجعة</th>
-      </tr></thead><tbody>
+      </tr></thead><tbody id="jp-body">
       ${rows.map(r => `<tr>
         <td>${esc(r.team_name)}</td>
         <td>${esc(r.track_name || "—")}</td>
@@ -4810,6 +4813,92 @@ async function doAssignCommittee(committeeId){
 // تقرير يكشف أين يتعثّر التحكيم: مشروع بلا إسناد، أو محكّم
 // لم يبدأ، أو تقييم جزئي.
 
+/* ---------------- فلاتر سير التحكيم ---------------- */
+// فلتر واحد يخدم الجدولين: المشاريع والأعباء.
+
+function fillJudgingFilters(){
+  const rows = window._progRows || [];
+  const coms = [...new Set(rows.map(r => r.اللجنة).filter(Boolean))].sort();
+  const trks = [...new Set(rows.map(r => r.المسار).filter(Boolean))].sort();
+
+  const setOpts = (id, list) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const cur = el.value;
+    el.innerHTML = `<option value="">الكل</option>` +
+      list.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join("");
+    if(list.includes(cur)) el.value = cur;
+  };
+  setOpts("jf-committee", coms);
+  setOpts("jf-track", trks);
+}
+
+function filterJudgingViews(){
+  const val = id => document.getElementById(id)?.value || "";
+  const term = val("jf-search").trim().toLowerCase();
+  const com  = val("jf-committee"), trk = val("jf-track"), stt = val("jf-status");
+
+  // ── المشاريع ──
+  const rows = (window._progRows || []).filter(r => {
+    if(com && r.اللجنة !== com) return false;
+    if(trk && r.المسار !== trk) return false;
+    if(stt && r.الحالة !== stt) return false;
+    if(!term) return true;
+    return (r.الفريق || "").toLowerCase().includes(term)
+        || (r.المشروع || "").toLowerCase().includes(term)
+        || (r.رمز_الفريق || "").toLowerCase().includes(term);
+  });
+
+  const cls = h => h === "مكتمل" ? "badge-green"
+                 : h === "جزئي"  ? "badge-gold"
+                 : h === "لم يبدأ" ? "badge-gray" : "badge-red";
+
+  const jp = document.getElementById("jp-body");
+  if(jp){
+    jp.innerHTML = rows.length ? rows.map(r => `<tr>
+      <td><strong>${esc(r.الفريق)}</strong>
+        ${r.رمز_الفريق ? `<code style="font-size:10.5px;margin-right:5px">${esc(r.رمز_الفريق)}</code>` : ""}</td>
+      <td>${esc(r.المشروع || "—")}</td>
+      <td>${esc(r.المسار || "—")}</td>
+      <td>${esc(r.اللجنة || "—")}</td>
+      <td><bdi>${r.محكّمون_قيّموا ?? 0}</bdi> من <bdi>${r.محكّمون_مسنَدون ?? 0}</bdi></td>
+      <td><span class="badge ${cls(r.الحالة)}">${esc(r.الحالة)}</span></td>
+      <td>${r.متوسط_الدرجة ?? "—"}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:22px">
+         لا مشاريع مطابقة</td></tr>`;
+  }
+
+  const cnt = document.getElementById("jf-count");
+  if(cnt) cnt.textContent = rows.length === (window._progRows||[]).length
+    ? `(${rows.length})` : `(${rows.length} من ${(window._progRows||[]).length})`;
+
+  // ── الأعباء: تُفلتر بالبحث واللجنة ──
+  const load = (window._loadRows || []).filter(j => {
+    if(com && !(j.اللجان || "").includes(com)) return false;
+    if(!term) return true;
+    return (j.المحكّم || "").toLowerCase().includes(term)
+        || (j.الجهة || "").toLowerCase().includes(term)
+        || (j.اللجان || "").toLowerCase().includes(term);
+  });
+
+  const jw = document.getElementById("jw-body");
+  if(jw){
+    jw.innerHTML = load.length ? load.map(j => `<tr>
+      <td><strong>${esc(j.المحكّم)}</strong></td>
+      <td>${esc(j.الجهة || "—")}</td>
+      <td>${esc(j.اللجان || "—")}</td>
+      <td><bdi>${j.مشاريع_مسنَدة ?? 0}</bdi></td>
+      <td><bdi>${j.مشاريع_قيّمها ?? 0}</bdi></td>
+      <td>${j.متبقية > 0 ? `<strong style="color:var(--gold)"><bdi>${j.متبقية}</bdi></strong>` : "—"}</td>
+      <td><span class="badge ${j.الحالة === "أنهى" ? "badge-green"
+            : j.الحالة === "جارٍ" ? "badge-gold" : "badge-gray"}">${esc(j.الحالة)}</span></td>
+    </tr>`).join("")
+    : `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:22px">
+         لا محكّمين مطابقين</td></tr>`;
+  }
+}
+
 async function renderJudgingProgress(){
   const body = document.getElementById("judging-body");
   body.innerHTML = `<div class="card"><p class="hint">جارٍ التحميل...</p></div>`;
@@ -4823,8 +4912,12 @@ async function renderJudgingProgress(){
     body.innerHTML = `<div class="card"><div class="alert alert-error">${esc(prog.error.message)}</div></div>`;
     return;
   }
+  // خطأ الأعباء كان يُبتلع، فيظهر الجدول فارغًا بلا سبب
+  window._loadErr = load.error?.message || null;
 
-  const rows = prog.data || [];
+  window._progRows = prog.data || [];
+  window._loadRows = load.data || [];
+  const rows = window._progRows;
   const by = k => rows.filter(r => r.الحالة === k).length;
   const done = by("مكتمل"), part = by("جزئي"), none = by("لم يبدأ"), unass = by("لم يُسنَد");
   const pct = rows.length ? Math.round(done / rows.length * 100) : 0;
@@ -4845,7 +4938,31 @@ async function renderJudgingProgress(){
       <bdi>${unass}</bdi> مشروعًا بلا محكّمين — أسند لجنة قبل بدء التحكيم</div>` : ""}
 
     <div class="card" style="margin-bottom:14px">
-      <h3 style="margin:0 0 12px">حالة المشاريع</h3>
+      <div class="jf-bar">
+        <div class="field" style="margin:0;flex:1;min-width:180px">
+          <label>بحث بالفريق أو المشروع أو المحكّم</label>
+          <input id="jf-search" placeholder="اكتب للبحث..." oninput="filterJudgingViews()">
+        </div>
+        <div class="field" style="margin:0;min-width:170px">
+          <label>اللجنة</label>
+          <select id="jf-committee" onchange="filterJudgingViews()"><option value="">الكل</option></select>
+        </div>
+        <div class="field" style="margin:0;min-width:160px">
+          <label>المسار</label>
+          <select id="jf-track" onchange="filterJudgingViews()"><option value="">الكل</option></select>
+        </div>
+        <div class="field" style="margin:0;min-width:150px">
+          <label>الحالة</label>
+          <select id="jf-status" onchange="filterJudgingViews()">
+            <option value="">الكل</option>
+            <option value="لم يُسنَد">لم يُسنَد</option>
+            <option value="لم يبدأ">لم يبدأ</option>
+            <option value="جزئي">جزئي</option>
+            <option value="مكتمل">مكتمل</option>
+          </select>
+        </div>
+      </div>
+      <h3 style="margin:16px 0 12px">حالة المشاريع <span class="hint" id="jf-count"></span></h3>
       <table class="table"><thead><tr>
         <th>الفريق</th><th>المشروع</th><th>المسار</th><th>اللجنة</th>
         <th>التقدّم</th><th>الحالة</th><th>المتوسط</th>
@@ -4866,6 +4983,11 @@ async function renderJudgingProgress(){
 
     <div class="card">
       <h3 style="margin:0 0 12px">أعباء المحكّمين</h3>
+      ${window._loadErr
+        ? `<div class="alert alert-error">تعذّر تحميل الأعباء: ${esc(window._loadErr)}</div>`
+        : !(load.data || []).length
+          ? `<div class="alert alert-warn">لا محكّمين نشطين — تأكد من إسناد دور «محكّم» وتفعيل الحسابات</div>`
+          : ""}
       <p class="hint" style="margin:0 0 12px">
         المشروع الذي قيّمه محكّم لا يظهر لمن يحلّ محلّه. لإعادة تقييمه،
         احذف الدرجات أولًا من تبويب موجز التحكيم.
@@ -4873,7 +4995,7 @@ async function renderJudgingProgress(){
       <table class="table"><thead><tr>
         <th>المحكّم</th><th>الجهة</th><th>اللجان</th>
         <th>مسنَدة</th><th>قيّمها</th><th>متبقية</th><th>الحالة</th>
-      </tr></thead><tbody>
+      </tr></thead><tbody id="jw-body">
       ${(load.data || []).map(j => `<tr>
         <td><strong>${esc(j.المحكّم)}</strong></td>
         <td>${esc(j.الجهة || "—")}</td>
@@ -4886,6 +5008,8 @@ async function renderJudgingProgress(){
       </tr>`).join("")}
       </tbody></table>
     </div>`;
+  fillJudgingFilters();
+  filterJudgingViews();
   if(window.lucide) lucide.createIcons();
 }
 
@@ -8801,6 +8925,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r165</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r166</div>
 </body>
 </html>
