@@ -78,6 +78,9 @@
   .btn-danger{background:#fdeceb; color:var(--danger);}
   .btn-danger:hover{background:var(--danger); color:#fff;}
   .btn-sm{padding:6px 12px; font-size:12.5px;}
+  .btn i,.btn svg{width:14px;height:14px;flex-shrink:0;vertical-align:-2px;
+    margin-left:6px;margin-inline-end:6px}
+
   #login-error{color:var(--danger); font-size:13px; margin-top:12px; display:none;}
 
   /* ---------- التصميم العام ---------- */
@@ -207,6 +210,25 @@
   .ct-ord{display:inline-block;min-width:18px;height:18px;line-height:18px;
     text-align:center;background:var(--navy);color:#fff;border-radius:5px;
     font-size:10.5px;font-weight:700;margin-left:7px;margin-inline-end:7px}
+  /* ملفات اللجان */
+  .cf-team{border:1px solid var(--border);border-radius:11px;
+    padding:12px 14px;margin-bottom:10px}
+  .cf-head{font-size:13.5px;font-weight:700;color:var(--navy);margin-bottom:9px}
+  .cf-head code{font-size:10.5px;color:var(--gold);background:#FBF3E2;
+    padding:2px 8px;border-radius:5px;margin-right:7px;margin-inline-start:7px}
+  .cf-ord{display:inline-block;min-width:19px;height:19px;line-height:19px;
+    text-align:center;background:var(--navy);color:#fff;border-radius:5px;
+    font-size:10.5px;margin-left:8px;margin-inline-end:8px}
+  .cf-file{display:flex;align-items:center;padding:7px 10px;border-radius:8px;
+    text-decoration:none;font-size:12.5px;color:var(--ink);transition:.15s}
+  .cf-file:hover{background:rgba(0,189,196,.08)}
+  .cf-file i,.cf-file svg{width:14px;height:14px;color:var(--teal);flex-shrink:0;
+    margin-left:9px;margin-inline-end:9px}
+  .cf-file .t{font-weight:600;flex-shrink:0}
+  .cf-file .n{color:var(--muted);font-size:11.5px;
+    margin-right:9px;margin-inline-start:9px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 
   body.dark .ct-item{background:rgba(255,255,255,.06)}
 
@@ -219,6 +241,8 @@
     border-bottom:1px solid var(--border)}
   /* فلاتر التحكيم */
   .jf-bar{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .dv-bar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:12px}
+
   .ord-in{width:52px;padding:5px 7px;text-align:center;font-family:inherit;
     font-size:13px;font-weight:700;color:var(--navy);
     border:1px solid var(--border);border-radius:7px;background:#fff}
@@ -1924,10 +1948,43 @@ async function renderDeliverables(){
       <button class="btn btn-primary" onclick="openDeliverableForm()">+ مطلوب جديد</button>
     </div>
     <div id="deliv-summary">${skeletonRows(2)}</div>
+
     <div class="card" style="margin-top:14px"><div id="deliv-list">${skeletonRows(3)}</div></div>`;
   if(window.lucide) lucide.createIcons();
   await loadDeliverables();
 }
+
+/* ---------------- ملفات اللجان ---------------- */
+// تحميل تسليمات لجنة واحدة بدل فرز كل المشاريع يدويًا.
+
+let _delivByCom = [];
+
+
+function downloadCommitteeFiles(comName){
+  const rows = _delivByCom.filter(r => (r.اللجنة || "— بلا لجنة") === comName);
+  if(!rows.length){ showToast("لا ملفات", true); return; }
+
+  const head = ["ترتيب التحكيم", "رقم المشروع", "الفريق", "المسار",
+                "التسليم", "اسم الملف", "الحجم KB", "الرابط", "ملاحظة الفريق"];
+  const body = rows.map(r => [
+    r.ترتيب_التحكيم ?? "", r.رمز_الفريق ?? "", r.الفريق ?? "",
+    r.المسار ?? "", r.التسليم ?? "", r.اسم_الملف ?? "",
+    r.الحجم_كيلوبايت ?? "", r.رابط_الملف ?? "", r.ملاحظة_الفريق ?? ""
+  ]);
+
+  // BOM ليقرأ Excel العربية صحيحة
+  const csv = "\ufeff" + [head, ...body]
+    .map(x => x.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\r\n");
+
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `ملفات-${comName.replace(/[\\/:*?"<>|]/g, "-")}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`صُدّر ${rows.length} ملفًا`);
+}
+
 
 async function loadDeliverables(){
   const [dRes, sRes] = await Promise.all([
@@ -2059,21 +2116,149 @@ async function deleteDeliverable(id, title){
   showToast("حُذف"); loadDeliverables();
 }
 
+/* ---------------- فلترة تسليمات المطلوب ---------------- */
+// اللجنة والحالة والبحث — لتسليم ملفات لجنة واحدة لمحكّميها.
+
+function filterDelivSubs(){
+  const val = id => document.getElementById(id)?.value || "";
+  const term = val("dv-search").trim().toLowerCase();
+  const com  = val("dv-com"), stt = val("dv-status");
+
+  const rows = (window._delivRows || []).filter(r => {
+    if(com && r._com !== com) return false;
+    if(stt === "سلّم"    && !r.submission_id) return false;
+    if(stt === "لم يسلّم" &&  r.submission_id) return false;
+    if(!term) return true;
+    return (r.team_name || "").toLowerCase().includes(term);
+  }).sort((a, b) => (a._order ?? 999) - (b._order ?? 999)
+                 || (a.team_name || "").localeCompare(b.team_name || "", "ar"));
+
+  const body = document.getElementById("dv-body");
+  if(body){
+    body.innerHTML = rows.length ? rows.map(r => `<tr>
+      <td style="text-align:center">${r._order ?? "—"}</td>
+      <td>${esc(r.team_name)}</td>
+      <td>${esc(r._com || "—")}</td>
+      <td>${esc(r.track_name || "—")}</td>
+      <td>${delivStatusBadge(r.الحالة)}</td>
+      <td>${r.file_url
+        ? `<a href="${esc(r.file_url)}" target="_blank" rel="noopener">${esc(r.file_name || "تحميل")}</a>`
+        : "—"}</td>
+      <td>${r.submission_id
+        ? `<button class="btn btn-outline btn-sm" style="width:auto;padding:3px 9px"
+             onclick="reviewDelivSub('${r.submission_id}')">مراجعة</button>`
+        : "—"}</td>
+    </tr>`).join("")
+    : `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">
+         لا نتائج مطابقة</td></tr>`;
+  }
+
+  const cnt = document.getElementById("dv-count");
+  if(cnt){
+    const done = rows.filter(r => r.submission_id).length;
+    cnt.textContent = `${done} من ${rows.length} فريقًا سلّموا`;
+  }
+}
+
+function exportDelivSubs(){
+  const val = id => document.getElementById(id)?.value || "";
+  const com = val("dv-com"), stt = val("dv-status");
+  const term = val("dv-search").trim().toLowerCase();
+
+  const rows = (window._delivRows || []).filter(r => {
+    if(com && r._com !== com) return false;
+    if(stt === "سلّم"    && !r.submission_id) return false;
+    if(stt === "لم يسلّم" &&  r.submission_id) return false;
+    if(!term) return true;
+    return (r.team_name || "").toLowerCase().includes(term);
+  }).sort((a, b) => (a._order ?? 999) - (b._order ?? 999));
+
+  if(!rows.length){ showToast("لا نتائج للتصدير", true); return; }
+
+  const head = ["ترتيب التحكيم", "الفريق", "اللجنة", "المسار",
+                "الحالة", "اسم الملف", "الرابط"];
+  const body = rows.map(r => [
+    r._order ?? "", r.team_name ?? "", r._com ?? "", r.track_name ?? "",
+    r.الحالة ?? "", r.file_name ?? "", r.file_url ?? ""
+  ]);
+
+  // BOM ليقرأ Excel العربية صحيحة
+  const csv = "\ufeff" + [head, ...body]
+    .map(x => x.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+    .join("\r\n");
+
+  const label = com ? com.replace(/[\\/:*?"<>|]/g, "-") : "الكل";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  a.download = `تسليمات-${label}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`صُدّر ${rows.length} صفًّا`);
+}
+
 async function viewDeliverableSubs(id){
-  const { data, error } = await sb.from("deliverables_status")
-    .select("*").eq("deliverable_id", id).order("team_name");
-  if(error){ showToast(error.message, true); return; }
-  const rows = data || [];
+  const [subRes, comRes] = await Promise.all([
+    sb.from("deliverables_status").select("*").eq("deliverable_id", id).order("team_name"),
+    sb.from("deliverables_by_committee").select("team_id, اللجنة, ترتيب_التحكيم")
+      .eq("deliverable_id", id)
+  ]);
+  if(subRes.error){ showToast(subRes.error.message, true); return; }
+
+  // لجنة كل فريق وترتيبه — للفلترة والفرز
+  const comOf = {};
+  (comRes.data || []).forEach(c => {
+    comOf[c.team_id] = { name: c.اللجنة, order: c.ترتيب_التحكيم };
+  });
+
+  window._delivRows = (subRes.data || []).map(r => ({
+    ...r,
+    _com:   comOf[r.team_id]?.name  || null,
+    _order: comOf[r.team_id]?.order ?? null
+  }));
+  window._delivId = id;
+
+  const rows = window._delivRows;
+  const coms = [...new Set(rows.map(r => r._com).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, "ar"));
   const title = rows[0]?.deliverable_title || "التسليمات";
+
   openModal(`
     <h3>${esc(title)}</h3>
-    <p class="hint">${rows.filter(r=>r.submission_id).length} من ${rows.length} فريقًا سلّموا</p>
-    <div style="max-height:60vh;overflow:auto;margin-top:10px">
+    <p class="hint" id="dv-count">${rows.filter(r=>r.submission_id).length} من ${rows.length} فريقًا سلّموا</p>
+
+    <div class="dv-bar">
+      <div class="field" style="margin:0;flex:1;min-width:150px">
+        <label>بحث بالفريق</label>
+        <input id="dv-search" placeholder="اكتب للبحث..." oninput="filterDelivSubs()">
+      </div>
+      <div class="field" style="margin:0;min-width:165px">
+        <label>اللجنة</label>
+        <select id="dv-com" onchange="filterDelivSubs()">
+          <option value="">كل اللجان</option>
+          ${coms.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field" style="margin:0;min-width:140px">
+        <label>الحالة</label>
+        <select id="dv-status" onchange="filterDelivSubs()">
+          <option value="">الكل</option>
+          <option value="سلّم">سلّم</option>
+          <option value="لم يسلّم">لم يسلّم</option>
+        </select>
+      </div>
+      <button class="btn btn-outline btn-sm" style="width:auto;margin-bottom:2px"
+        onclick="exportDelivSubs()">تصدير</button>
+    </div>
+
+    <div style="max-height:52vh;overflow:auto;margin-top:12px">
       <table class="table"><thead><tr>
-        <th>الفريق</th><th>المسار</th><th>الحالة</th><th>الملف</th><th>المراجعة</th>
-      </tr></thead><tbody id="jp-body">
+        <th style="width:58px">الترتيب</th>
+        <th>الفريق</th><th>اللجنة</th><th>المسار</th><th>الحالة</th><th>الملف</th><th>المراجعة</th>
+      </tr></thead><tbody id="dv-body">
       ${rows.map(r => `<tr>
+        <td style="text-align:center">${r._order ?? "—"}</td>
         <td>${esc(r.team_name)}</td>
+        <td>${esc(r._com || "—")}</td>
         <td>${esc(r.track_name || "—")}</td>
         <td>${delivStatusBadge(r.الحالة)}</td>
         <td>${r.file_url ? `<a href="${esc(r.file_url)}" target="_blank" rel="noopener">${esc(r.file_name || "تحميل")}</a>` : "—"}</td>
@@ -9178,6 +9363,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r173</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r175</div>
 </body>
 </html>
