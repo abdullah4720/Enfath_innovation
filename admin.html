@@ -4905,7 +4905,7 @@ async function renderJudgingProgress(){
 
   const [prog, load] = await Promise.all([
     sb.from("judging_progress").select("*"),
-    sb.from("judge_workload").select("*")
+    sb.from("judge_workload").select("*").eq("round_active", true)
   ]);
 
   if(prog.error){
@@ -8925,6 +8925,6 @@ function formatActivityMetadata(metadata){
   return `<div style="font-size:11.5px;color:var(--muted);margin-top:3px;background:var(--border-light);border-radius:6px;padding:5px 9px;display:inline-block">${parts.join(" · ")}</div>`;
 }
 </script>
-<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r166</div>
+<div style="position:fixed;bottom:6px;left:8px;font-size:9.5px;color:#94a3b8;opacity:.55;font-family:monospace;z-index:9999;pointer-events:none">build: 2026-09-04-r167</div>
 </body>
 </html>
